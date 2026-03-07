@@ -4,7 +4,7 @@ An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com
 
 > **Disclaimer:** This is a fan-made, unofficial app. It is not affiliated with or endorsed by Giant Bomb. All Giant Bomb content is property of its respective owners.
 
-**Giant Bomb is an independent, ad-free video game site.** A free account gets you access to some content, but for the full experience — including exclusive shows, ad-free videos, and access to the full back catalog — [**join Premium**](https://giantbomb.com/get-premium). It's worth it.
+**Giant Bomb is an independent video game site.** A free account gets you access to some content, but for the full experience — including exclusive shows, ad-free videos, and access to the full back catalog — [**join Premium**](https://giantbomb.com/get-premium). It's worth it.
 
 ## Features
 
