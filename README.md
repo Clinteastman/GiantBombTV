@@ -2,7 +2,7 @@
 
 An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com) videos with a glassmorphism-inspired UI.
 
-> **Disclaimer:** This is a fan-made, unofficial app. It is not affiliated with, endorsed by, or connected to Giant Bomb or Fandom in any way. All Giant Bomb content is property of its respective owners. A Giant Bomb account is required for premium content.
+> **Disclaimer:** This is a fan-made, unofficial app. It is not affiliated with or endorsed by Giant Bomb. All Giant Bomb content is property of its respective owners. A Giant Bomb account is required for premium content.
 
 ## Features
 
