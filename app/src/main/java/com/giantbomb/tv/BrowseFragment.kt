@@ -9,7 +9,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.leanback.app.BrowseSupportFragment
@@ -37,6 +39,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     private var backdropImageView: ImageView? = null
     private var backdropNextView: ImageView? = null
     private var currentBackdropUrl: String? = null
+    private var loadingSpinner: ProgressBar? = null
 
     companion object {
         const val SETTINGS_REFRESH = 2
@@ -53,11 +56,17 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
 
         prefs = PrefsManager(requireContext())
 
+        loadingSpinner = requireActivity().findViewById(R.id.loading_spinner)
         setupBackdrop()
         setupUIElements()
         setupListeners()
 
-        loadContent()
+        // First launch: redirect to setup if no API key
+        if (prefs.apiKey.isNullOrEmpty()) {
+            launchSetup()
+        } else {
+            loadContent()
+        }
     }
 
     private fun setupBackdrop() {
@@ -175,7 +184,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         val api = GiantBombApi(key)
 
         launch {
-            title = getString(R.string.loading)  // shown briefly while data loads
+            loadingSpinner?.visibility = View.VISIBLE
             val rowPresenter = ListRowPresenter(androidx.leanback.widget.FocusHighlight.ZOOM_FACTOR_NONE).apply {
                 shadowEnabled = false
                 selectEffectEnabled = false  // disable the dim overlay on unfocused rows
@@ -354,15 +363,22 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
 
             adapter = rowsAdapter
             title = null  // clear text title — badge logo is shown instead
+            loadingSpinner?.visibility = View.GONE
             isLoading = false
         }
     }
+
+    private var hasBeenVisible = false
 
     override fun onResume() {
         super.onResume()
         if (adapter == null || adapter.size() == 0) {
             loadContent()
+        } else if (hasBeenVisible) {
+            // Refresh after returning from playback/detail to update progress & watched state
+            loadContent()
         }
+        hasBeenVisible = true
     }
 
     private fun cycleQuality() {

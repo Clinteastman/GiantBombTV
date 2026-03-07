@@ -1,5 +1,6 @@
 package com.giantbomb.tv
 
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -161,7 +162,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     exoPlayer.addListener(object : Player.Listener {
                         override fun onPlaybackStateChanged(state: Int) {
                             if (state == Player.STATE_ENDED) {
-                                launch { api.markWatched(v.id) }
+                                launch {
+                                    api.markWatched(v.id)
+                                    playNextEpisode(v)
+                                }
                             }
                         }
                     })
@@ -296,6 +300,33 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     }
 
     private fun isQualityPickerShowing() = qualityOverlay != null
+
+    private suspend fun playNextEpisode(current: Video) {
+        val showId = current.showId ?: run {
+            finish()
+            return
+        }
+
+        // Fetch show videos and find the one published right before this one
+        val result = api.getVideos(limit = 50, showId = showId)
+        val videos = result.getOrNull()
+        if (videos != null && videos.size > 1) {
+            val currentIndex = videos.indexOfFirst { it.id == current.id }
+            // Videos are sorted newest first, so "next" is the one before this in the list (older)
+            // But for "next episode" UX, we want the one after in chronological order,
+            // which is the one at currentIndex - 1 (newer) in the list
+            val nextVideo = if (currentIndex > 0) videos[currentIndex - 1] else null
+            if (nextVideo != null) {
+                val intent = Intent(this@PlaybackActivity, PlaybackActivity::class.java).apply {
+                    putExtra(EXTRA_VIDEO, nextVideo)
+                }
+                startActivity(intent)
+                finish()
+                return
+            }
+        }
+        finish()
+    }
 
     private fun startProgressSaving() {
         progressJob = launch {

@@ -189,21 +189,6 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         content.addView(metaView)
         animViews.add(metaView)
 
-        // Fetch duration from playback API and update meta
-        launch {
-            val playback = api.getPlayback(video.id).getOrNull()
-            if (playback != null && playback.duration > 0) {
-                val totalSec = playback.duration.toInt()
-                val h = totalSec / 3600
-                val m = (totalSec % 3600) / 60
-                val durationStr = if (h > 0) "${h}h ${m}m" else "${m}m"
-                val parts = mutableListOf(durationStr)
-                if (video.publishDate.isNotEmpty()) parts.add(video.publishDate.take(10))
-                if (!video.author.isNullOrEmpty()) parts.add(video.author)
-                metaView.text = parts.joinToString("  \u2022  ")
-            }
-        }
-
         // Description
         if (!video.description.isNullOrEmpty()) {
             val descView = TextView(this).apply {
@@ -259,13 +244,27 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             ).apply { marginStart = 10.dp() }
             setOnClickListener {
                 launch {
-                    val result = api.addToWatchlist(video.id)
-                    result.onSuccess {
-                        text = "\u2713 Watchlist"
-                        Toast.makeText(this@DetailActivity, "Added to watchlist", Toast.LENGTH_SHORT).show()
-                    }
-                    result.onFailure {
-                        Toast.makeText(this@DetailActivity, "Failed to add", Toast.LENGTH_SHORT).show()
+                    val onWatchlist = tag == true
+                    if (onWatchlist) {
+                        val result = api.removeFromWatchlist(video.id)
+                        result.onSuccess {
+                            text = "+ Watchlist"
+                            tag = false
+                            Toast.makeText(this@DetailActivity, "Removed from watchlist", Toast.LENGTH_SHORT).show()
+                        }
+                        result.onFailure {
+                            Toast.makeText(this@DetailActivity, "Failed to remove", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        val result = api.addToWatchlist(video.id)
+                        result.onSuccess {
+                            text = "\u2713 Watchlist"
+                            tag = true
+                            Toast.makeText(this@DetailActivity, "Added to watchlist", Toast.LENGTH_SHORT).show()
+                        }
+                        result.onFailure {
+                            Toast.makeText(this@DetailActivity, "Failed to add", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             }
@@ -277,6 +276,42 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         root.addView(content)
         setContentView(root)
+
+        // Fetch duration, progress, and watchlist state asynchronously
+        launch {
+            val playbackDeferred = async { api.getPlayback(video.id) }
+            val progressDeferred = async { api.getProgress() }
+            val watchlistDeferred = async { api.getWatchlist() }
+
+            val playback = playbackDeferred.await().getOrNull()
+            val progress = progressDeferred.await().getOrNull()?.find { it.videoId == video.id }
+            val watchlist = watchlistDeferred.await().getOrNull()
+            val isOnWatchlist = watchlist?.any { it.id == video.id } == true
+
+            // Update duration in meta
+            if (playback != null && playback.duration > 0) {
+                val totalSec = playback.duration.toInt()
+                val h = totalSec / 3600
+                val m = (totalSec % 3600) / 60
+                val durationStr = if (h > 0) "${h}h ${m}m" else "${m}m"
+                val parts = mutableListOf(durationStr)
+                if (video.publishDate.isNotEmpty()) parts.add(video.publishDate.take(10))
+                if (!video.author.isNullOrEmpty()) parts.add(video.author)
+                metaView.text = parts.joinToString("  \u2022  ")
+            }
+
+            // Update watch button to show Resume if there's progress
+            if (progress != null && progress.percentComplete in 1..94) {
+                val resumeMin = (progress.currentTime / 60).toInt()
+                watchButton.text = "${getString(R.string.resume)} (${resumeMin}m in)"
+            }
+
+            // Update watchlist button state
+            if (isOnWatchlist) {
+                watchlistButton.text = "\u2713 Watchlist"
+                watchlistButton.tag = true
+            }
+        }
 
         // Staggered entrance animation
         animViews.forEachIndexed { index, view ->
