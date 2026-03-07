@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="gb_red">#E3192C</color>
+    <color name="gb_red_dark">#B0141F</color>
+    <color name="gb_dark">#1A1A1A</color>
+    <color name="gb_black">#000000</color>
+    <color name="gb_white">#FFFFFF</color>
+    <color name="gb_grey">#333333</color>
+
+    <!-- Plex-inspired surface hierarchy -->
+    <color name="gb_background">#1A1A20</color>
+    <color name="gb_surface">#22222A</color>
+    <color name="gb_surface_elevated">#2A2A32</color>
+    <color name="gb_surface_card">#252530</color>
+    <color name="gb_overlay">#CC000000</color>
+
+    <!-- Text hierarchy -->
+    <color name="gb_text_primary">#F1F1F1</color>
+    <color name="gb_text_secondary">#A0A0A0</color>
+    <color name="gb_text_tertiary">#999999</color>
+
+    <!-- Accent colors -->
+    <color name="gb_gold">#FFD700</color>
+    <color name="gb_gold_dark">#C5A600</color>
+    <color name="gb_focus_glow">#40E3192C</color>
+    <color name="gb_progress_bar">#E3192C</color>
+    <color name="gb_progress_track">#33FFFFFF</color>
+
+    <!-- Glass / frosted surfaces -->
+    <color name="gb_glass">#18FFFFFF</color>
+    <color name="gb_glass_border">#14FFFFFF</color>
+    <color name="gb_glass_hover">#24FFFFFF</color>
+    <color name="gb_glass_card">#12FFFFFF</color>
+    <color name="gb_glass_button">#1AFFFFFF</color>
+    <color name="gb_glass_button_hover">#2AFFFFFF</color>
+    <color name="gb_glass_input">#10FFFFFF</color>
+</resources>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Giant Bomb TV</string>
+    <string name="browse_title">Giant Bomb</string>
+    <string name="setup_title">Feed Setup</string>
+    <string name="feed_url_hint">Paste your Giant Bomb Premium RSS Feed URL</string>
+    <string name="save">Save &amp; Load Feed</string>
+    <string name="loading">Loading\u2026</string>
+    <string name="error_no_feed">No RSS feed URL configured.</string>
+    <string name="error_loading">Error loading feed. Check your URL and connection.</string>
+    <string name="watch">Watch Now</string>
+    <string name="resume">Resume Watching</string>
+    <string name="recent">Recent Videos</string>
+    <string name="continue_watching">Continue Watching</string>
+    <string name="settings">Settings</string>
+    <string name="settings_feed">Change Feed URL</string>
+    <string name="settings_feed_desc">Update your RSS feed</string>
+    <string name="settings_refresh">Refresh</string>
+    <string name="settings_refresh_desc">Reload the video feed</string>
+    <string name="settings_setup">API Key</string>
+    <string name="settings_setup_desc">Connect your Giant Bomb account</string>
+    <string name="settings_about">About</string>
+    <string name="settings_about_desc">Giant Bomb TV app info</string>
+</resources>

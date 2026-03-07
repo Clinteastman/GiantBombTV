@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Base dark -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#1A1A20" />
+        </shape>
+    </item>
+    <!-- Subtle warm glow from top-left -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#1A2A1F30"
+                android:endColor="#001A1A20"
+                android:angle="135" />
+        </shape>
+    </item>
+    <!-- Subtle cool accent from bottom-right -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#001A1A20"
+                android:centerColor="#00000000"
+                android:endColor="#12181830"
+                android:angle="315" />
+        </shape>
+    </item>
+</layer-list>
