@@ -41,7 +41,7 @@ An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/GiantBombTV.git
+git clone https://github.com/Clinteastman/GiantBombTV.git
 cd GiantBombTV
 
 # Build debug APK
