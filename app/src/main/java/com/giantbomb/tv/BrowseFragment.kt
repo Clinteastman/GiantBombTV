@@ -177,6 +177,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         val api = GiantBombApi(key)
 
         launch {
+            try {
             loadingSpinner?.visibility = View.VISIBLE
             val rowPresenter = ListRowPresenter(androidx.leanback.widget.FocusHighlight.ZOOM_FACTOR_NONE).apply {
                 shadowEnabled = false
@@ -356,8 +357,10 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
 
             adapter = rowsAdapter
             title = null  // clear text title — badge logo is shown instead
-            loadingSpinner?.visibility = View.GONE
-            isLoading = false
+            } finally {
+                loadingSpinner?.visibility = View.GONE
+                isLoading = false
+            }
         }
     }
 

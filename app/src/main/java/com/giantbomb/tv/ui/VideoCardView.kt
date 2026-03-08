@@ -121,6 +121,7 @@ class VideoCardView(context: Context) : FrameLayout(context) {
 
     fun setTitle(title: String) {
         titleView.text = title
+        contentDescription = title
     }
 
     fun setMeta(meta: String) {

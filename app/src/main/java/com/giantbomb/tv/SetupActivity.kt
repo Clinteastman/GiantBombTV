@@ -80,6 +80,7 @@ class SetupActivity : Activity(), CoroutineScope by MainScope() {
 
         val logoImage = ImageView(this).apply {
             setImageResource(R.drawable.giant_bomb_logo)
+            contentDescription = "Giant Bomb logo"
             adjustViewBounds = true
             layoutParams = LinearLayout.LayoutParams(dp(220), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(16)

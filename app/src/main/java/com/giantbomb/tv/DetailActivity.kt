@@ -61,6 +61,8 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             )
             scaleType = ImageView.ScaleType.CENTER_CROP
             alpha = 0.35f
+            contentDescription = null // decorative
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
         val imageUrl = video.thumbnailUrl ?: video.posterUrl
         if (!imageUrl.isNullOrEmpty()) {
@@ -218,6 +220,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             textColor = Color.WHITE,
             bold = true
         ).apply {
+            contentDescription = "Watch ${video.title}"
             setPadding(32.dp(), 10.dp(), 32.dp(), 10.dp())
             setOnClickListener {
                 val intent = Intent(this@DetailActivity, PlaybackActivity::class.java).apply {
@@ -237,6 +240,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             textColor = 0xFFCCCCCC.toInt(),
             bold = false
         ).apply {
+            contentDescription = "Add to watchlist"
             setPadding(24.dp(), 10.dp(), 24.dp(), 10.dp())
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -278,6 +282,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             textColor = 0xFFCCCCCC.toInt(),
             bold = false
         ).apply {
+            contentDescription = "Watch from start"
             setPadding(24.dp(), 10.dp(), 24.dp(), 10.dp())
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,

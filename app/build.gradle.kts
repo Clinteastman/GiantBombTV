@@ -29,7 +29,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (System.getenv("KEYSTORE_FILE") != null) {
                 signingConfigs.getByName("release")
@@ -63,6 +64,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
     implementation("androidx.media3:media3-ui-leanback:1.5.1")
+    implementation("androidx.media3:media3-session:1.5.1")
 
     // CardView
     implementation("androidx.cardview:cardview:1.0.0")

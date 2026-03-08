@@ -24,6 +24,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
+import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
@@ -40,6 +41,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     }
 
     private var player: ExoPlayer? = null
+    private var mediaSession: MediaSession? = null
     private lateinit var playerView: PlayerView
     private lateinit var rootLayout: FrameLayout
     private lateinit var api: GiantBombApi
@@ -215,6 +217,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     .build().also { exoPlayer ->
                     playerView.player = exoPlayer
 
+                    // MediaSession for Fire TV remote and Alexa integration
+                    mediaSession?.release()
+                    mediaSession = MediaSession.Builder(this@PlaybackActivity, exoPlayer).build()
+
                     exoPlayer.setMediaItem(MediaItem.fromUri(qualityOptions[currentQualityIndex].url))
                     exoPlayer.playWhenReady = false
                     exoPlayer.prepare()
@@ -272,6 +278,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         // Release old player and create a fresh one so video surface resets
         progressJob?.cancel()
+        mediaSession?.release()
+        mediaSession = null
         p.release()
 
         val loadControl = DefaultLoadControl.Builder()
@@ -305,6 +313,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             .setAudioAttributes(audioAttributes, true)
             .build().also { newPlayer ->
                 playerView.player = newPlayer
+                mediaSession = MediaSession.Builder(this@PlaybackActivity, newPlayer).build()
                 newPlayer.setMediaItem(MediaItem.fromUri(option.url))
                 newPlayer.prepare()
                 newPlayer.seekTo(position)
@@ -381,10 +390,12 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         panel.addView(title)
 
         // Quality option items
+        val qualityItems = mutableListOf<TextView>()
         qualityOptions.forEachIndexed { index, option ->
             val isSelected = index == currentQualityIndex
             val item = TextView(this).apply {
                 text = if (isSelected) "● ${option.label}" else "○ ${option.label}"
+                contentDescription = if (isSelected) "${option.label}, selected" else option.label
                 setTextColor(if (isSelected) 0xFFE53935.toInt() else Color.WHITE)
                 textSize = 16f
                 typeface = if (isSelected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
@@ -408,12 +419,24 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     switchQuality(index)
                 }
             }
+            qualityItems.add(item)
             panel.addView(item)
 
             // Auto-focus the current quality
             if (isSelected) {
                 item.post { item.requestFocus() }
             }
+        }
+
+        // Set explicit focus chain for D-pad navigation
+        for (i in qualityItems.indices) {
+            val item = qualityItems[i]
+            item.id = View.generateViewId()
+        }
+        for (i in qualityItems.indices) {
+            val item = qualityItems[i]
+            if (i > 0) item.nextFocusUpId = qualityItems[i - 1].id
+            if (i < qualityItems.lastIndex) item.nextFocusDownId = qualityItems[i + 1].id
         }
 
         overlay.addView(panel)
@@ -481,6 +504,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     private fun releasePlayer() {
         progressJob?.cancel()
+        mediaSession?.release()
+        mediaSession = null
         player?.release()
         player = null
     }

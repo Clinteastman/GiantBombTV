@@ -322,7 +322,7 @@ class GiantBombApi(
         val code = response.code
         val text = response.body?.string() ?: ""
 
-        if (code != 200) throw Exception("HTTP $code")
-        return JSONObject(text)
+        if (code !in 200..299) throw Exception("HTTP $code")
+        return if (text.isNotEmpty()) JSONObject(text) else JSONObject()
     }
 }
