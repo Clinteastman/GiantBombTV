@@ -20,7 +20,13 @@ An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com
 
 ## Screenshots
 
-*Coming soon*
+| Browse | Detail |
+|--------|--------|
+| ![Browse](screenshots/browse.png) | ![Detail](screenshots/detail.png) |
+
+| Playback | Quality Picker |
+|----------|---------------|
+| ![Playback](screenshots/playback.png) | ![Quality](screenshots/quality.png) |
 
 ## Setup
 
