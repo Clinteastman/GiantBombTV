@@ -186,7 +186,7 @@ This project uses AI-assisted tooling for specific parts of the development work
 - **Claude Code** - unit test generation, commit messages, PR review prep, mock reviews for app store readiness, and as a sounding board during planning
 - **GitHub Copilot** - pull request code reviews
 
-These tools handle the repetitive parts of solo development (writing tests, reviewing your own PRs, preparing store submissions) so more time goes into the actual app. All architecture, features, and code are written by a human developer with 26 years of professional experience. Android/Kotlin is a new stack for this project, so AI review serves as a useful second opinion when learning a new platform.
+These tools handle the repetitive parts of solo development (writing tests, reviewing your own PRs, preparing store submissions) so more time goes into the actual app. All architecture, features, and code are written by a human developer with 26 years of professional experience. Android/Kotlin is a new stack for me, so AI review serves as a useful second opinion when learning a new platform.
 
 ## Known Issues
 
