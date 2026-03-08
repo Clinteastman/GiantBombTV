@@ -3,7 +3,7 @@ package com.giantbomb.tv.mobile
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
+
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -488,7 +488,6 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             if (!video.thumbnailUrl.isNullOrEmpty()) {
                 Glide.with(thumbnail)
                     .load(video.thumbnailUrl)
-                    .override(com.bumptech.glide.request.target.Target.SIZE_ORIGINAL)
                     .centerCrop()
                     .into(thumbnail)
             } else {
@@ -566,7 +565,6 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             val watched: TextView = view.findViewById(R.id.small_watched)
 
             init {
-                val density = view.resources.displayMetrics.density
                 watched.background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
                     setColor(0xCC4CAF50.toInt())

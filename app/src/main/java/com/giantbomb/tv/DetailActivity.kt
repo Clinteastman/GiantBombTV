@@ -42,9 +42,9 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val isTvDevice = DeviceUtil.isTv(this)
+        val isTv = DeviceUtil.isTv(this)
         // Edge-to-edge + cutout for phones
-        if (!isTvDevice) {
+        if (!isTv) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 window.attributes.layoutInDisplayCutoutMode =
@@ -61,7 +61,6 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val prefs = PrefsManager(this)
         val apiKey = prefs.apiKey ?: ""
         val api = GiantBombApi(apiKey)
-        val isTv = DeviceUtil.isTv(this)
 
         val root = FrameLayout(this).apply {
             setBackgroundResource(R.drawable.bg_ambient_gradient)

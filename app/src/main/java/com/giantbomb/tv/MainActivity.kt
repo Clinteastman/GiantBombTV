@@ -33,13 +33,14 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (DeviceUtil.isTv(this)) {
+        val isTv = DeviceUtil.isTv(this)
+        if (isTv) {
             setTheme(R.style.Theme_GiantBombTV)
         }
         super.onCreate(savedInstanceState)
 
         // Edge-to-edge + display cutout support for phones
-        if (!DeviceUtil.isTv(this)) {
+        if (!isTv) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 window.attributes.layoutInDisplayCutoutMode =
@@ -50,7 +51,7 @@ class MainActivity : FragmentActivity() {
         setContentView(R.layout.activity_main)
 
         if (savedInstanceState == null) {
-            val fragment = if (DeviceUtil.isTv(this)) {
+            val fragment = if (isTv) {
                 BrowseFragment()
             } else {
                 MobileBrowseFragment()

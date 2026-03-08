@@ -161,8 +161,13 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
 
         // Player container - 16:9 in portrait, fullscreen in landscape
+        val screenWidth = resources.displayMetrics.widthPixels
         playerContainer = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (screenWidth * 9) / 16
+            )
         }
 
         playerView = PlayerView(this).apply {
@@ -270,7 +275,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
         contentLayout.addView(upNextHeader)
 
-        // Related videos RecyclerView (nested in ScrollView via NestedScrollView behavior)
+        // RecyclerView with nested scrolling disabled to measure all items inside ScrollView
         relatedRecycler = RecyclerView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
