@@ -179,6 +179,15 @@ app/src/main/java/com/giantbomb/tv/
 | Play/Pause | - | Toggle playback |
 | FF/Rewind | - | Skip ±10 seconds |
 
+## AI Tools Used
+
+This project uses AI-assisted tooling for specific parts of the development workflow:
+
+- **Claude Code** - unit test generation, commit messages, PR review prep, mock reviews for app store readiness, and as a sounding board during planning
+- **GitHub Copilot** - pull request code reviews
+
+These tools handle the repetitive parts of solo development (writing tests, reviewing your own PRs, preparing store submissions) so more time goes into the actual app. All architecture, features, and code are written by a human developer with 26 years of professional experience. Android/Kotlin is a new stack for this project, so AI review serves as a useful second opinion when learning a new platform.
+
 ## Known Issues
 
 - Audio crackle and video stutter on emulators due to software decoding - does not affect real hardware (Fire TV, etc.)
