@@ -12,17 +12,21 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.ScrollView
 import android.widget.Toast
+import androidx.core.view.WindowCompat
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Video
+import com.giantbomb.tv.util.DeviceUtil
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.*
 
@@ -37,6 +41,16 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val isTv = DeviceUtil.isTv(this)
+        // Edge-to-edge + cutout for phones
+        if (!isTv) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
 
         @Suppress("DEPRECATION")
         val video = intent.getSerializableExtra(EXTRA_VIDEO) as? Video ?: run {
@@ -113,13 +127,17 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // Content
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.BOTTOM
-            setPadding(48.dp(), 30.dp(), 200.dp(), 40.dp())
+            gravity = if (isTv) Gravity.BOTTOM else Gravity.TOP
+            if (isTv) {
+                setPadding(48.dp(), 30.dp(), 200.dp(), 40.dp())
+            } else {
+                setPadding(16.dp(), 16.dp(), 16.dp(), 24.dp())
+            }
             clipChildren = false
             clipToPadding = false
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
+                FrameLayout.LayoutParams.WRAP_CONTENT
             )
         }
 
@@ -205,9 +223,9 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             animViews.add(descView)
         }
 
-        // Buttons
+        // Buttons - vertical on phone for better fit, horizontal on TV
         val buttonLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+            orientation = if (isTv) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
             gravity = Gravity.START
         }
 
@@ -221,7 +239,15 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             bold = true
         ).apply {
             contentDescription = "Watch ${video.title}"
-            setPadding(32.dp(), 10.dp(), 32.dp(), 10.dp())
+            if (isTv) {
+                setPadding(32.dp(), 10.dp(), 32.dp(), 10.dp())
+            } else {
+                setPadding(24.dp(), 12.dp(), 24.dp(), 12.dp())
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
             setOnClickListener {
                 val intent = Intent(this@DetailActivity, PlaybackActivity::class.java).apply {
                     putExtra(PlaybackActivity.EXTRA_VIDEO, video)
@@ -242,10 +268,17 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         ).apply {
             contentDescription = "Add to watchlist"
             setPadding(24.dp(), 10.dp(), 24.dp(), 10.dp())
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { marginStart = 10.dp() }
+            layoutParams = if (isTv) {
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { marginStart = 10.dp() }
+            } else {
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = 8.dp() }
+            }
             setOnClickListener {
                 launch {
                     val onWatchlist = tag == true
@@ -284,10 +317,17 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         ).apply {
             contentDescription = "Watch from start"
             setPadding(24.dp(), 10.dp(), 24.dp(), 10.dp())
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { marginStart = 10.dp() }
+            layoutParams = if (isTv) {
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { marginStart = 10.dp() }
+            } else {
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = 8.dp() }
+            }
             visibility = View.GONE  // shown only when there's progress
             setOnClickListener {
                 // Reset progress then play
@@ -308,7 +348,19 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         content.addView(buttonLayout)
         animViews.add(buttonLayout)
 
-        root.addView(content)
+        if (isTv) {
+            root.addView(content)
+        } else {
+            val scrollView = ScrollView(this).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+                isFillViewport = true
+            }
+            scrollView.addView(content)
+            root.addView(scrollView)
+        }
         setContentView(root)
 
         // Fetch duration, progress, and watchlist state asynchronously

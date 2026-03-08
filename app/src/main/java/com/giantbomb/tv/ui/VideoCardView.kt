@@ -27,15 +27,15 @@ class VideoCardView(context: Context) : FrameLayout(context) {
     private val cardHeightPx: Int
 
     init {
-        val density = context.resources.displayMetrics.density
-        val hPadding = (CARD_MARGIN_DP * density).toInt()
-        val vPaddingPx = (CARD_VPADDING_DP * density).toInt()
-        cardWidthPx = (CARD_WIDTH_DP * density).toInt() + hPadding * 2
-        cardHeightPx = (CARD_HEIGHT_DP * density).toInt() + vPaddingPx * 2
+        val res = context.resources
+        val density = res.displayMetrics.density
+        val hPadding = res.getDimensionPixelSize(R.dimen.card_margin)
+        val vPaddingPx = res.getDimensionPixelSize(R.dimen.card_vpadding)
+        cardWidthPx = res.getDimensionPixelSize(R.dimen.card_width) + hPadding * 2
+        cardHeightPx = res.getDimensionPixelSize(R.dimen.card_height) + vPaddingPx * 2
         val cornerRadius = 12f * density
 
-        val vPadding = (CARD_VPADDING_DP * density).toInt()
-        setPadding(hPadding, vPadding, hPadding, vPadding)
+        setPadding(hPadding, vPaddingPx, hPadding, vPaddingPx)
         clipChildren = false
         clipToPadding = false
 
@@ -83,7 +83,7 @@ class VideoCardView(context: Context) : FrameLayout(context) {
         }
         textArea.background = textBg
 
-        // Premium badge — frosted gold pill
+        // Premium badge -- frosted gold pill
         val badgeBg = GradientDrawable().apply {
             setColor(0xCCFFD700.toInt())
             setCornerRadius(4f * density)
@@ -91,7 +91,7 @@ class VideoCardView(context: Context) : FrameLayout(context) {
         }
         premiumBadge.background = badgeBg
 
-        // Watched badge — small green circle with checkmark
+        // Watched badge -- small green circle with checkmark
         val watchedBg = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(0xCC4CAF50.toInt())
@@ -152,12 +152,5 @@ class VideoCardView(context: Context) : FrameLayout(context) {
 
     fun setWatched(watched: Boolean) {
         watchedBadge.visibility = if (watched) View.VISIBLE else View.GONE
-    }
-
-    companion object {
-        private const val CARD_WIDTH_DP = 320
-        private const val CARD_HEIGHT_DP = 240
-        private const val CARD_MARGIN_DP = 8
-        private const val CARD_VPADDING_DP = 8
     }
 }

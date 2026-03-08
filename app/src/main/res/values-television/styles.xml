@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.GiantBombTV" parent="Theme.Leanback">
+        <item name="android:colorPrimary">@color/gb_red</item>
+        <item name="android:colorPrimaryDark">@color/gb_red_dark</item>
+        <item name="android:colorAccent">@color/gb_red</item>
+        <item name="defaultBrandColor">@android:color/transparent</item>
+        <item name="defaultBrandColorDark">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/gb_background</item>
+        <item name="rowHeaderStyle">@style/GiantBomb.RowHeader</item>
+    </style>
+
+    <style name="GiantBomb.RowHeader" parent="Widget.Leanback.Row.Header">
+        <item name="android:textColor">@color/gb_text_secondary</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+</resources>

@@ -26,9 +26,8 @@
         android:layout_height="match_parent"
         android:background="#60000000" />
 
-    <fragment
-        android:id="@+id/main_browse_fragment"
-        android:name="com.giantbomb.tv.BrowseFragment"
+    <FrameLayout
+        android:id="@+id/main_fragment_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 

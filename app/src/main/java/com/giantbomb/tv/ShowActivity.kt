@@ -8,6 +8,7 @@ import android.widget.ImageView
 import androidx.fragment.app.FragmentActivity
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.model.Show
+import com.giantbomb.tv.util.DeviceUtil
 
 class ShowActivity : FragmentActivity() {
 
@@ -16,6 +17,9 @@ class ShowActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        if (DeviceUtil.isTv(this)) {
+            setTheme(R.style.Theme_GiantBombTV)
+        }
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_show)
 
@@ -34,6 +38,12 @@ class ShowActivity : FragmentActivity() {
             backdrop.setRenderEffect(
                 RenderEffect.createBlurEffect(50f, 50f, Shader.TileMode.CLAMP)
             )
+        }
+
+        if (savedInstanceState == null) {
+            supportFragmentManager.beginTransaction()
+                .replace(R.id.show_fragment_container, ShowBrowseFragment())
+                .commit()
         }
     }
 }

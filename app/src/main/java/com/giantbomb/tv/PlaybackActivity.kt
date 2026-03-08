@@ -1,19 +1,28 @@
 package com.giantbomb.tv
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -25,12 +34,16 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
 import androidx.media3.session.MediaSession
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.data.YouTubeExtractor
-import com.giantbomb.tv.model.Mp4Source
 import com.giantbomb.tv.model.Video
+import com.giantbomb.tv.util.DeviceUtil
 import kotlinx.coroutines.*
 
 class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
@@ -49,6 +62,12 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var videoDuration: Double = 0.0
     private var progressJob: Job? = null
     private var saveJob: Job? = null
+    private var isTv = false
+
+    // Mobile portrait layout views
+    private var mobileContentScroll: ScrollView? = null
+    private var playerContainer: FrameLayout? = null
+    private var relatedRecycler: RecyclerView? = null
 
     // Quality selection
     private data class QualityOption(val label: String, val url: String, val isHls: Boolean = false)
@@ -56,10 +75,22 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var currentQualityIndex = 0
     private var qualityOverlay: View? = null
 
+    private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        isTv = DeviceUtil.isTv(this)
+
+        // Edge-to-edge + cutout for phones
+        if (!isTv) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
 
         val prefs = PrefsManager(this)
         api = GiantBombApi(prefs.apiKey ?: "")
@@ -69,6 +100,17 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             finish()
             return
         }
+
+        if (isTv) {
+            buildTvLayout()
+        } else {
+            buildMobileLayout()
+        }
+    }
+
+    private fun buildTvLayout() {
+        // Force landscape on TV
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 
         rootLayout = FrameLayout(this).apply {
             layoutParams = FrameLayout.LayoutParams(
@@ -85,10 +127,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             useController = true
             controllerShowTimeoutMs = 3000
             controllerAutoShow = true
-            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
             setKeepContentOnPlayerReset(false)
 
-            // Hook the gear/settings button to open our quality picker
             setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
                 if (visibility == View.VISIBLE) {
                     findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.setOnClickListener {
@@ -100,6 +141,211 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         rootLayout.addView(playerView)
         setContentView(rootLayout)
+    }
+
+    private fun buildMobileLayout() {
+        rootLayout = FrameLayout(this).apply {
+            setBackgroundColor(0xFF1A1A20.toInt())
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        val mainLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        // Player container - 16:9 in portrait, fullscreen in landscape
+        val screenWidth = resources.displayMetrics.widthPixels
+        playerContainer = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (screenWidth * 9) / 16
+            )
+        }
+
+        playerView = PlayerView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            useController = true
+            controllerShowTimeoutMs = 3000
+            controllerAutoShow = true
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+            setKeepContentOnPlayerReset(false)
+
+            setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
+                if (visibility == View.VISIBLE) {
+                    findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.setOnClickListener {
+                        showQualityPicker()
+                    }
+                }
+            })
+        }
+
+        playerContainer!!.addView(playerView)
+        mainLayout.addView(playerContainer)
+
+        // Content below video (only visible in portrait)
+        val v = video!!
+        mobileContentScroll = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+            setBackgroundColor(0xFF1A1A20.toInt())
+        }
+
+        val contentLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(16.dp(), 12.dp(), 16.dp(), 24.dp())
+        }
+
+        // Video title
+        val titleView = TextView(this).apply {
+            text = v.title
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            maxLines = 2
+        }
+        contentLayout.addView(titleView)
+
+        // Meta line
+        val metaView = TextView(this).apply {
+            val parts = mutableListOf<String>()
+            if (!v.showTitle.isNullOrEmpty()) parts.add(v.showTitle)
+            if (v.publishDate.isNotEmpty()) parts.add(v.publishDate.take(10))
+            if (!v.author.isNullOrEmpty()) parts.add(v.author)
+            text = parts.joinToString("  \u2022  ")
+            textSize = 13f
+            setTextColor(0xFFA0A0A0.toInt())
+            setPadding(0, 4.dp(), 0, 0)
+        }
+        contentLayout.addView(metaView)
+
+        // Description
+        if (!v.description.isNullOrEmpty()) {
+            val descView = TextView(this).apply {
+                text = v.description.replace(Regex("<[^>]*>"), "")
+                textSize = 14f
+                setTextColor(0xFF999999.toInt())
+                setPadding(0, 12.dp(), 0, 0)
+                maxLines = 6
+                setLineSpacing(0f, 1.3f)
+            }
+            contentLayout.addView(descView)
+        }
+
+        // Quality button
+        val qualityBtn = TextView(this).apply {
+            text = "Quality"
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(16.dp(), 8.dp(), 16.dp(), 8.dp())
+            val density = resources.displayMetrics.density
+            background = GradientDrawable().apply {
+                setColor(0x33FFFFFF)
+                cornerRadius = 6f * density
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 12.dp() }
+            setOnClickListener { showQualityPicker() }
+        }
+        contentLayout.addView(qualityBtn)
+
+        // "Up Next" header
+        val upNextHeader = TextView(this).apply {
+            text = "Up Next"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, 20.dp(), 0, 8.dp())
+        }
+        contentLayout.addView(upNextHeader)
+
+        // RecyclerView with nested scrolling disabled to measure all items inside ScrollView
+        relatedRecycler = RecyclerView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            isNestedScrollingEnabled = false
+            layoutManager = LinearLayoutManager(this@PlaybackActivity)
+        }
+        contentLayout.addView(relatedRecycler)
+
+        mobileContentScroll!!.addView(contentLayout)
+        mainLayout.addView(mobileContentScroll)
+
+        rootLayout.addView(mainLayout)
+        setContentView(rootLayout)
+
+        // Set initial layout based on current orientation
+        updateMobileOrientation(resources.configuration.orientation)
+
+        // Load related videos
+        loadRelatedVideos(v)
+    }
+
+    private fun loadRelatedVideos(v: Video) {
+        val showId = v.showId ?: return
+        launch {
+            val result = api.getVideos(limit = 20, showId = showId)
+            result.onSuccess { videos ->
+                val related = videos.filter { it.id != v.id }
+                relatedRecycler?.adapter = RelatedVideoAdapter(related)
+            }
+        }
+    }
+
+    private fun updateMobileOrientation(orientation: Int) {
+        if (isTv) return
+        val isLandscape = orientation == Configuration.ORIENTATION_LANDSCAPE
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+
+        if (isLandscape) {
+            // Fullscreen landscape
+            mobileContentScroll?.visibility = View.GONE
+            playerContainer?.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+            // Hide system bars
+            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+            insetsController.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            // Portrait - video at top 16:9, content below
+            mobileContentScroll?.visibility = View.VISIBLE
+            playerContainer?.post {
+                val width = playerContainer!!.width
+                if (width > 0) {
+                    playerContainer?.layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        (width * 9) / 16
+                    )
+                }
+            }
+            // Show system bars
+            insetsController.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        updateMobileOrientation(newConfig.orientation)
     }
 
     override fun onStart() {
@@ -127,23 +373,20 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 if (!playback.hlsUrl.isNullOrEmpty()) {
                     qualityOptions.add(QualityOption("Auto (HLS)", playback.hlsUrl, isHls = true))
                 }
-                // Sort MP4s by height descending (highest quality first)
                 playback.mp4s.sortedByDescending { it.height }.forEach { mp4 ->
                     val label = if (mp4.height > 0) "${mp4.height}p" else mp4.label.ifEmpty { "MP4" }
                     qualityOptions.add(QualityOption(label, mp4.url))
                 }
 
-                // If no GB sources available, try YouTube extraction as fallback
+                // YouTube fallback
                 if (qualityOptions.isEmpty() && !playback.youtubeUrl.isNullOrEmpty()) {
                     val ytUrl = playback.youtubeUrl
                     if (ytUrl != null) {
                         val ytResult = YouTubeExtractor().extract(ytUrl)
                         ytResult.onSuccess { yt ->
-                            // Add YouTube HLS if available
                             if (yt.hlsUrl != null) {
                                 qualityOptions.add(QualityOption("YouTube HLS", yt.hlsUrl, isHls = true))
                             }
-                            // Add muxed (video+audio) YouTube streams
                             yt.streams
                                 .filter { !it.isAdaptive && it.hasVideo }
                                 .sortedByDescending { it.height }
@@ -167,7 +410,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     return@onSuccess
                 }
 
-                // Select quality based on user preference
                 val preferred = PrefsManager(this@PlaybackActivity).preferredQuality
                 currentQualityIndex = if (preferred == "auto") {
                     0
@@ -177,12 +419,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 }
 
                 val loadControl = DefaultLoadControl.Builder()
-                    .setBufferDurationsMs(
-                        30_000,   // minBufferMs
-                        60_000,   // maxBufferMs
-                        5_000,    // bufferForPlaybackMs — more data before starting
-                        10_000    // bufferForPlaybackAfterRebufferMs
-                    )
+                    .setBufferDurationsMs(30_000, 60_000, 5_000, 10_000)
                     .build()
 
                 val audioAttributes = AudioAttributes.Builder()
@@ -217,7 +454,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     .build().also { exoPlayer ->
                     playerView.player = exoPlayer
 
-                    // MediaSession for Fire TV remote and Alexa integration
                     mediaSession?.release()
                     mediaSession = MediaSession.Builder(this@PlaybackActivity, exoPlayer).build()
 
@@ -225,7 +461,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     exoPlayer.playWhenReady = false
                     exoPlayer.prepare()
 
-                    // Resume from server-side progress (unless starting from beginning)
                     val startFromBeginning = intent.getBooleanExtra("start_from_beginning", false)
                     if (!startFromBeginning) {
                         val progressResult = api.getProgress()
@@ -238,7 +473,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
                     exoPlayer.addListener(object : Player.Listener {
                         override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                            // Force PlayerView to recalculate layout when resolution changes
                             playerView.requestLayout()
                         }
 
@@ -253,7 +487,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     })
 
                     exoPlayer.playWhenReady = true
-
                     startProgressSaving()
                 }
             }
@@ -276,7 +509,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         currentQualityIndex = index
 
-        // Release old player and create a fresh one so video surface resets
         progressJob?.cancel()
         mediaSession?.release()
         mediaSession = null
@@ -344,16 +576,13 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             return
         }
 
-        // Remove existing overlay if any
         dismissQualityPicker()
-
         player?.pause()
 
         val dp = { value: Int ->
             TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), resources.displayMetrics).toInt()
         }
 
-        // Scrim background
         val overlay = FrameLayout(this).apply {
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -364,7 +593,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             isFocusable = true
         }
 
-        // Panel
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = FrameLayout.LayoutParams(
@@ -379,7 +607,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             setPadding(dp(24), dp(20), dp(24), dp(20))
         }
 
-        // Title
         val title = TextView(this).apply {
             text = "Stream Quality"
             setTextColor(Color.WHITE)
@@ -389,7 +616,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
         panel.addView(title)
 
-        // Quality option items
         val qualityItems = mutableListOf<TextView>()
         qualityOptions.forEachIndexed { index, option ->
             val isSelected = index == currentQualityIndex
@@ -422,13 +648,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             qualityItems.add(item)
             panel.addView(item)
 
-            // Auto-focus the current quality
             if (isSelected) {
                 item.post { item.requestFocus() }
             }
         }
 
-        // Set explicit focus chain for D-pad navigation
         for (i in qualityItems.indices) {
             val item = qualityItems[i]
             item.id = View.generateViewId()
@@ -460,14 +684,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             return
         }
 
-        // Fetch show videos and find the one published right before this one
         val result = api.getVideos(limit = 50, showId = showId)
         val videos = result.getOrNull()
         if (videos != null && videos.size > 1) {
             val currentIndex = videos.indexOfFirst { it.id == current.id }
-            // Videos are sorted newest first, so "next" is the one before this in the list (older)
-            // But for "next episode" UX, we want the one after in chronological order,
-            // which is the one at currentIndex - 1 (newer) in the list
             val nextVideo = if (currentIndex > 0) videos[currentIndex - 1] else null
             if (nextVideo != null) {
                 val intent = Intent(this@PlaybackActivity, PlaybackActivity::class.java).apply {
@@ -496,7 +716,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val currentSec = p.currentPosition / 1000.0
         val durationSec = if (videoDuration > 0) videoDuration else p.duration / 1000.0
         if (currentSec > 0 && durationSec > 0) {
-            // Cancel any in-flight save to avoid piling up network calls
             saveJob?.cancel()
             saveJob = launch { api.saveProgress(v.id, currentSec, durationSec) }
         }
@@ -511,13 +730,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        // If quality picker is showing, handle back to dismiss
         if (isQualityPickerShowing()) {
             if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE) {
                 dismissQualityPicker()
                 return true
             }
-            // Let the overlay handle DPAD navigation
             return super.onKeyDown(keyCode, event)
         }
 
@@ -539,7 +756,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 player?.let { it.seekTo(maxOf(0, it.currentPosition - 10000)) }
                 true
             }
-            // Menu button opens quality picker
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> {
                 showQualityPicker()
                 true
@@ -551,5 +767,48 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     override fun onDestroy() {
         super.onDestroy()
         cancel()
+    }
+
+    // -----------------------------------------------------------------------
+    // Related videos adapter for mobile portrait mode
+    // -----------------------------------------------------------------------
+
+    private inner class RelatedVideoAdapter(private val videos: List<Video>) :
+        RecyclerView.Adapter<RelatedVideoAdapter.VH>() {
+
+        inner class VH(view: View) : RecyclerView.ViewHolder(view) {
+            val thumbnail: ImageView = view.findViewById(R.id.related_thumbnail)
+            val title: TextView = view.findViewById(R.id.related_title)
+            val meta: TextView = view.findViewById(R.id.related_meta)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val view = android.view.LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_related_video, parent, false)
+            return VH(view)
+        }
+
+        override fun getItemCount() = videos.size
+
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val video = videos[position]
+            holder.title.text = video.title
+            holder.meta.text = if (video.publishDate.isNotEmpty()) video.publishDate.take(10) else ""
+
+            if (!video.thumbnailUrl.isNullOrEmpty()) {
+                Glide.with(holder.thumbnail)
+                    .load(video.thumbnailUrl)
+                    .centerCrop()
+                    .into(holder.thumbnail)
+            }
+
+            holder.itemView.setOnClickListener {
+                val intent = Intent(this@PlaybackActivity, PlaybackActivity::class.java).apply {
+                    putExtra(EXTRA_VIDEO, video)
+                }
+                startActivity(intent)
+                finish()
+            }
+        }
     }
 }
