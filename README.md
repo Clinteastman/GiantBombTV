@@ -4,7 +4,7 @@ An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com
 
 > **Disclaimer:** This is a fan-made, unofficial app. It is not affiliated with or endorsed by Giant Bomb. All Giant Bomb content is property of its respective owners.
 
-**Giant Bomb is an independent video game site.** A free account gets you access to some content, but for the full experience — including exclusive shows, ad-free videos, and access to the full back catalog — [**join Premium**](https://giantbomb.com/get-premium). It's worth it.
+**Giant Bomb is an independent video game site.** A free account gets you access to some content, but for the full experience (exclusive shows, ad-free videos, and access to the full back catalog) [**join Premium**](https://giantbomb.com/get-premium). It's worth it.
 
 ## Features
 
@@ -13,7 +13,7 @@ An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com
 - **Watchlist** management (add/remove from detail screen)
 - **Search** across all Giant Bomb videos
 - **Show browsing** with infinite scroll through episodes
-- **Stream quality selection** — Auto (HLS), 1080p, 720p, 480p, 360p (per-session and default preference)
+- **Stream quality selection** - Auto (HLS), 1080p, 720p, 480p, 360p (per-session and default preference)
 - **Watched indicators** (green checkmark) and red progress bars on all video cards
 - **Blurred backdrop** with smooth crossfade transitions as you navigate
 - **D-pad optimized** navigation for TV remotes
@@ -28,10 +28,41 @@ An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com
 |----------|---------------|
 | ![Playback](screenshots/playback.png) | ![Quality](screenshots/quality.png) |
 
-## Setup
+## Installation
+
+Download the latest APK from the [Releases](https://github.com/Clinteastman/GiantBombTV/releases) page, or use one of the methods below.
+
+### Obtainium (recommended for auto-updates)
+
+[Obtainium](https://github.com/ImranR98/Obtainium) tracks GitHub releases and notifies you when updates are available. You can sideload Obtainium onto your TV via ADB, then manage updates directly from the TV.
+
+1. Install Obtainium on your Android TV device
+2. Add a new app with the URL: `https://github.com/Clinteastman/GiantBombTV`
+3. Obtainium will install the latest release and notify you of future updates
+
+### Downloader (Fire TV / Android TV)
+
+[Downloader](https://www.aftvnews.com/downloader/) is a popular sideloading app available on the Amazon Appstore and Google Play for TV.
+
+1. Install Downloader on your Fire TV or Android TV
+2. Open Downloader and enter the URL for the latest release APK from the [Releases](https://github.com/Clinteastman/GiantBombTV/releases) page
+3. Download and install when prompted
+
+### ADB (from a computer)
+
+If you have a computer on the same network as your TV:
+
+```bash
+# Enable developer options and ADB debugging on your TV
+# Connect via network: adb connect <tv-ip-address>
+# Then install the APK:
+adb install -r app-release.apk
+```
+
+### Setup
 
 1. Log in to [giantbomb.com](https://www.giantbomb.com) and find your API key in your profile settings
-2. Build and install the app (see below)
+2. Install the app using any method above
 3. Launch the app and enter your API key in the setup screen
 
 ## Building
@@ -44,6 +75,7 @@ An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com
   - Compile SDK 35
   - Build Tools (latest)
   - Android TV system image (optional, for emulator testing)
+- Supports devices running Android 5.0+ (SDK 21)
 
 ### Build & Install
 
@@ -51,6 +83,9 @@ An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com
 # Clone the repo
 git clone https://github.com/Clinteastman/GiantBombTV.git
 cd GiantBombTV
+
+# Run tests
+./gradlew testDebugUnitTest
 
 # Build debug APK
 ./gradlew assembleDebug
@@ -62,12 +97,19 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.giantbomb.tv/.MainActivity
 ```
 
+### CI/CD
+
+This project uses GitHub Actions for automated builds and releases:
+
+- **Build & Test** - runs unit tests and builds on every push and PR to `master`
+- **Release** - push a version tag (e.g. `git tag v0.3.0 && git push origin v0.3.0`) to automatically run tests, build a signed release APK, and create a GitHub Release
+
 ### Emulator Setup
 
 To run on an Android TV emulator:
 
 1. In Android Studio, open **Device Manager**
-2. Create a new virtual device → select **Television** → any TV profile
+2. Create a new virtual device, select **Television**, then any TV profile
 3. Select a system image (API 34 recommended)
 4. Start the emulator, then run the build & install commands above
 
@@ -86,6 +128,7 @@ app/src/main/java/com/giantbomb/tv/
 ├── SetupActivity.kt             # API key entry screen
 ├── data/
 │   ├── GiantBombApi.kt          # Giant Bomb public API client (OkHttp)
+│   ├── YouTubeExtractor.kt      # YouTube stream extraction (fallback playback)
 │   └── PrefsManager.kt          # SharedPreferences wrapper
 ├── model/
 │   ├── Video.kt                 # Video, Show, PlaybackInfo, ProgressEntry models
@@ -105,6 +148,8 @@ app/src/main/java/com/giantbomb/tv/
 - **Glide** for image loading
 - **OkHttp** for networking
 - **Giant Bomb Public API** for all content
+- **JUnit + MockWebServer** for unit testing
+- **GitHub Actions** for CI/CD
 
 ## Remote Controls
 
@@ -113,15 +158,15 @@ app/src/main/java/com/giantbomb/tv/
 | D-pad | Navigate cards | Seek / show controls |
 | Select/Enter | Open video detail | Play/pause |
 | Back | Navigate back | Save progress & exit |
-| Menu | — | Open quality picker |
-| Search orb | Open search | — |
-| Play/Pause | — | Toggle playback |
-| FF/Rewind | — | Skip ±10 seconds |
+| Menu | - | Open quality picker |
+| Search orb | Open search | - |
+| Play/Pause | - | Toggle playback |
+| FF/Rewind | - | Skip ±10 seconds |
 
 ## Known Issues
 
-- Audio crackle and video stutter on emulators due to software decoding — does not affect real hardware (Fire TV, etc.)
-- This is an early preview — expect rough edges
+- Audio crackle and video stutter on emulators due to software decoding - does not affect real hardware (Fire TV, etc.)
+- This is an early preview - expect rough edges
 
 ## License
 
