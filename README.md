@@ -112,6 +112,12 @@ app/src/main/java/com/giantbomb/tv/
 | Play/Pause | — | Toggle playback |
 | FF/Rewind | — | Skip ±10 seconds |
 
+## Known Issues
+
+- Minor audio crackle at playback start on some devices/emulators
+- Video playback may stutter on emulators due to software decoding (real hardware has dedicated video decode chips)
+- This is an early preview — expect rough edges
+
 ## License
 
 This project is provided as-is for personal, non-commercial use only.
