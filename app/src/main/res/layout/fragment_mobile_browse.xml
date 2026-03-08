@@ -10,14 +10,15 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
-        <!-- Top toolbar -->
+        <!-- Top toolbar - insets applied programmatically -->
         <FrameLayout
             android:id="@+id/toolbar_container"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:background="@color/gb_background"
+            android:layout_height="wrap_content"
+            android:background="@android:color/transparent"
             android:paddingStart="16dp"
-            android:paddingEnd="12dp">
+            android:paddingEnd="12dp"
+            android:paddingBottom="8dp">
 
             <ImageView
                 android:id="@+id/toolbar_logo"

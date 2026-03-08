@@ -1,7 +1,9 @@
 package com.giantbomb.tv.mobile
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -11,7 +13,10 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -68,13 +73,24 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         swipeRefresh = view.findViewById(R.id.swipe_refresh)
         miniPlayerContainer = view.findViewById(R.id.mini_player_container)
 
+        // Apply system bar insets to toolbar - status bar top + consistent horizontal padding
+        val toolbar = view.findViewById<FrameLayout>(R.id.toolbar_container)
+        val basePadStart = toolbar.paddingStart
+        val basePadEnd = toolbar.paddingEnd
+        val basePadBottom = toolbar.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(toolbar) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.statusBars())
+            v.setPadding(basePadStart, bars.top + (8 * resources.displayMetrics.density).toInt(), basePadEnd, basePadBottom)
+            insets
+        }
+
         // Toolbar search
         view.findViewById<ImageView>(R.id.toolbar_search).setOnClickListener {
             startActivity(Intent(requireContext(), SearchActivity::class.java))
         }
 
         browseAdapter = BrowseAdapter()
-        recyclerView.layoutManager = LinearLayoutManager(requireContext())
+        setupLayoutManager()
         recyclerView.adapter = browseAdapter
 
         swipeRefresh.setColorSchemeColors(
@@ -93,15 +109,46 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     }
 
     private var hasBeenVisible = false
+    private var wasInBackground = false
+
+    private fun isLandscape(): Boolean =
+        resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    private fun setupLayoutManager() {
+        val spanCount = if (isLandscape()) 2 else 1
+        val glm = GridLayoutManager(requireContext(), spanCount)
+        glm.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+            override fun getSpanSize(position: Int): Int {
+                if (position >= browseItems.size) return spanCount
+                return when (browseItems[position]) {
+                    is BrowseItem.VerticalVideo -> 1 // each card takes 1 span (so 2-across in landscape)
+                    else -> spanCount // full width for headers, horizontal rows, settings
+                }
+            }
+        }
+        recyclerView.layoutManager = glm
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        setupLayoutManager()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        wasInBackground = true
+    }
 
     override fun onResume() {
         super.onResume()
         if (browseItems.isEmpty()) {
             loadContent()
-        } else if (hasBeenVisible) {
+        } else if (wasInBackground && hasBeenVisible) {
+            // Only reload when returning from another activity, not on rotation
             loadContent()
         }
         hasBeenVisible = true
+        wasInBackground = false
     }
 
     fun loadContent() {
@@ -351,6 +398,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     }
 
     private inner class VerticalVideoVH(view: View) : RecyclerView.ViewHolder(view) {
+        private val thumbnailContainer: FrameLayout = view.findViewById(R.id.thumbnail_container)
         private val thumbnail: ImageView = view.findViewById(R.id.video_thumbnail)
         private val titleView: TextView = view.findViewById(R.id.video_title)
         private val metaView: TextView = view.findViewById(R.id.video_meta)
@@ -362,6 +410,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
 
         init {
             val density = view.resources.displayMetrics.density
+
             // Premium badge styling
             premiumBadge.background = GradientDrawable().apply {
                 setColor(0xCCFFD700.toInt())
@@ -383,6 +432,20 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
 
         fun bind(item: BrowseItem.VerticalVideo) {
             val video = item.video
+
+            // Enforce 16:9 on each bind (handles orientation changes & recycling)
+            thumbnailContainer.post {
+                val width = thumbnailContainer.width
+                if (width > 0) {
+                    val targetHeight = (width * 9) / 16
+                    val lp = thumbnailContainer.layoutParams
+                    if (lp.height != targetHeight) {
+                        lp.height = targetHeight
+                        thumbnailContainer.layoutParams = lp
+                    }
+                }
+            }
+
             titleView.text = video.title
 
             val meta = buildString {
@@ -421,10 +484,11 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 progressBar.visibility = View.GONE
             }
 
-            // Thumbnail
+            // Thumbnail - use placeholder size to avoid stale cache sizing
             if (!video.thumbnailUrl.isNullOrEmpty()) {
                 Glide.with(thumbnail)
                     .load(video.thumbnailUrl)
+                    .override(com.bumptech.glide.request.target.Target.SIZE_ORIGINAL)
                     .centerCrop()
                     .into(thumbnail)
             } else {

@@ -1,6 +1,6 @@
 # Giant Bomb TV
 
-An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com) videos with a glassmorphism-inspired UI.
+An unofficial Android TV and mobile app for watching [Giant Bomb](https://www.giantbomb.com) videos. Glassmorphism-inspired TV UI and a YouTube-style mobile layout.
 
 > **Disclaimer:** This is a fan-made, unofficial app. It is not affiliated with or endorsed by Giant Bomb. All Giant Bomb content is property of its respective owners.
 
@@ -15,10 +15,15 @@ An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com
 - **Show browsing** with infinite scroll through episodes
 - **Stream quality selection** - Auto (HLS), 1080p, 720p, 480p, 360p (per-session and default preference)
 - **Watched indicators** (green checkmark) and red progress bars on all video cards
-- **Blurred backdrop** with smooth crossfade transitions as you navigate
+- **Blurred backdrop** with smooth crossfade transitions as you navigate (TV)
 - **D-pad optimized** navigation for TV remotes
+- **Mobile phone layout** - YouTube-style vertical feed with horizontal category rows
+- **Portrait playback** - video at top with "Up Next" episodes below (mobile)
+- **Responsive** - adapts between 1-column (portrait) and 2-column (landscape) grid on phones
 
 ## Screenshots
+
+### Android TV
 
 | Browse | Detail |
 |--------|--------|
@@ -27,6 +32,12 @@ An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com
 | Playback | Quality Picker |
 |----------|---------------|
 | ![Playback](screenshots/playback.png) | ![Quality](screenshots/quality.png) |
+
+### Mobile
+
+| Browse | Detail | Playback | Search |
+|--------|--------|----------|--------|
+| ![Browse](screenshots/mobile_browse.png) | ![Detail](screenshots/mobile_detail.png) | ![Playback](screenshots/mobile_playback.png) | ![Search](screenshots/mobile_search.png) |
 
 ## Installation
 
@@ -117,15 +128,15 @@ To run on an Android TV emulator:
 
 ```
 app/src/main/java/com/giantbomb/tv/
-├── MainActivity.kt              # Host activity for BrowseFragment
-├── BrowseFragment.kt            # Main browse screen (Leanback BrowseSupportFragment)
-├── DetailActivity.kt            # Video detail screen with cinematic backdrop
-├── PlaybackActivity.kt          # ExoPlayer video playback with quality picker
-├── SearchActivity.kt            # Search screen host
-├── GiantBombSearchFragment.kt   # Leanback search with debounced API queries
+├── MainActivity.kt              # Host activity (loads TV or mobile fragment)
+├── BrowseFragment.kt            # TV browse screen (Leanback BrowseSupportFragment)
+├── DetailActivity.kt            # Video detail screen (responsive TV/mobile)
+├── PlaybackActivity.kt          # ExoPlayer playback (fullscreen TV, portrait+landscape mobile)
+├── SearchActivity.kt            # Search screen host (loads TV or mobile search)
+├── GiantBombSearchFragment.kt   # Leanback search with debounced API queries (TV)
 ├── ShowActivity.kt              # Show episode browser
 ├── ShowBrowseFragment.kt        # Infinite-scroll episode list for a show
-├── SetupActivity.kt             # API key entry screen
+├── SetupActivity.kt             # API key entry screen (responsive)
 ├── data/
 │   ├── GiantBombApi.kt          # Giant Bomb public API client (OkHttp)
 │   ├── YouTubeExtractor.kt      # YouTube stream extraction (fallback playback)
@@ -133,11 +144,16 @@ app/src/main/java/com/giantbomb/tv/
 ├── model/
 │   ├── Video.kt                 # Video, Show, PlaybackInfo, ProgressEntry models
 │   └── SettingsItem.kt          # Settings row item model
-└── ui/
-    ├── VideoCardView.kt         # Custom glassmorphism video card
-    ├── CardPresenter.kt         # Leanback presenter for video cards
-    ├── ShowCardPresenter.kt     # Leanback presenter for show cards
-    └── SettingsCardPresenter.kt # Leanback presenter for settings cards
+├── mobile/
+│   ├── MobileBrowseFragment.kt  # YouTube-style vertical feed with horizontal rows
+│   └── MobileSearchFragment.kt  # Mobile search with text input and list results
+├── ui/
+│   ├── VideoCardView.kt         # Custom glassmorphism video card (TV)
+│   ├── CardPresenter.kt         # Leanback presenter for video cards
+│   ├── ShowCardPresenter.kt     # Leanback presenter for show cards
+│   └── SettingsCardPresenter.kt # Leanback presenter for settings cards
+└── util/
+    └── DeviceUtil.kt            # Runtime TV/phone detection
 ```
 
 ## Tech Stack

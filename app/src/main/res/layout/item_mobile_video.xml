@@ -9,24 +9,17 @@
     android:paddingBottom="16dp"
     android:background="?android:attr/selectableItemBackground">
 
-    <!-- Thumbnail container -->
+    <!-- Thumbnail container with 16:9 aspect ratio enforced programmatically -->
     <FrameLayout
+        android:id="@+id/thumbnail_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
         <ImageView
             android:id="@+id/video_thumbnail"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:adjustViewBounds="true"
-            android:scaleType="centerCrop"
-            tools:layout_height="200dp" />
-
-        <!-- Force 16:9 aspect ratio via an invisible spacer -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:visibility="invisible" />
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop" />
 
         <!-- Watched checkmark overlay -->
         <TextView
@@ -79,7 +72,7 @@
             tools:text="1:23:45"
             tools:visibility="visible" />
 
-        <!-- Progress bar track (full width at bottom of thumbnail) -->
+        <!-- Progress bar track -->
         <View
             android:id="@+id/video_progress_track"
             android:layout_width="match_parent"

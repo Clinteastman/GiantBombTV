@@ -2,9 +2,12 @@ package com.giantbomb.tv
 
 import android.app.Activity
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
+import android.view.WindowManager
+import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
 import com.giantbomb.tv.mobile.MobileBrowseFragment
 import com.giantbomb.tv.util.DeviceUtil
@@ -34,6 +37,16 @@ class MainActivity : FragmentActivity() {
             setTheme(R.style.Theme_GiantBombTV)
         }
         super.onCreate(savedInstanceState)
+
+        // Edge-to-edge + display cutout support for phones
+        if (!DeviceUtil.isTv(this)) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+
         setContentView(R.layout.activity_main)
 
         if (savedInstanceState == null) {
