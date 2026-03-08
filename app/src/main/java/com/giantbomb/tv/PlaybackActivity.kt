@@ -131,8 +131,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     qualityOptions.add(QualityOption(label, mp4.url))
                 }
 
-                // If no GB sources, or YouTube URL is available, try YouTube extraction
-                if (qualityOptions.isEmpty() || !playback.youtubeUrl.isNullOrEmpty()) {
+                // If no GB sources available, try YouTube extraction as fallback
+                if (qualityOptions.isEmpty() && !playback.youtubeUrl.isNullOrEmpty()) {
                     val ytUrl = playback.youtubeUrl
                     if (ytUrl != null) {
                         val ytResult = YouTubeExtractor().extract(ytUrl)

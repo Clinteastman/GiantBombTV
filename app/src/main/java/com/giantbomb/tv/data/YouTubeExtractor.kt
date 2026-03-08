@@ -12,14 +12,14 @@ import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
 /**
- * Lightweight YouTube stream URL extractor using the InnerTube API.
+ * Lightweight YouTube stream URL extractor.
  * Extracts direct video/audio stream URLs from YouTube video IDs or URLs.
  */
 class YouTubeExtractor {
 
     companion object {
         private const val TAG = "YouTubeExtractor"
-        private const val INNERTUBE_URL = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
+        private const val PLAYER_URL = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
 
         private val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -124,7 +124,7 @@ class YouTubeExtractor {
             }
 
             val requestBuilder = Request.Builder()
-                .url(INNERTUBE_URL)
+                .url(PLAYER_URL)
                 .header("User-Agent", userAgent)
                 .header("Content-Type", "application/json")
                 .header("X-YouTube-Client-Name", clientName)
@@ -135,11 +135,12 @@ class YouTubeExtractor {
             requestBuilder.post(body.toString().toRequestBody("application/json".toMediaType()))
 
             val response = client.newCall(requestBuilder.build()).execute()
-            val text = response.body?.string() ?: ""
+            val code = response.code
+            val text = response.use { it.body?.string() ?: "" }
 
-            if (response.code != 200) {
-                Log.w(TAG, "HTTP ${response.code} from $clientType client")
-                return Result.failure(Exception("HTTP ${response.code}"))
+            if (code != 200) {
+                Log.w(TAG, "HTTP $code from $clientType client")
+                return Result.failure(Exception("HTTP $code"))
             }
 
             val json = JSONObject(text)

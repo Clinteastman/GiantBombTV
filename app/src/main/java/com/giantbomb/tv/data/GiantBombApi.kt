@@ -10,6 +10,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URI
 import java.util.concurrent.TimeUnit
 
 class GiantBombApi(
@@ -104,8 +105,11 @@ class GiantBombApi(
 
             // YouTube URL (may be a valid URL, or sometimes junk data)
             val rawYt = json.optString("youtube_url", null)
-            val youtubeUrl = rawYt?.takeIf {
-                it.contains("youtube.com/") || it.contains("youtu.be/")
+            val youtubeUrl = rawYt?.takeIf { url ->
+                try {
+                    val host = URI(url).host?.lowercase() ?: return@takeIf false
+                    host == "youtu.be" || host.endsWith(".youtube.com") || host == "youtube.com"
+                } catch (_: Exception) { false }
             }
 
             val mp4s = mutableListOf<Mp4Source>()

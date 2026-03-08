@@ -296,6 +296,36 @@ class GiantBombApiTest {
         assertNull(result.getOrThrow().youtubeUrl)
     }
 
+    @Test
+    fun `getPlayback - rejects spoofed youtube URL with wrong host`() = runTest {
+        val body = JSONObject().apply {
+            put("title", "Spoofed")
+            put("youtube_url", "https://example.com/?youtube.com/watch?v=abc123def45")
+            put("free", JSONObject().apply {
+                put("duration", 300.0)
+            })
+        }
+        server.enqueue(MockResponse().setBody(body.toString()).setResponseCode(200))
+
+        val result = api.getPlayback(102)
+        assertNull(result.getOrThrow().youtubeUrl)
+    }
+
+    @Test
+    fun `getPlayback - accepts youtu-be short URL`() = runTest {
+        val body = JSONObject().apply {
+            put("title", "Short YT")
+            put("youtube_url", "https://youtu.be/abc123def45")
+            put("free", JSONObject().apply {
+                put("duration", 300.0)
+            })
+        }
+        server.enqueue(MockResponse().setBody(body.toString()).setResponseCode(200))
+
+        val result = api.getPlayback(103)
+        assertEquals("https://youtu.be/abc123def45", result.getOrThrow().youtubeUrl)
+    }
+
     // --- getProgress ---
 
     @Test
