@@ -21,6 +21,31 @@ class PrefsManager(context: Context) {
         get() = prefs.getString("preferred_quality", "auto") ?: "auto"
         set(value) = prefs.edit().putString("preferred_quality", value).apply()
 
+    /** Favourite show IDs - these get pinned to the top of the browse list */
+    fun getFavouriteShows(): Set<Int> {
+        return prefs.getStringSet("favourite_shows", emptySet())
+            ?.mapNotNull { it.toIntOrNull() }?.toSet() ?: emptySet()
+    }
+
+    fun toggleFavouriteShow(showId: Int): Boolean {
+        val current = prefs.getStringSet("favourite_shows", emptySet())?.toMutableSet() ?: mutableSetOf()
+        val idStr = showId.toString()
+        val isFavourite = if (current.contains(idStr)) {
+            current.remove(idStr)
+            false
+        } else {
+            current.add(idStr)
+            true
+        }
+        prefs.edit().putStringSet("favourite_shows", current).apply()
+        return isFavourite
+    }
+
+    fun isFavouriteShow(showId: Int): Boolean {
+        return prefs.getStringSet("favourite_shows", emptySet())
+            ?.contains(showId.toString()) == true
+    }
+
     companion object {
         val QUALITY_OPTIONS = listOf("auto", "1080p", "720p", "480p", "360p")
 

@@ -96,7 +96,7 @@ class SetupActivity : Activity(), CoroutineScope by MainScope() {
         }
 
         val instructions = TextView(this).apply {
-            text = "Enter your API key from giantbomb.com/api/\n\nYour key is a 40-character code on that page."
+            text = "Find your API key on your Giant Bomb profile page.\n\nLog in at giantbomb.com, go to your profile, and copy the 40-character API key."
             textSize = 16f
             setTextColor(0xFFA0A0A0.toInt())
             setPadding(0, 0, 0, dp(16))

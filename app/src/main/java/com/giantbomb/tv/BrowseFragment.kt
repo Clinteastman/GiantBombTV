@@ -5,6 +5,7 @@ import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.KeyEvent
 import android.view.View
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -44,7 +45,21 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         private const val BACKDROP_DELAY_MS = 300L
         private const val CROSSFADE_DURATION = 600L
         private const val BACKDROP_ALPHA = 0.5f
+        private const val INITIAL_VIDEO_LIMIT = 100
+        private const val ROW_PAGE_SIZE = 40
+        private const val LOAD_MORE_THRESHOLD = 5
     }
+
+    // Per-row pagination state for show-grouped rows
+    private data class RowPagination(
+        val showTitle: String,
+        val showId: Int,
+        val adapter: ArrayObjectAdapter,
+        var offset: Int,
+        var hasMore: Boolean = true,
+        var isLoading: Boolean = false
+    )
+    private val rowPaginationMap = mutableMapOf<String, RowPagination>()
 
     @Suppress("DEPRECATION")
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -56,6 +71,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         setupBackdrop()
         setupUIElements()
         setupListeners()
+        // setupKeyInterceptor() // TODO: re-enable when pin/unpin is fixed
 
         // First launch: redirect to setup if no API key
         if (prefs.apiKey.isNullOrEmpty()) {
@@ -93,6 +109,10 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                     startActivity(intent)
                 }
                 is Show -> {
+                    // TODO: Pin/unpin favourite shows - disabled due to Leanback key repeat issue
+                    // val isFav = prefs.toggleFavouriteShow(item.id)
+                    // val msg = if (isFav) "\u2605 ${item.title} pinned" else "${item.title} unpinned"
+                    // Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
                     val intent = Intent(requireContext(), ShowActivity::class.java).apply {
                         putExtra(ShowActivity.EXTRA_SHOW, item)
                     }
@@ -108,10 +128,23 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             }
         }
 
-        // Debounced backdrop update on item focus
-        onItemViewSelectedListener = OnItemViewSelectedListener { _, item, _, _ ->
+        // Debounced backdrop update on item focus + per-row pagination
+        onItemViewSelectedListener = OnItemViewSelectedListener { _, item, _, row ->
             when (item) {
-                is Video -> updateBackdropDebounced(item.thumbnailUrl ?: item.posterUrl)
+                is Video -> {
+                    updateBackdropDebounced(item.thumbnailUrl ?: item.posterUrl)
+                    // Check if we need to load more for this row
+                    val header = (row as? ListRow)?.headerItem?.name
+                    if (header != null) {
+                        val pagination = rowPaginationMap[header]
+                        if (pagination != null && !pagination.isLoading && pagination.hasMore) {
+                            val position = pagination.adapter.indexOf(item)
+                            if (position >= pagination.adapter.size() - LOAD_MORE_THRESHOLD) {
+                                loadMoreForRow(pagination)
+                            }
+                        }
+                    }
+                }
                 is Show -> updateBackdropDebounced(item.posterUrl ?: item.logoUrl)
             }
         }
@@ -120,6 +153,27 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             val intent = Intent(requireContext(), SearchActivity::class.java)
             startActivity(intent)
         }
+    }
+
+    private fun setupKeyInterceptor() {
+        // Block select/enter key repeats to prevent rapid-fire pin toggling
+        // Leanback consumes key events internally, so we must intercept at the grid level
+        view?.viewTreeObserver?.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                view?.viewTreeObserver?.removeOnGlobalLayoutListener(this)
+                try {
+                    val rowsFragment = childFragmentManager.fragments.firstOrNull { it is androidx.leanback.app.RowsSupportFragment }
+                    val gridView = (rowsFragment as? androidx.leanback.app.RowsSupportFragment)?.verticalGridView
+                    gridView?.setOnKeyInterceptListener { event ->
+                        val isSelectKey = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                                event.keyCode == KeyEvent.KEYCODE_ENTER ||
+                                event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
+                                event.keyCode == KeyEvent.KEYCODE_BUTTON_A
+                        isSelectKey && event.repeatCount > 0
+                    }
+                } catch (_: Exception) { }
+            }
+        })
     }
 
     private fun updateBackdropDebounced(imageUrl: String?) {
@@ -188,7 +242,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
 
             val watchlistDeferred = async { api.getWatchlist() }
             val progressDeferred = async { api.getProgress() }
-            val recentDeferred = async { api.getVideos(limit = 40) }
+            val recentDeferred = async { api.getVideos(limit = INITIAL_VIDEO_LIMIT) }
             val showsDeferred = async { api.getShows() }
 
             // Await shows early so we can use show posters as thumbnail fallback
@@ -245,17 +299,6 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 return v.withFallbackThumb()
             }
 
-            // Watchlist
-            val watchlist = if (key.isNotEmpty()) watchlistDeferred.await().getOrNull() else null
-            if (watchlist != null && watchlist.isNotEmpty()) {
-                val wlAdapter = ArrayObjectAdapter(CardPresenter())
-                watchlist.forEach { wlAdapter.add(it.withProgress()) }
-                rowsAdapter.add(ListRow(
-                    HeaderItem(headerIdCounter++, "My Watchlist"),
-                    wlAdapter
-                ))
-            }
-
             // Recent videos
             val recent = recentDeferred.await()
             recent.onSuccess { videos ->
@@ -268,27 +311,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                     ))
                 }
 
-                val grouped = videos.filter { it.showTitle != null }
-                    .groupBy { it.showTitle!! }
-                    .filter { it.value.size >= 2 }
-                    .toSortedMap()
-                grouped.forEach { (show, showVideos) ->
-                    val listRowAdapter = ArrayObjectAdapter(CardPresenter())
-                    showVideos.forEach { listRowAdapter.add(it.withProgress()) }
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, show),
-                        listRowAdapter
-                    ))
-                }
-            }
-
-            recent.onFailure { e ->
-                Toast.makeText(requireContext(),
-                    "Error loading videos: ${e.message}", Toast.LENGTH_LONG).show()
-            }
-
-            // Premium & Free rows from recent videos
-            recent.onSuccess { videos ->
+                // Premium row right after Recent
                 val premiumVideos = videos.filter { it.premium }
                 if (premiumVideos.size >= 2) {
                     val premiumAdapter = ArrayObjectAdapter(CardPresenter())
@@ -298,28 +321,52 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                         premiumAdapter
                     ))
                 }
-                val freeVideos = videos.filter { !it.premium }
-                if (freeVideos.size >= 2) {
-                    val freeAdapter = ArrayObjectAdapter(CardPresenter())
-                    freeVideos.forEach { freeAdapter.add(it.withProgress()) }
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, "Free Videos"),
-                        freeAdapter
-                    ))
-                }
             }
 
-            // Browse Shows row
+            recent.onFailure { e ->
+                Toast.makeText(requireContext(),
+                    "Error loading videos: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+
+            // Per-show video rows - fetch first page for each show in parallel
+            rowPaginationMap.clear()
             if (shows != null && shows.isNotEmpty()) {
+                // TODO: re-enable favourite sorting when pin/unpin UI is fixed
+                // val favouriteIds = prefs.getFavouriteShows()
+                val activeShows = shows.filter { it.active }
+                val showVideoResults = activeShows.map { s ->
+                    s to async { api.getShowVideos(s.id, limit = ROW_PAGE_SIZE) }
+                }
+                for ((s, deferred) in showVideoResults) {
+                    val showVideos = deferred.await().getOrNull() ?: continue
+                    if (showVideos.isEmpty()) continue
+                    val listRowAdapter = ArrayObjectAdapter(CardPresenter())
+                    showVideos.forEach { listRowAdapter.add(it.withProgress()) }
+                    val rowTitle = s.title
+                    rowsAdapter.add(ListRow(
+                        HeaderItem(headerIdCounter++, rowTitle),
+                        listRowAdapter
+                    ))
+                    rowPaginationMap[rowTitle] = RowPagination(
+                        showTitle = s.title,
+                        showId = s.id,
+                        adapter = listRowAdapter,
+                        offset = showVideos.size,
+                        hasMore = showVideos.size >= ROW_PAGE_SIZE
+                    )
+                }
+
+                // Browse Shows card row - click to pin/unpin
                 val showsAdapter = ArrayObjectAdapter(ShowCardPresenter())
-                shows.filter { it.active }.forEach { showsAdapter.add(it) }
+                activeShows.forEach { showsAdapter.add(it) }
                 if (showsAdapter.size() > 0) {
                     rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, "Shows"),
+                        HeaderItem(headerIdCounter++, "All Shows"),
                         showsAdapter
                     ))
                 }
-                // Also add inactive shows
+
+                // Past shows card row
                 val inactiveShows = shows.filter { !it.active }
                 if (inactiveShows.isNotEmpty()) {
                     val inactiveAdapter = ArrayObjectAdapter(ShowCardPresenter())
@@ -327,6 +374,30 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                     rowsAdapter.add(ListRow(
                         HeaderItem(headerIdCounter++, "Past Shows"),
                         inactiveAdapter
+                    ))
+                }
+            }
+
+            // Watchlist
+            val watchlist = if (key.isNotEmpty()) watchlistDeferred.await().getOrNull() else null
+            if (watchlist != null && watchlist.isNotEmpty()) {
+                val wlAdapter = ArrayObjectAdapter(CardPresenter())
+                watchlist.forEach { wlAdapter.add(it.withProgress()) }
+                rowsAdapter.add(ListRow(
+                    HeaderItem(headerIdCounter++, "My Watchlist"),
+                    wlAdapter
+                ))
+            }
+
+            // Free Videos row
+            recent.onSuccess { videos ->
+                val freeVideos = videos.filter { !it.premium }
+                if (freeVideos.size >= 2) {
+                    val freeAdapter = ArrayObjectAdapter(CardPresenter())
+                    freeVideos.forEach { freeAdapter.add(it.withProgress()) }
+                    rowsAdapter.add(ListRow(
+                        HeaderItem(headerIdCounter++, "Free Videos"),
+                        freeAdapter
                     ))
                 }
             }
@@ -386,6 +457,40 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             "Default quality: ${PrefsManager.qualityLabel(options[nextIndex])}", Toast.LENGTH_SHORT).show()
         // Reload to update the settings card description
         loadContent()
+    }
+
+    private fun loadMoreForRow(pagination: RowPagination) {
+        pagination.isLoading = true
+        val key = prefs.apiKey ?: ""
+        val api = GiantBombApi(key)
+
+        launch {
+            try {
+                val result = api.getShowVideos(pagination.showId, limit = ROW_PAGE_SIZE, offset = pagination.offset)
+                result.onSuccess { videos ->
+                    if (videos.size < ROW_PAGE_SIZE) pagination.hasMore = false
+                    pagination.offset += videos.size
+
+                    val progressResult = api.getProgress().getOrNull()
+                    val progressMap = progressResult?.associateBy { it.videoId } ?: emptyMap()
+
+                    videos.forEach { video ->
+                        val entry = progressMap[video.id]
+                        val v = when {
+                            entry != null && entry.percentComplete >= 95 -> video.copy(watched = true)
+                            entry != null && entry.percentComplete in 1..94 -> video.copy(progressPercent = entry.percentComplete)
+                            else -> video
+                        }
+                        pagination.adapter.add(v)
+                    }
+                }
+                result.onFailure {
+                    pagination.hasMore = false
+                }
+            } finally {
+                pagination.isLoading = false
+            }
+        }
     }
 
     private fun launchSetup() {

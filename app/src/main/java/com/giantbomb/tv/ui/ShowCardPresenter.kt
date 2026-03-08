@@ -8,6 +8,7 @@ import androidx.leanback.widget.ImageCardView
 import androidx.leanback.widget.Presenter
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.R
+import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Show
 
 class ShowCardPresenter : Presenter() {
@@ -44,8 +45,10 @@ class ShowCardPresenter : Presenter() {
     override fun onBindViewHolder(viewHolder: ViewHolder, item: Any) {
         val show = item as Show
         val cardView = viewHolder.view as ImageCardView
-        cardView.titleText = show.title
-        cardView.contentText = if (show.active) "Active" else ""
+        val prefs = PrefsManager(viewHolder.view.context)
+        val isFav = prefs.isFavouriteShow(show.id)
+        cardView.titleText = if (isFav) "\u2605 ${show.title}" else show.title
+        cardView.contentText = if (isFav) "Pinned" else if (show.active) "Active" else ""
 
         val imageUrl = show.posterUrl ?: show.logoUrl
         if (!imageUrl.isNullOrEmpty()) {

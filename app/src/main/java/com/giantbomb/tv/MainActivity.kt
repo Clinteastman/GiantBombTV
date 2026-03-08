@@ -3,12 +3,28 @@ package com.giantbomb.tv
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
+import android.view.KeyEvent
 import androidx.fragment.app.FragmentActivity
 
 class MainActivity : FragmentActivity() {
 
     companion object {
         const val SETUP_REQUEST = 1001
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val isSelectKey = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                event.keyCode == KeyEvent.KEYCODE_ENTER ||
+                event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
+                event.keyCode == KeyEvent.KEYCODE_BUTTON_A
+        if (isSelectKey) {
+            Log.d("GBKeyEvent", "select action=${event.action} repeat=${event.repeatCount} code=${event.keyCode}")
+            if (event.repeatCount > 0) {
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
