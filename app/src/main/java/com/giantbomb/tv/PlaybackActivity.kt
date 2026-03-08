@@ -27,6 +27,7 @@ import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
 import androidx.media3.ui.PlayerView
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
+import com.giantbomb.tv.data.YouTubeExtractor
 import com.giantbomb.tv.model.Mp4Source
 import com.giantbomb.tv.model.Video
 import kotlinx.coroutines.*
@@ -128,6 +129,34 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 playback.mp4s.sortedByDescending { it.height }.forEach { mp4 ->
                     val label = if (mp4.height > 0) "${mp4.height}p" else mp4.label.ifEmpty { "MP4" }
                     qualityOptions.add(QualityOption(label, mp4.url))
+                }
+
+                // If no GB sources, or YouTube URL is available, try YouTube extraction
+                if (qualityOptions.isEmpty() || !playback.youtubeUrl.isNullOrEmpty()) {
+                    val ytUrl = playback.youtubeUrl
+                    if (ytUrl != null) {
+                        val ytResult = YouTubeExtractor().extract(ytUrl)
+                        ytResult.onSuccess { yt ->
+                            // Add YouTube HLS if available
+                            if (yt.hlsUrl != null) {
+                                qualityOptions.add(QualityOption("YouTube HLS", yt.hlsUrl, isHls = true))
+                            }
+                            // Add muxed (video+audio) YouTube streams
+                            yt.streams
+                                .filter { !it.isAdaptive && it.hasVideo }
+                                .sortedByDescending { it.height }
+                                .forEach { stream ->
+                                    val label = "YT ${stream.qualityLabel ?: "${stream.height}p"}"
+                                    qualityOptions.add(QualityOption(label, stream.url))
+                                }
+                            if (videoDuration == 0.0 && yt.duration > 0) {
+                                videoDuration = yt.duration.toDouble()
+                            }
+                        }
+                        ytResult.onFailure { e ->
+                            android.util.Log.w("PlaybackActivity", "YouTube extraction failed: ${e.message}")
+                        }
+                    }
                 }
 
                 if (qualityOptions.isEmpty()) {

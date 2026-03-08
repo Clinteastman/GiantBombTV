@@ -36,7 +36,8 @@ data class PlaybackInfo(
     val hlsUrl: String?,
     val mp4s: List<Mp4Source>,
     val duration: Double,
-    val posterUrl: String?
+    val posterUrl: String?,
+    val youtubeUrl: String? = null
 ) : Serializable
 
 data class Mp4Source(

@@ -99,6 +99,12 @@ class GiantBombApi(private val apiKey: String) {
             val duration = sources?.optDouble("duration", 0.0) ?: 0.0
             val poster = sources?.optString("poster", null)
 
+            // YouTube URL (may be a valid URL, or sometimes junk data)
+            val rawYt = json.optString("youtube_url", null)
+            val youtubeUrl = rawYt?.takeIf {
+                it.contains("youtube.com/") || it.contains("youtu.be/")
+            }
+
             val mp4s = mutableListOf<Mp4Source>()
             sources?.optJSONArray("mp4s")?.let { arr ->
                 for (i in 0 until arr.length()) {
@@ -118,7 +124,8 @@ class GiantBombApi(private val apiKey: String) {
                 hlsUrl = hlsUrl,
                 mp4s = mp4s,
                 duration = duration,
-                posterUrl = poster
+                posterUrl = poster,
+                youtubeUrl = youtubeUrl
             ))
         } catch (e: Exception) {
             Result.failure(e)
