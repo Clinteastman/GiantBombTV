@@ -1,11 +1,7 @@
 package com.giantbomb.tv
 
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.RenderEffect
-import android.graphics.Shader
 import android.graphics.drawable.Drawable
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -72,12 +68,6 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     private fun setupBackdrop() {
         backdropImageView = requireActivity().findViewById(R.id.backdrop_image)
         backdropNextView = requireActivity().findViewById(R.id.backdrop_image_next)
-        // Apply RenderEffect blur on API 31+ to both layers
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val blur = RenderEffect.createBlurEffect(50f, 50f, Shader.TileMode.CLAMP)
-            backdropImageView?.setRenderEffect(blur)
-            backdropNextView?.setRenderEffect(blur)
-        }
     }
 
     private fun setupUIElements() {
@@ -151,7 +141,10 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             Glide.with(requireContext())
                 .load(imageUrl)
                 .override(480, 270)
-                .centerCrop()
+                .transform(
+                    com.bumptech.glide.load.resource.bitmap.CenterCrop(),
+                    com.giantbomb.tv.ui.BlurTransformation(radius = 10, passes = 2)
+                )
                 .into(object : com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
                     override fun onResourceReady(resource: android.graphics.drawable.Drawable, transition: com.bumptech.glide.request.transition.Transition<in android.graphics.drawable.Drawable>?) {
                         if (!isAdded) return
