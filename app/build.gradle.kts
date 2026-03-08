@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.giantbomb.tv"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.giantbomb.tv"
@@ -38,10 +38,10 @@ dependencies {
     implementation("androidx.leanback:leanback-preference:1.0.0")
 
     // ExoPlayer
-    implementation("androidx.media3:media3-exoplayer:1.2.0")
-    implementation("androidx.media3:media3-exoplayer-hls:1.2.0")
-    implementation("androidx.media3:media3-ui:1.2.0")
-    implementation("androidx.media3:media3-ui-leanback:1.2.0")
+    implementation("androidx.media3:media3-exoplayer:1.5.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
+    implementation("androidx.media3:media3-ui:1.5.1")
+    implementation("androidx.media3:media3-ui-leanback:1.5.1")
 
     // CardView
     implementation("androidx.cardview:cardview:1.0.0")

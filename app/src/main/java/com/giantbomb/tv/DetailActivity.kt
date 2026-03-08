@@ -269,6 +269,35 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 }
             }
         }
+        val restartButton = createGlassButton(
+            text = "Watch from Start",
+            fillColor = 0x1AFFFFFF,
+            focusFillColor = 0x2AFFFFFF,
+            borderColor = 0x18FFFFFF,
+            focusBorderColor = 0x30FFFFFF,
+            textColor = 0xFFCCCCCC.toInt(),
+            bold = false
+        ).apply {
+            setPadding(24.dp(), 10.dp(), 24.dp(), 10.dp())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginStart = 10.dp() }
+            visibility = View.GONE  // shown only when there's progress
+            setOnClickListener {
+                // Reset progress then play
+                launch {
+                    api.saveProgress(video.id, 0.0, 1.0)
+                }
+                val intent = Intent(this@DetailActivity, PlaybackActivity::class.java).apply {
+                    putExtra(PlaybackActivity.EXTRA_VIDEO, video)
+                    putExtra("start_from_beginning", true)
+                }
+                startActivity(intent)
+            }
+        }
+        buttonLayout.addView(restartButton)
+
         buttonLayout.addView(watchlistButton)
 
         content.addView(buttonLayout)
@@ -304,6 +333,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             if (progress != null && progress.percentComplete in 1..94) {
                 val resumeMin = (progress.currentTime / 60).toInt()
                 watchButton.text = "${getString(R.string.resume)} (${resumeMin}m in)"
+                restartButton.visibility = View.VISIBLE
             }
 
             // Update watchlist button state

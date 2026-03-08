@@ -24,7 +24,7 @@ An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com
 
 ## Setup
 
-1. Get your Giant Bomb API key from [giantbomb.com/app/](https://www.giantbomb.com/app/)
+1. Log in to [giantbomb.com](https://www.giantbomb.com) and find your API key in your profile settings
 2. Build and install the app (see below)
 3. Launch the app and enter your API key in the setup screen
 
@@ -35,7 +35,7 @@ An unofficial Android TV app for watching [Giant Bomb](https://www.giantbomb.com
 - [Android Studio](https://developer.android.com/studio) (Ladybug or later) **or** the Android SDK command-line tools
 - JDK 17+
 - Android SDK with:
-  - Compile SDK 34
+  - Compile SDK 35
   - Build Tools (latest)
   - Android TV system image (optional, for emulator testing)
 

@@ -20,7 +20,10 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
 import androidx.media3.ui.PlayerView
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
@@ -42,6 +45,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var video: Video? = null
     private var videoDuration: Double = 0.0
     private var progressJob: Job? = null
+    private var saveJob: Job? = null
 
     // Quality selection
     private data class QualityOption(val label: String, val url: String, val isHls: Boolean = false)
@@ -78,6 +82,17 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             useController = true
             controllerShowTimeoutMs = 3000
             controllerAutoShow = true
+            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+            setKeepContentOnPlayerReset(false)
+
+            // Hook the gear/settings button to open our quality picker
+            setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
+                if (visibility == View.VISIBLE) {
+                    findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.setOnClickListener {
+                        showQualityPicker()
+                    }
+                }
+            })
         }
 
         rootLayout.addView(playerView)
@@ -131,7 +146,12 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 }
 
                 val loadControl = DefaultLoadControl.Builder()
-                    .setBufferDurationsMs(30_000, 60_000, 5_000, 10_000)
+                    .setBufferDurationsMs(
+                        30_000,   // minBufferMs
+                        60_000,   // maxBufferMs
+                        5_000,    // bufferForPlaybackMs — more data before starting
+                        10_000    // bufferForPlaybackAfterRebufferMs
+                    )
                     .build()
 
                 val audioAttributes = AudioAttributes.Builder()
@@ -139,7 +159,28 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
                     .build()
 
+                val audioBufferSize = DefaultAudioTrackBufferSizeProvider.Builder()
+                    .setMinPcmBufferDurationUs(2_500_000)
+                    .setMaxPcmBufferDurationUs(5_000_000)
+                    .build()
+
+                val audioSink = DefaultAudioSink.Builder(this@PlaybackActivity)
+                    .setAudioTrackBufferSizeProvider(audioBufferSize)
+                    .build()
+
+                val renderersFactory = object : DefaultRenderersFactory(this@PlaybackActivity) {
+                    override fun buildAudioSink(
+                        context: android.content.Context,
+                        enableFloatOutput: Boolean,
+                        enableAudioTrackPlaybackParams: Boolean
+                    ): androidx.media3.exoplayer.audio.AudioSink {
+                        return audioSink
+                    }
+                }.forceEnableMediaCodecAsynchronousQueueing()
+                    .setEnableDecoderFallback(true)
+
                 player = ExoPlayer.Builder(this@PlaybackActivity)
+                    .setRenderersFactory(renderersFactory)
                     .setLoadControl(loadControl)
                     .setAudioAttributes(audioAttributes, true)
                     .build().also { exoPlayer ->
@@ -149,17 +190,23 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     exoPlayer.playWhenReady = false
                     exoPlayer.prepare()
 
-                    // Resume from server-side progress
-                    val progressResult = api.getProgress()
-                    progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
-                        if (progress.percentComplete < 95 && progress.currentTime > 0) {
-                            exoPlayer.seekTo((progress.currentTime * 1000).toLong())
+                    // Resume from server-side progress (unless starting from beginning)
+                    val startFromBeginning = intent.getBooleanExtra("start_from_beginning", false)
+                    if (!startFromBeginning) {
+                        val progressResult = api.getProgress()
+                        progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
+                            if (progress.percentComplete < 95 && progress.currentTime > 0) {
+                                exoPlayer.seekTo((progress.currentTime * 1000).toLong())
+                            }
                         }
                     }
 
-                    exoPlayer.playWhenReady = true
-
                     exoPlayer.addListener(object : Player.Listener {
+                        override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                            // Force PlayerView to recalculate layout when resolution changes
+                            playerView.requestLayout()
+                        }
+
                         override fun onPlaybackStateChanged(state: Int) {
                             if (state == Player.STATE_ENDED) {
                                 launch {
@@ -169,6 +216,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                             }
                         }
                     })
+
+                    exoPlayer.playWhenReady = true
 
                     startProgressSaving()
                 }
@@ -191,10 +240,62 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val wasPlaying = p.isPlaying
 
         currentQualityIndex = index
-        p.setMediaItem(MediaItem.fromUri(option.url))
-        p.prepare()
-        p.seekTo(position)
-        p.playWhenReady = wasPlaying
+
+        // Release old player and create a fresh one so video surface resets
+        progressJob?.cancel()
+        p.release()
+
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(30_000, 60_000, 5_000, 10_000)
+            .build()
+
+        val audioBufferSize = DefaultAudioTrackBufferSizeProvider.Builder()
+            .setMinPcmBufferDurationUs(2_500_000)
+            .setMaxPcmBufferDurationUs(5_000_000)
+            .build()
+        val audioSink = DefaultAudioSink.Builder(this)
+            .setAudioTrackBufferSizeProvider(audioBufferSize)
+            .build()
+        val renderersFactory = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: android.content.Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): androidx.media3.exoplayer.audio.AudioSink = audioSink
+        }.forceEnableMediaCodecAsynchronousQueueing()
+            .setEnableDecoderFallback(true)
+
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+            .build()
+
+        player = ExoPlayer.Builder(this)
+            .setRenderersFactory(renderersFactory)
+            .setLoadControl(loadControl)
+            .setAudioAttributes(audioAttributes, true)
+            .build().also { newPlayer ->
+                playerView.player = newPlayer
+                newPlayer.setMediaItem(MediaItem.fromUri(option.url))
+                newPlayer.prepare()
+                newPlayer.seekTo(position)
+                newPlayer.playWhenReady = wasPlaying
+
+                newPlayer.addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(state: Int) {
+                        if (state == Player.STATE_ENDED) {
+                            launch {
+                                video?.let { v ->
+                                    api.markWatched(v.id)
+                                    playNextEpisode(v)
+                                }
+                            }
+                        }
+                    }
+                })
+
+                startProgressSaving()
+            }
 
         Toast.makeText(this, "Quality: ${option.label}", Toast.LENGTH_SHORT).show()
     }
@@ -343,7 +444,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val currentSec = p.currentPosition / 1000.0
         val durationSec = if (videoDuration > 0) videoDuration else p.duration / 1000.0
         if (currentSec > 0 && durationSec > 0) {
-            launch { api.saveProgress(v.id, currentSec, durationSec) }
+            // Cancel any in-flight save to avoid piling up network calls
+            saveJob?.cancel()
+            saveJob = launch { api.saveProgress(v.id, currentSec, durationSec) }
         }
     }
 
