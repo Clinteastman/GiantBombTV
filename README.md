@@ -120,8 +120,7 @@ app/src/main/java/com/giantbomb/tv/
 
 ## Known Issues
 
-- Minor audio crackle at playback start on some devices/emulators
-- Video playback may stutter on emulators due to software decoding (real hardware has dedicated video decode chips)
+- Audio crackle and video stutter on emulators due to software decoding — does not affect real hardware (Fire TV, etc.)
 - This is an early preview — expect rough edges
 
 ## License
