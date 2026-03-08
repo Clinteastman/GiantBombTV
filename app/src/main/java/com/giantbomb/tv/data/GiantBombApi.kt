@@ -10,13 +10,17 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URI
 import java.util.concurrent.TimeUnit
 
-class GiantBombApi(private val apiKey: String) {
+class GiantBombApi(
+    private val apiKey: String,
+    private val baseUrl: String = DEFAULT_BASE
+) {
 
     companion object {
         private const val TAG = "GiantBombApi"
-        private const val BASE = "https://giantbomb.com"
+        private const val DEFAULT_BASE = "https://giantbomb.com"
         private const val USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
@@ -99,6 +103,15 @@ class GiantBombApi(private val apiKey: String) {
             val duration = sources?.optDouble("duration", 0.0) ?: 0.0
             val poster = sources?.optString("poster", null)
 
+            // YouTube URL (may be a valid URL, or sometimes junk data)
+            val rawYt = json.optString("youtube_url", null)
+            val youtubeUrl = rawYt?.takeIf { url ->
+                try {
+                    val host = URI(url).host?.lowercase() ?: return@takeIf false
+                    host == "youtu.be" || host.endsWith(".youtube.com") || host == "youtube.com"
+                } catch (_: Exception) { false }
+            }
+
             val mp4s = mutableListOf<Mp4Source>()
             sources?.optJSONArray("mp4s")?.let { arr ->
                 for (i in 0 until arr.length()) {
@@ -118,7 +131,8 @@ class GiantBombApi(private val apiKey: String) {
                 hlsUrl = hlsUrl,
                 mp4s = mp4s,
                 duration = duration,
-                posterUrl = poster
+                posterUrl = poster,
+                youtubeUrl = youtubeUrl
             ))
         } catch (e: Exception) {
             Result.failure(e)
@@ -245,7 +259,7 @@ class GiantBombApi(private val apiKey: String) {
 
     private fun get(path: String): JSONObject {
         val request = Request.Builder()
-            .url("$BASE$path")
+            .url("$baseUrl$path")
             .header("User-Agent", USER_AGENT)
             .header("Accept", "application/json")
             .header("Accept-Language", "en-US,en;q=0.9")
@@ -274,7 +288,7 @@ class GiantBombApi(private val apiKey: String) {
     private fun post(path: String, body: JSONObject): JSONObject {
         val jsonType = "application/json".toMediaType()
         val request = Request.Builder()
-            .url("$BASE$path")
+            .url("$baseUrl$path")
             .header("User-Agent", USER_AGENT)
             .header("Accept", "application/json")
             .header("Accept-Language", "en-US,en;q=0.9")
@@ -294,7 +308,7 @@ class GiantBombApi(private val apiKey: String) {
 
     private fun delete(path: String): JSONObject {
         val request = Request.Builder()
-            .url("$BASE$path")
+            .url("$baseUrl$path")
             .header("User-Agent", USER_AGENT)
             .header("Accept", "application/json")
             .header("Accept-Language", "en-US,en;q=0.9")
