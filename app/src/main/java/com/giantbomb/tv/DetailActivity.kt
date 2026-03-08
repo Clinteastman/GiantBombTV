@@ -18,11 +18,13 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.ScrollView
 import android.widget.Toast
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Video
+import com.giantbomb.tv.util.DeviceUtil
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.*
 
@@ -47,6 +49,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val prefs = PrefsManager(this)
         val apiKey = prefs.apiKey ?: ""
         val api = GiantBombApi(apiKey)
+        val isTv = DeviceUtil.isTv(this)
 
         val root = FrameLayout(this).apply {
             setBackgroundResource(R.drawable.bg_ambient_gradient)
@@ -113,13 +116,17 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // Content
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.BOTTOM
-            setPadding(48.dp(), 30.dp(), 200.dp(), 40.dp())
+            gravity = if (isTv) Gravity.BOTTOM else Gravity.TOP
+            if (isTv) {
+                setPadding(48.dp(), 30.dp(), 200.dp(), 40.dp())
+            } else {
+                setPadding(16.dp(), 16.dp(), 16.dp(), 24.dp())
+            }
             clipChildren = false
             clipToPadding = false
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
+                FrameLayout.LayoutParams.WRAP_CONTENT
             )
         }
 
@@ -308,7 +315,19 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         content.addView(buttonLayout)
         animViews.add(buttonLayout)
 
-        root.addView(content)
+        if (isTv) {
+            root.addView(content)
+        } else {
+            val scrollView = ScrollView(this).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+                isFillViewport = true
+            }
+            scrollView.addView(content)
+            root.addView(scrollView)
+        }
         setContentView(root)
 
         // Fetch duration, progress, and watchlist state asynchronously

@@ -20,7 +20,7 @@
             <!-- Thumbnail area -->
             <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="180dp">
+                android:layout_height="@dimen/card_thumb_height">
 
                 <ImageView
                     android:id="@+id/card_thumbnail"

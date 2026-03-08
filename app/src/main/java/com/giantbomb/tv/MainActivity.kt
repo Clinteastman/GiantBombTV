@@ -6,6 +6,8 @@ import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
 import androidx.fragment.app.FragmentActivity
+import com.giantbomb.tv.mobile.MobileBrowseFragment
+import com.giantbomb.tv.util.DeviceUtil
 
 class MainActivity : FragmentActivity() {
 
@@ -28,17 +30,32 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        if (DeviceUtil.isTv(this)) {
+            setTheme(R.style.Theme_GiantBombTV)
+        }
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        if (savedInstanceState == null) {
+            val fragment = if (DeviceUtil.isTv(this)) {
+                BrowseFragment()
+            } else {
+                MobileBrowseFragment()
+            }
+            supportFragmentManager.beginTransaction()
+                .replace(R.id.main_fragment_container, fragment)
+                .commit()
+        }
     }
 
     @Deprecated("Use Activity Result API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == SETUP_REQUEST && resultCode == Activity.RESULT_OK) {
-            val fragment = supportFragmentManager.findFragmentById(R.id.main_browse_fragment)
-            if (fragment is BrowseFragment) {
-                fragment.loadContent()
+            val fragment = supportFragmentManager.findFragmentById(R.id.main_fragment_container)
+            when (fragment) {
+                is BrowseFragment -> fragment.loadContent()
+                is MobileBrowseFragment -> fragment.loadContent()
             }
         }
     }

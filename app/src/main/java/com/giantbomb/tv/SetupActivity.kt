@@ -13,8 +13,10 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.ScrollView
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
+import com.giantbomb.tv.util.DeviceUtil
 import kotlinx.coroutines.*
 
 class SetupActivity : Activity(), CoroutineScope by MainScope() {
@@ -53,12 +55,25 @@ class SetupActivity : Activity(), CoroutineScope by MainScope() {
             setStroke((1f * density).toInt(), 0x14FFFFFF)
             setCornerRadius(cornerRadius)
         }
+        val isTv = DeviceUtil.isTv(this)
+
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = LayerDrawable(arrayOf(cardFill, cardBorder))
             setPadding(dp(40), dp(30), dp(40), dp(30))
-            layoutParams = FrameLayout.LayoutParams(dp(450), FrameLayout.LayoutParams.WRAP_CONTENT).apply {
-                gravity = Gravity.CENTER
+            layoutParams = if (isTv) {
+                FrameLayout.LayoutParams(dp(450), FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.CENTER
+                }
+            } else {
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = Gravity.CENTER
+                    marginStart = dp(24)
+                    marginEnd = dp(24)
+                }
             }
         }
 
@@ -178,7 +193,15 @@ class SetupActivity : Activity(), CoroutineScope by MainScope() {
         card.addView(statusText)
         card.addView(buttonRow)
 
-        root.addView(card)
+        val scrollView = ScrollView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            isFillViewport = true
+        }
+        scrollView.addView(card)
+        root.addView(scrollView)
         setContentView(root)
 
         editText.post { editText.requestFocus() }
