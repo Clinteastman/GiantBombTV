@@ -212,6 +212,38 @@ class GiantBombApi(
         }
     }
 
+    suspend fun getUpcoming(): Result<UpcomingResponse> = withContext(Dispatchers.IO) {
+        try {
+            val json = get("/upcoming_json")
+            val liveNow = json.optJSONObject("liveNow")?.let { l ->
+                UpcomingStream(
+                    type = l.optString("type", ""),
+                    title = l.optString("title", ""),
+                    image = l.safeString("image"),
+                    date = l.optString("date", ""),
+                    premium = l.optBoolean("premium", false)
+                )
+            }
+            val upcomingArr = json.optJSONArray("upcoming")
+            val upcoming = mutableListOf<UpcomingStream>()
+            if (upcomingArr != null) {
+                for (i in 0 until upcomingArr.length()) {
+                    val u = upcomingArr.getJSONObject(i)
+                    upcoming.add(UpcomingStream(
+                        type = u.optString("type", ""),
+                        title = u.optString("title", ""),
+                        image = u.safeString("image"),
+                        date = u.optString("date", ""),
+                        premium = u.optBoolean("premium", false)
+                    ))
+                }
+            }
+            Result.success(UpcomingResponse(liveNow = liveNow, upcoming = upcoming))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     private fun JSONObject.safeString(key: String): String? {
         if (isNull(key)) return null
         val s = optString(key, "")

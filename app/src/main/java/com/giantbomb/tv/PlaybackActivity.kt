@@ -50,6 +50,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     companion object {
         const val EXTRA_VIDEO = "extra_video"
+        const val EXTRA_LIVE_HLS_URL = "extra_live_hls_url"
+        const val EXTRA_LIVE_TITLE = "extra_live_title"
         private const val PROGRESS_SAVE_INTERVAL = 30_000L
     }
 
@@ -74,6 +76,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var qualityOptions = mutableListOf<QualityOption>()
     private var currentQualityIndex = 0
     private var qualityOverlay: View? = null
+    private var isLiveStream = false
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
 
@@ -96,7 +99,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         api = GiantBombApi(prefs.apiKey ?: "")
 
         @Suppress("DEPRECATION")
-        video = intent.getSerializableExtra(EXTRA_VIDEO) as? Video ?: run {
+        video = intent.getSerializableExtra(EXTRA_VIDEO) as? Video
+
+        // Allow launching with just an HLS URL (for live streams)
+        val liveHlsUrl = intent.getStringExtra(EXTRA_LIVE_HLS_URL)
+        if (video == null && liveHlsUrl == null) {
             finish()
             return
         }
@@ -360,6 +367,13 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     }
 
     private fun initializePlayer() {
+        // Live stream mode: direct HLS URL, no API call needed
+        val liveHlsUrl = intent.getStringExtra(EXTRA_LIVE_HLS_URL)
+        if (liveHlsUrl != null) {
+            initializeLivePlayer(liveHlsUrl)
+            return
+        }
+
         val v = video ?: return
 
         launch {
@@ -499,6 +513,82 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
     }
 
+    private fun initializeLivePlayer(hlsUrl: String) {
+        val liveTitle = intent.getStringExtra(EXTRA_LIVE_TITLE) ?: "Giant Bomb Live"
+
+        qualityOptions.clear()
+        qualityOptions.add(QualityOption("Live", hlsUrl, isHls = true))
+        currentQualityIndex = 0
+
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(10_000, 30_000, 2_000, 5_000)
+            .build()
+
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+            .build()
+
+        // Replace the SurfaceView-based PlayerView with a TextureView-based one.
+        // TextureView handles mid-stream resolution changes properly (SurfaceView
+        // has a fixed native buffer that causes zoomed-in rendering on some devices).
+        val livePlayerView = layoutInflater.inflate(R.layout.view_live_player, null) as PlayerView
+        val parent = playerView.parent as ViewGroup
+        val index = parent.indexOfChild(playerView)
+        val lp = playerView.layoutParams
+        parent.removeView(playerView)
+        parent.addView(livePlayerView, index, lp)
+        playerView = livePlayerView
+
+        playerView.setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
+            if (visibility == View.VISIBLE) {
+                playerView.findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.setOnClickListener {
+                    showQualityPicker()
+                }
+            }
+        })
+
+        isLiveStream = true
+
+        player = ExoPlayer.Builder(this)
+            .setLoadControl(loadControl)
+            .setAudioAttributes(audioAttributes, true)
+            .build().also { exoPlayer ->
+                playerView.player = exoPlayer
+
+                // Force highest bitrate from the start to prevent adaptive mid-stream
+                // resolution switching. The codec's adaptive playback causes zoomed-in
+                // rendering on some devices when it seamlessly switches to a higher
+                // resolution. By always selecting the highest bitrate, the codec is
+                // initialized at full resolution and never needs to adapt. The user
+                // can still manually switch quality via the quality picker.
+                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+                    .setForceHighestSupportedBitrate(true)
+                    .build()
+
+                mediaSession?.release()
+                mediaSession = MediaSession.Builder(this, exoPlayer).build()
+
+                exoPlayer.setMediaItem(MediaItem.fromUri(hlsUrl))
+                exoPlayer.playWhenReady = true
+                exoPlayer.prepare()
+
+                exoPlayer.addListener(object : Player.Listener {
+                    override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                        // Build quality options from available HLS renditions
+                        if (qualityOptions.size <= 1) {
+                            buildLiveQualityOptions(exoPlayer)
+                        }
+                    }
+                })
+            }
+
+        // Update title if shown in mobile layout
+        mobileContentScroll?.let { scroll ->
+            scroll.findViewWithTag<TextView>("video_title")?.text = liveTitle
+        }
+    }
+
     private fun switchQuality(index: Int) {
         if (index == currentQualityIndex) return
         val p = player ?: return
@@ -607,14 +697,37 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             setPadding(dp(24), dp(20), dp(24), dp(20))
         }
 
+        // Title row with close button
+        val titleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            setPadding(0, 0, 0, dp(12))
+        }
         val title = TextView(this).apply {
             text = "Stream Quality"
             setTextColor(Color.WHITE)
             textSize = 18f
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, 0, 0, dp(12))
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        panel.addView(title)
+        titleRow.addView(title)
+        val closeBtn = TextView(this).apply {
+            text = "\u2715"
+            setTextColor(0xAAFFFFFF.toInt())
+            textSize = 20f
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setPadding(dp(8), 0, dp(4), 0)
+            setOnClickListener { dismissQualityPicker() }
+            setOnFocusChangeListener { v, hasFocus ->
+                (v as TextView).setTextColor(if (hasFocus) Color.WHITE else 0xAAFFFFFF.toInt())
+            }
+        }
+        titleRow.addView(closeBtn)
+        panel.addView(titleRow)
 
         val qualityItems = mutableListOf<TextView>()
         qualityOptions.forEachIndexed { index, option ->
@@ -642,7 +755,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
                 setOnClickListener {
                     dismissQualityPicker()
-                    switchQuality(index)
+                    if (isLiveStream) switchLiveQuality(index) else switchQuality(index)
                 }
             }
             qualityItems.add(item)
@@ -653,19 +766,65 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             }
         }
 
+        closeBtn.id = View.generateViewId()
         for (i in qualityItems.indices) {
             val item = qualityItems[i]
             item.id = View.generateViewId()
         }
+        // Wire focus: close button <-> first item, items <-> each other
+        closeBtn.nextFocusDownId = qualityItems.first().id
+        qualityItems.first().nextFocusUpId = closeBtn.id
         for (i in qualityItems.indices) {
             val item = qualityItems[i]
             if (i > 0) item.nextFocusUpId = qualityItems[i - 1].id
             if (i < qualityItems.lastIndex) item.nextFocusDownId = qualityItems[i + 1].id
         }
+        qualityItems.last().nextFocusDownId = closeBtn.id
+        closeBtn.nextFocusUpId = qualityItems.last().id
 
         overlay.addView(panel)
         rootLayout.addView(overlay)
         qualityOverlay = overlay
+    }
+
+    private fun buildLiveQualityOptions(exoPlayer: ExoPlayer) {
+        qualityOptions.clear()
+        qualityOptions.add(QualityOption("Auto", "", isHls = true))
+
+        val trackGroups = exoPlayer.currentTracks.groups
+        val heights = mutableSetOf<Int>()
+        for (group in trackGroups) {
+            if (group.type == C.TRACK_TYPE_VIDEO) {
+                for (i in 0 until group.length) {
+                    val format = group.getTrackFormat(i)
+                    if (format.height > 0) {
+                        heights.add(format.height)
+                    }
+                }
+            }
+        }
+
+        heights.sortedDescending().forEach { h ->
+            qualityOptions.add(QualityOption("${h}p", h.toString(), isHls = true))
+        }
+    }
+
+    private fun switchLiveQuality(index: Int) {
+        val p = player ?: return
+        currentQualityIndex = index
+
+        if (index == 0) {
+            // Auto - clear track override
+            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+                .clearVideoSizeConstraints()
+                .build()
+        } else {
+            val option = qualityOptions.getOrNull(index) ?: return
+            val maxHeight = option.url.toIntOrNull() ?: return
+            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+                .setMaxVideoSize(Int.MAX_VALUE, maxHeight)
+                .build()
+        }
     }
 
     private fun dismissQualityPicker() {
