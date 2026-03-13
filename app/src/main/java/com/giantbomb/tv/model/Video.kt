@@ -53,3 +53,16 @@ data class ProgressEntry(
     val duration: Double,
     val percentComplete: Int
 ) : Serializable
+
+data class UpcomingStream(
+    val type: String,
+    val title: String,
+    val image: String?,
+    val date: String,
+    val premium: Boolean
+) : Serializable
+
+data class UpcomingResponse(
+    val liveNow: UpcomingStream?,
+    val upcoming: List<UpcomingStream>
+) : Serializable

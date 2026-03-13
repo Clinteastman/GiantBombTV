@@ -22,9 +22,12 @@ import com.giantbomb.tv.model.ProgressEntry
 import com.giantbomb.tv.model.SettingsItem
 import com.giantbomb.tv.model.Show
 import com.giantbomb.tv.model.Video
+import com.giantbomb.tv.data.TwitchExtractor
+import com.giantbomb.tv.model.UpcomingStream
 import com.giantbomb.tv.ui.CardPresenter
 import com.giantbomb.tv.ui.SettingsCardPresenter
 import com.giantbomb.tv.ui.ShowCardPresenter
+import com.giantbomb.tv.ui.UpcomingCardPresenter
 import kotlinx.coroutines.*
 
 class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
@@ -100,7 +103,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     }
 
     private fun setupListeners() {
-        onItemViewClickedListener = OnItemViewClickedListener { _, item, _, _ ->
+        onItemViewClickedListener = OnItemViewClickedListener { _, item, _, row ->
             when (item) {
                 is Video -> {
                     val intent = Intent(requireContext(), DetailActivity::class.java).apply {
@@ -117,6 +120,17 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                         putExtra(ShowActivity.EXTRA_SHOW, item)
                     }
                     startActivity(intent)
+                }
+                is UpcomingStream -> {
+                    val targetMs = com.giantbomb.tv.ui.UpcomingCardView.parseDate(item.date)
+                    val isStreamLive = targetMs > 0L && targetMs <= System.currentTimeMillis()
+                    // Also treat items from the Live Now row as live (targetMs may be 0)
+                    val isLiveRow = (row as? ListRow)?.headerItem?.name?.contains("Live") == true
+                    if (isStreamLive || isLiveRow) {
+                        launchTwitchStream(item.title)
+                    } else {
+                        Toast.makeText(requireContext(), "This show hasn't started yet", Toast.LENGTH_SHORT).show()
+                    }
                 }
                 is SettingsItem -> {
                     when (item.id) {
@@ -240,6 +254,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             val rowsAdapter = ArrayObjectAdapter(rowPresenter)
             var headerIdCounter = 0L
 
+            val upcomingDeferred = async { api.getUpcoming() }
             val watchlistDeferred = async { api.getWatchlist() }
             val progressDeferred = async { api.getProgress() }
             val recentDeferred = async { api.getVideos(limit = INITIAL_VIDEO_LIMIT) }
@@ -252,6 +267,29 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 if (!thumbnailUrl.isNullOrEmpty()) return this
                 val fallback = showId?.let { showPosterMap[it] }
                 return if (fallback != null) copy(thumbnailUrl = fallback, isFallbackThumb = true) else this
+            }
+
+            // Upcoming / Live Now
+            val upcomingResult = upcomingDeferred.await().getOrNull()
+            if (upcomingResult != null) {
+                // Live Now row
+                if (upcomingResult.liveNow != null) {
+                    val liveAdapter = ArrayObjectAdapter(UpcomingCardPresenter(isLiveNow = true))
+                    liveAdapter.add(upcomingResult.liveNow)
+                    rowsAdapter.add(ListRow(
+                        HeaderItem(headerIdCounter++, "\uD83D\uDD34 Live Now"),
+                        liveAdapter
+                    ))
+                }
+                // Upcoming row
+                if (upcomingResult.upcoming.isNotEmpty()) {
+                    val upcomingAdapter = ArrayObjectAdapter(UpcomingCardPresenter())
+                    upcomingResult.upcoming.forEach { upcomingAdapter.add(it) }
+                    rowsAdapter.add(ListRow(
+                        HeaderItem(headerIdCounter++, "Upcoming"),
+                        upcomingAdapter
+                    ))
+                }
             }
 
             // Continue Watching
@@ -325,7 +363,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
 
             recent.onFailure { e ->
                 Toast.makeText(requireContext(),
-                    "Error loading videos: ${e.message}", Toast.LENGTH_LONG).show()
+                    GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
             }
 
             // Per-show video rows - fetch first page for each show in parallel
@@ -489,6 +527,25 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 }
             } finally {
                 pagination.isLoading = false
+            }
+        }
+    }
+
+    private fun launchTwitchStream(title: String) {
+        Toast.makeText(requireContext(), "Loading live stream...", Toast.LENGTH_SHORT).show()
+        launch {
+            val result = TwitchExtractor().extract("giantbomb")
+            result.onSuccess { stream ->
+                val liveTitle = stream.title.ifEmpty { title }
+                val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
+                    putExtra(PlaybackActivity.EXTRA_LIVE_HLS_URL, stream.hlsUrl)
+                    putExtra(PlaybackActivity.EXTRA_LIVE_TITLE, liveTitle)
+                }
+                startActivity(intent)
+            }
+            result.onFailure { e ->
+                Toast.makeText(requireContext(),
+                    "Stream not available: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }

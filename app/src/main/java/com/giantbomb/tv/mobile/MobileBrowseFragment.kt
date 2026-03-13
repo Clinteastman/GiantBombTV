@@ -26,8 +26,11 @@ import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.ProgressEntry
 import com.giantbomb.tv.model.SettingsItem
+import com.giantbomb.tv.data.TwitchExtractor
 import com.giantbomb.tv.model.Show
+import com.giantbomb.tv.model.UpcomingStream
 import com.giantbomb.tv.model.Video
+import com.giantbomb.tv.ui.UpcomingCardView
 import kotlinx.coroutines.*
 
 class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
@@ -58,6 +61,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         data class HorizontalShowRow(val shows: List<Show>) : BrowseItem()
         data class VerticalVideo(val video: Video) : BrowseItem()
         data class SettingRow(val item: SettingsItem) : BrowseItem()
+        data class UpcomingRow(val streams: List<UpcomingStream>, val liveNow: UpcomingStream?) : BrowseItem()
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -121,8 +125,8 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             override fun getSpanSize(position: Int): Int {
                 if (position >= browseItems.size) return spanCount
                 return when (browseItems[position]) {
-                    is BrowseItem.VerticalVideo -> 1 // each card takes 1 span (so 2-across in landscape)
-                    else -> spanCount // full width for headers, horizontal rows, settings
+                    is BrowseItem.VerticalVideo -> 1
+                    else -> spanCount
                 }
             }
         }
@@ -163,6 +167,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             try {
                 val items = mutableListOf<BrowseItem>()
 
+                val upcomingDeferred = async { api.getUpcoming() }
                 val watchlistDeferred = async { api.getWatchlist() }
                 val progressDeferred = async { api.getProgress() }
                 val recentDeferred = async { api.getVideos(limit = INITIAL_VIDEO_LIMIT) }
@@ -194,6 +199,17 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                         else -> this
                     }
                     return v.withFallbackThumb()
+                }
+
+                // Upcoming / Live Now
+                val upcomingResult = upcomingDeferred.await().getOrNull()
+                if (upcomingResult != null) {
+                    val hasContent = upcomingResult.liveNow != null || upcomingResult.upcoming.isNotEmpty()
+                    if (hasContent) {
+                        val headerTitle = if (upcomingResult.liveNow != null) "\uD83D\uDD34 Live Now" else "Upcoming"
+                        items.add(BrowseItem.SectionHeader(headerTitle))
+                        items.add(BrowseItem.UpcomingRow(upcomingResult.upcoming, upcomingResult.liveNow))
+                    }
                 }
 
                 // Continue Watching
@@ -250,7 +266,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 recent.onFailure { e ->
                     if (isAdded) {
                         Toast.makeText(requireContext(),
-                            "Error loading videos: ${e.message}", Toast.LENGTH_LONG).show()
+                            GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
                     }
                 }
 
@@ -327,6 +343,27 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         loadContent()
     }
 
+    private fun launchTwitchStream(title: String) {
+        Toast.makeText(requireContext(), "Loading live stream...", Toast.LENGTH_SHORT).show()
+        launch {
+            val result = TwitchExtractor().extract("giantbomb")
+            result.onSuccess { stream ->
+                val liveTitle = stream.title.ifEmpty { title }
+                val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
+                    putExtra(PlaybackActivity.EXTRA_LIVE_HLS_URL, stream.hlsUrl)
+                    putExtra(PlaybackActivity.EXTRA_LIVE_TITLE, liveTitle)
+                }
+                startActivity(intent)
+            }
+            result.onFailure { e ->
+                if (isAdded) {
+                    Toast.makeText(requireContext(),
+                        "Stream not available: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
     private fun launchSetup() {
         val intent = Intent(requireContext(), SetupActivity::class.java)
         @Suppress("DEPRECATION")
@@ -349,6 +386,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         val TYPE_HORIZONTAL_SHOW_ROW = 2
         val TYPE_VERTICAL_VIDEO = 3
         val TYPE_SETTING = 4
+        val TYPE_UPCOMING_ROW = 5
 
         override fun getItemViewType(position: Int): Int = when (browseItems[position]) {
             is BrowseItem.SectionHeader -> TYPE_SECTION_HEADER
@@ -356,6 +394,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             is BrowseItem.HorizontalShowRow -> TYPE_HORIZONTAL_SHOW_ROW
             is BrowseItem.VerticalVideo -> TYPE_VERTICAL_VIDEO
             is BrowseItem.SettingRow -> TYPE_SETTING
+            is BrowseItem.UpcomingRow -> TYPE_UPCOMING_ROW
         }
 
         override fun getItemCount() = browseItems.size
@@ -368,6 +407,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 TYPE_HORIZONTAL_SHOW_ROW -> HorizontalShowRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
                 TYPE_VERTICAL_VIDEO -> VerticalVideoVH(inflater.inflate(R.layout.item_mobile_video, parent, false))
                 TYPE_SETTING -> SettingVH(inflater.inflate(R.layout.item_mobile_setting, parent, false))
+                TYPE_UPCOMING_ROW -> UpcomingRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
                 else -> throw IllegalArgumentException("Unknown view type: $viewType")
             }
         }
@@ -379,6 +419,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 is BrowseItem.HorizontalShowRow -> (holder as HorizontalShowRowVH).bind(item)
                 is BrowseItem.VerticalVideo -> (holder as VerticalVideoVH).bind(item)
                 is BrowseItem.SettingRow -> (holder as SettingVH).bind(item)
+                is BrowseItem.UpcomingRow -> (holder as UpcomingRowVH).bind(item)
             }
         }
     }
@@ -549,6 +590,21 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         }
     }
 
+    private inner class UpcomingRowVH(view: View) : RecyclerView.ViewHolder(view) {
+        private val horizontalRecycler: RecyclerView = view.findViewById(R.id.horizontal_recycler)
+
+        init {
+            horizontalRecycler.layoutManager = LinearLayoutManager(view.context, LinearLayoutManager.HORIZONTAL, false)
+        }
+
+        fun bind(item: BrowseItem.UpcomingRow) {
+            val allStreams = mutableListOf<Pair<UpcomingStream, Boolean>>()
+            item.liveNow?.let { allStreams.add(it to true) }
+            item.streams.forEach { allStreams.add(it to false) }
+            horizontalRecycler.adapter = UpcomingAdapter(allStreams)
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Inner adapters for horizontal rows
     // -----------------------------------------------------------------------
@@ -654,6 +710,181 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     putExtra(ShowActivity.EXTRA_SHOW, show)
                 }
                 startActivity(intent)
+            }
+        }
+    }
+
+    private inner class UpcomingAdapter(
+        private val streams: List<Pair<UpcomingStream, Boolean>>
+    ) : RecyclerView.Adapter<UpcomingAdapter.VH>() {
+
+        private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
+        inner class VH(view: View) : RecyclerView.ViewHolder(view) {
+            val cardBg: FrameLayout = view.findViewById(R.id.upcoming_card_bg)
+            val image: ImageView = view.findViewById(R.id.upcoming_image)
+            val title: TextView = view.findViewById(R.id.upcoming_title)
+            val time: TextView = view.findViewById(R.id.upcoming_time)
+            val countdownGroup: View = view.findViewById(R.id.upcoming_countdown_group)
+            val hours: TextView = view.findViewById(R.id.upcoming_hours)
+            val minutes: TextView = view.findViewById(R.id.upcoming_minutes)
+            val seconds: TextView = view.findViewById(R.id.upcoming_seconds)
+            val days: TextView = view.findViewById(R.id.upcoming_days)
+            val daysGroup: View = view.findViewById(R.id.upcoming_days_group)
+            val daysSep: View = view.findViewById(R.id.upcoming_sep1)
+            val premiumBadge: TextView = view.findViewById(R.id.upcoming_premium_badge)
+            val liveBadge: TextView = view.findViewById(R.id.upcoming_live_badge)
+            var countdownRunnable: Runnable? = null
+
+            init {
+                val density = view.resources.displayMetrics.density
+                val cornerRadius = 12f * density
+
+                cardBg.background = GradientDrawable().apply {
+                    setColor(0x18FFFFFF)
+                    setCornerRadius(cornerRadius)
+                }
+                cardBg.outlineProvider = object : android.view.ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: android.graphics.Outline) {
+                        outline.setRoundRect(0, 0, view.width, view.height, cornerRadius)
+                    }
+                }
+                cardBg.clipToOutline = true
+
+                view.findViewById<View>(R.id.upcoming_scrim).background = GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(0x80000000.toInt(), 0x60000000.toInt())
+                )
+
+                view.findViewById<View>(R.id.upcoming_text_area).background = GradientDrawable().apply {
+                    setColor(0x0DFFFFFF)
+                    cornerRadii = floatArrayOf(0f, 0f, 0f, 0f, cornerRadius, cornerRadius, cornerRadius, cornerRadius)
+                }
+
+                premiumBadge.background = GradientDrawable().apply {
+                    setColor(0xCCFFD700.toInt())
+                    setCornerRadius(4f * density)
+                }
+
+                liveBadge.background = GradientDrawable().apply {
+                    setColor(0xFFE3192C.toInt())
+                    setCornerRadius(4f * density)
+                }
+            }
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_mobile_upcoming, parent, false)
+            return VH(view)
+        }
+
+        override fun getItemCount() = streams.size
+
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val (stream, isLive) = streams[position]
+            holder.title.text = stream.title
+            holder.premiumBadge.visibility = if (stream.premium) View.VISIBLE else View.GONE
+
+            if (!stream.image.isNullOrEmpty()) {
+                Glide.with(holder.image).load(stream.image).centerCrop().into(holder.image)
+            } else {
+                holder.image.setImageResource(0)
+            }
+
+            // Stop any previous countdown
+            holder.countdownRunnable?.let { handler.removeCallbacks(it) }
+
+            if (isLive) {
+                holder.liveBadge.visibility = View.VISIBLE
+                holder.countdownGroup.visibility = View.GONE
+                holder.time.text = "Streaming now"
+                // Load Twitch preview thumbnail for live streams
+                Glide.with(holder.image)
+                    .load("https://static-cdn.jtvnw.net/previews-ttv/live_user_giantbomb-640x360.jpg")
+                    .centerCrop()
+                    .into(holder.image)
+            } else {
+                holder.liveBadge.visibility = View.GONE
+                val targetMs = UpcomingCardView.parseDate(stream.date)
+
+                if (targetMs == 0L) {
+                    // Unknown time - hide countdown, show fallback
+                    holder.countdownGroup.visibility = View.GONE
+                    holder.time.text = "Time TBD"
+                    return
+                }
+
+                holder.countdownGroup.visibility = View.VISIBLE
+                holder.time.text = UpcomingCardView.formatLocalTime(targetMs)
+
+                val countdown = object : Runnable {
+                    override fun run() {
+                        val remaining = targetMs - System.currentTimeMillis()
+                        if (remaining <= 0) {
+                            // Switch to LIVE state
+                            holder.countdownGroup.visibility = View.GONE
+                            holder.liveBadge.visibility = View.VISIBLE
+                            holder.time.text = "Starting soon - tap to watch"
+                            // Load Twitch preview thumbnail
+                            if (holder.image.tag != "twitch_preview") {
+                                holder.image.tag = "twitch_preview"
+                                Glide.with(holder.image)
+                                    .load("https://static-cdn.jtvnw.net/previews-ttv/live_user_giantbomb-640x360.jpg")
+                                    .centerCrop()
+                                    .into(holder.image)
+                            }
+                            return
+                        }
+                        val totalSec = remaining / 1000
+                        val d = totalSec / 86400
+                        val h = (totalSec % 86400) / 3600
+                        val m = (totalSec % 3600) / 60
+                        val s = totalSec % 60
+
+                        if (d > 0) {
+                            holder.daysGroup.visibility = View.VISIBLE
+                            holder.daysSep.visibility = View.VISIBLE
+                            holder.days.text = "%02d".format(d)
+                        } else {
+                            holder.daysGroup.visibility = View.GONE
+                            holder.daysSep.visibility = View.GONE
+                        }
+                        holder.hours.text = "%02d".format(h)
+                        holder.minutes.text = "%02d".format(m)
+                        holder.seconds.text = "%02d".format(s)
+
+                        handler.postDelayed(this, 1000)
+                    }
+                }
+                holder.countdownRunnable = countdown
+                handler.post(countdown)
+            }
+
+            holder.itemView.setOnClickListener {
+                // Only allow playback for live streams; future items can't be played yet
+                val targetMs = UpcomingCardView.parseDate(stream.date)
+                val isStreamLive = isLive || (targetMs > 0L && targetMs <= System.currentTimeMillis())
+                if (isStreamLive) {
+                    launchTwitchStream(stream.title)
+                } else {
+                    if (isAdded) {
+                        Toast.makeText(requireContext(), "This show hasn't started yet", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        override fun onViewRecycled(holder: VH) {
+            holder.countdownRunnable?.let { handler.removeCallbacks(it) }
+            holder.countdownRunnable = null
+        }
+
+        override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+            super.onDetachedFromRecyclerView(recyclerView)
+            for (i in 0 until recyclerView.childCount) {
+                val holder = recyclerView.getChildViewHolder(recyclerView.getChildAt(i)) as? VH
+                holder?.countdownRunnable?.let { handler.removeCallbacks(it) }
+                holder?.countdownRunnable = null
             }
         }
     }
