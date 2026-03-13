@@ -110,6 +110,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         if (isTv) {
             buildTvLayout()
+        } else if (liveHlsUrl != null) {
+            buildMobileLiveLayout()
         } else {
             buildMobileLayout()
         }
@@ -148,6 +150,48 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         rootLayout.addView(playerView)
         setContentView(rootLayout)
+    }
+
+    private fun buildMobileLiveLayout() {
+        // Fullscreen landscape layout for live streams on mobile (no video metadata)
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+
+        rootLayout = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        playerView = PlayerView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            useController = true
+            controllerShowTimeoutMs = 3000
+            controllerAutoShow = true
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+            setKeepContentOnPlayerReset(false)
+
+            setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
+                if (visibility == View.VISIBLE) {
+                    findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.setOnClickListener {
+                        showQualityPicker()
+                    }
+                }
+            })
+        }
+
+        rootLayout.addView(playerView)
+        setContentView(rootLayout)
+
+        // Hide system bars for immersive playback
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        insetsController.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
     private fun buildMobileLayout() {
