@@ -266,7 +266,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 recent.onFailure { e ->
                     if (isAdded) {
                         Toast.makeText(requireContext(),
-                            "Error loading videos: ${e.message}", Toast.LENGTH_LONG).show()
+                            GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
                     }
                 }
 

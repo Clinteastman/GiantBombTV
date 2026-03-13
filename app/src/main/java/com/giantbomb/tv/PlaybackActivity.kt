@@ -551,7 +551,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
             result.onFailure { e ->
                 Toast.makeText(this@PlaybackActivity,
-                    "Failed to load video: ${e.message}", Toast.LENGTH_LONG).show()
+                    GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
                 finish()
             }
         }

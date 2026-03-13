@@ -117,7 +117,7 @@ class ShowBrowseFragment : RowsSupportFragment(), CoroutineScope by MainScope() 
 
         result.onFailure { e ->
             Toast.makeText(requireContext(),
-                "Error loading show: ${e.message}", Toast.LENGTH_LONG).show()
+                GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
         }
 
         isLoading = false

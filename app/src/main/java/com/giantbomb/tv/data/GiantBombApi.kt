@@ -13,6 +13,17 @@ import org.json.JSONObject
 import java.net.URI
 import java.util.concurrent.TimeUnit
 
+class ApiException(
+    val httpCode: Int,
+    val endpoint: String,
+    val responseSnippet: String,
+    val userMessage: String
+) : Exception(userMessage) {
+
+    val diagnosticInfo: String
+        get() = "HTTP $httpCode on $endpoint | ${responseSnippet.take(200)}"
+}
+
 class GiantBombApi(
     private val apiKey: String,
     private val baseUrl: String = DEFAULT_BASE
@@ -29,6 +40,20 @@ class GiantBombApi(
             .readTimeout(15, TimeUnit.SECONDS)
             .followRedirects(true)
             .build()
+
+        fun friendlyErrorMessage(e: Throwable): String {
+            if (e is ApiException) return e.userMessage
+            val msg = e.message ?: ""
+            return when {
+                msg.contains("Unable to resolve host") || msg.contains("No address associated") ->
+                    "No internet connection. Check your network and try again."
+                msg.contains("timeout") || msg.contains("timed out") ->
+                    "Connection timed out. The server may be slow - try again in a moment."
+                msg.contains("Connection refused") ->
+                    "Could not reach Giant Bomb. The site may be down - try again later."
+                else -> "Something went wrong: $msg"
+            }
+        }
     }
 
     suspend fun validateKey(): Result<Boolean> = withContext(Dispatchers.IO) {
@@ -310,8 +335,31 @@ class GiantBombApi(
         Log.d(TAG, "GET $path -> $code")
 
         if (code != 200) {
-            Log.e(TAG, "GET error: ${text.take(300)}")
-            throw Exception("HTTP $code")
+            Log.e(TAG, "GET $path error ($code): ${text.take(500)}")
+            val endpoint = path.substringBefore("?").substringBefore("api_key")
+            val isCloudflare = text.contains("cloudflare", ignoreCase = true) ||
+                    text.contains("cf-browser-verification", ignoreCase = true) ||
+                    text.contains("challenge-platform", ignoreCase = true)
+            val userMsg = when {
+                code == 403 && isCloudflare ->
+                    "Blocked by Cloudflare (403). This usually resolves itself - try again in a few minutes. [CF block on $endpoint]"
+                code == 403 ->
+                    "Access denied (403). Your API key may be invalid or expired. Try re-entering it in Settings. [403 on $endpoint]"
+                code == 401 ->
+                    "Not authorized (401). Your API key may be invalid. Try re-entering it in Settings. [401 on $endpoint]"
+                code == 429 ->
+                    "Too many requests (429). Please wait a minute and try again. [Rate limited on $endpoint]"
+                code in 500..599 ->
+                    "Giant Bomb server error ($code). The site may be having issues - try again later. [$code on $endpoint]"
+                else ->
+                    "Request failed ($code). Try again or check your connection. [$code on $endpoint]"
+            }
+            throw ApiException(
+                httpCode = code,
+                endpoint = endpoint,
+                responseSnippet = text.take(300),
+                userMessage = userMsg
+            )
         }
 
         return JSONObject(text)
@@ -334,7 +382,12 @@ class GiantBombApi(
         val code = response.code
         val text = response.body?.string() ?: ""
 
-        if (code != 200) throw Exception("HTTP $code")
+        if (code != 200) {
+            val endpoint = path.substringBefore("?")
+            Log.e(TAG, "POST $endpoint error ($code): ${text.take(500)}")
+            throw ApiException(code, endpoint, text.take(300),
+                "Request failed ($code) on $endpoint. Check your API key or try again.")
+        }
         return JSONObject(text)
     }
 
@@ -354,7 +407,12 @@ class GiantBombApi(
         val code = response.code
         val text = response.body?.string() ?: ""
 
-        if (code !in 200..299) throw Exception("HTTP $code")
+        if (code !in 200..299) {
+            val endpoint = path.substringBefore("?")
+            Log.e(TAG, "DELETE $endpoint error ($code): ${text.take(500)}")
+            throw ApiException(code, endpoint, text.take(300),
+                "Request failed ($code) on $endpoint. Check your API key or try again.")
+        }
         return if (text.isNotEmpty()) JSONObject(text) else JSONObject()
     }
 }

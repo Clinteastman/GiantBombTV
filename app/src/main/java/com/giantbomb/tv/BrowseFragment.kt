@@ -355,7 +355,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
 
             recent.onFailure { e ->
                 Toast.makeText(requireContext(),
-                    "Error loading videos: ${e.message}", Toast.LENGTH_LONG).show()
+                    GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
             }
 
             // Per-show video rows - fetch first page for each show in parallel
