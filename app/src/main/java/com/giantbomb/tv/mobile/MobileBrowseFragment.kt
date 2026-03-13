@@ -348,9 +348,10 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         launch {
             val result = TwitchExtractor().extract("giantbomb")
             result.onSuccess { stream ->
+                val liveTitle = stream.title.ifEmpty { title }
                 val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
                     putExtra(PlaybackActivity.EXTRA_LIVE_HLS_URL, stream.hlsUrl)
-                    putExtra(PlaybackActivity.EXTRA_LIVE_TITLE, stream.title)
+                    putExtra(PlaybackActivity.EXTRA_LIVE_TITLE, liveTitle)
                 }
                 startActivity(intent)
             }
@@ -717,7 +718,6 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         private val streams: List<Pair<UpcomingStream, Boolean>>
     ) : RecyclerView.Adapter<UpcomingAdapter.VH>() {
 
-        private val activeCountdowns = mutableListOf<Runnable>()
         private val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
         inner class VH(view: View) : RecyclerView.ViewHolder(view) {
@@ -805,8 +805,16 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     .into(holder.image)
             } else {
                 holder.liveBadge.visibility = View.GONE
-                holder.countdownGroup.visibility = View.VISIBLE
                 val targetMs = UpcomingCardView.parseDate(stream.date)
+
+                if (targetMs == 0L) {
+                    // Unknown time - hide countdown, show fallback
+                    holder.countdownGroup.visibility = View.GONE
+                    holder.time.text = "Time TBD"
+                    return
+                }
+
+                holder.countdownGroup.visibility = View.VISIBLE
                 holder.time.text = UpcomingCardView.formatLocalTime(targetMs)
 
                 val countdown = object : Runnable {
@@ -853,13 +861,31 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             }
 
             holder.itemView.setOnClickListener {
-                launchTwitchStream(stream.title)
+                // Only allow playback for live streams; future items can't be played yet
+                val targetMs = UpcomingCardView.parseDate(stream.date)
+                val isStreamLive = isLive || (targetMs > 0L && targetMs <= System.currentTimeMillis())
+                if (isStreamLive) {
+                    launchTwitchStream(stream.title)
+                } else {
+                    if (isAdded) {
+                        Toast.makeText(requireContext(), "This show hasn't started yet", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         }
 
         override fun onViewRecycled(holder: VH) {
             holder.countdownRunnable?.let { handler.removeCallbacks(it) }
             holder.countdownRunnable = null
+        }
+
+        override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+            super.onDetachedFromRecyclerView(recyclerView)
+            for (i in 0 until recyclerView.childCount) {
+                val holder = recyclerView.getChildViewHolder(recyclerView.getChildAt(i)) as? VH
+                holder?.countdownRunnable?.let { handler.removeCallbacks(it) }
+                holder?.countdownRunnable = null
+            }
         }
     }
 

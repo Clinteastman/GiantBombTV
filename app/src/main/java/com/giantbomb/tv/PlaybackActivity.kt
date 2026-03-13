@@ -627,10 +627,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 })
             }
 
-        // Update title if shown in mobile layout
-        mobileContentScroll?.let { scroll ->
-            scroll.findViewWithTag<TextView>("video_title")?.text = liveTitle
-        }
     }
 
     private fun switchQuality(index: Int) {
@@ -760,6 +756,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         titleRow.addView(title)
         val closeBtn = TextView(this).apply {
             text = "\u2715"
+            contentDescription = "Close"
             setTextColor(0xAAFFFFFF.toInt())
             textSize = 20f
             isFocusable = true
@@ -858,15 +855,18 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         currentQualityIndex = index
 
         if (index == 0) {
-            // Auto - clear track override
+            // Auto - clear track override and allow adaptive bitrate selection
             p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
                 .clearVideoSizeConstraints()
+                .setForceHighestSupportedBitrate(false)
                 .build()
         } else {
+            // Specific quality - lock to that rendition
             val option = qualityOptions.getOrNull(index) ?: return
             val maxHeight = option.url.toIntOrNull() ?: return
             p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
                 .setMaxVideoSize(Int.MAX_VALUE, maxHeight)
+                .setForceHighestSupportedBitrate(true)
                 .build()
         }
     }

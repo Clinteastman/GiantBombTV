@@ -151,10 +151,16 @@ class UpcomingCardView(context: Context) : FrameLayout(context) {
             timeView.text = "Streaming now"
         } else {
             liveBadge.visibility = View.GONE
-            countdownGroup.visibility = View.VISIBLE
             targetTimeMs = parseDate(dateStr)
-            timeView.text = formatLocalTime(targetTimeMs)
-            startCountdown()
+            if (targetTimeMs == 0L) {
+                // Unknown time - hide countdown, show fallback
+                countdownGroup.visibility = View.GONE
+                timeView.text = "Time TBD"
+            } else {
+                countdownGroup.visibility = View.VISIBLE
+                timeView.text = formatLocalTime(targetTimeMs)
+                startCountdown()
+            }
         }
     }
 

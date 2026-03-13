@@ -103,7 +103,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     }
 
     private fun setupListeners() {
-        onItemViewClickedListener = OnItemViewClickedListener { _, item, _, _ ->
+        onItemViewClickedListener = OnItemViewClickedListener { _, item, _, row ->
             when (item) {
                 is Video -> {
                     val intent = Intent(requireContext(), DetailActivity::class.java).apply {
@@ -122,7 +122,15 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                     startActivity(intent)
                 }
                 is UpcomingStream -> {
-                    launchTwitchStream(item.title)
+                    val targetMs = com.giantbomb.tv.ui.UpcomingCardView.parseDate(item.date)
+                    val isStreamLive = targetMs > 0L && targetMs <= System.currentTimeMillis()
+                    // Also treat items from the Live Now row as live (targetMs may be 0)
+                    val isLiveRow = (row as? ListRow)?.headerItem?.name?.contains("Live") == true
+                    if (isStreamLive || isLiveRow) {
+                        launchTwitchStream(item.title)
+                    } else {
+                        Toast.makeText(requireContext(), "This show hasn't started yet", Toast.LENGTH_SHORT).show()
+                    }
                 }
                 is SettingsItem -> {
                     when (item.id) {
@@ -528,9 +536,10 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         launch {
             val result = TwitchExtractor().extract("giantbomb")
             result.onSuccess { stream ->
+                val liveTitle = stream.title.ifEmpty { title }
                 val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
                     putExtra(PlaybackActivity.EXTRA_LIVE_HLS_URL, stream.hlsUrl)
-                    putExtra(PlaybackActivity.EXTRA_LIVE_TITLE, stream.title)
+                    putExtra(PlaybackActivity.EXTRA_LIVE_TITLE, liveTitle)
                 }
                 startActivity(intent)
             }

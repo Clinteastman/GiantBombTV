@@ -101,29 +101,31 @@ class UpdateChecker(private val context: Context) {
                 .build()
                 .newCall(request).execute()
 
-            if (response.code != 200) {
-                Log.e(TAG, "Download failed: HTTP ${response.code}")
-                return@withContext null
-            }
+            response.use { resp ->
+                if (resp.code != 200) {
+                    Log.e(TAG, "Download failed: HTTP ${resp.code}")
+                    return@withContext null
+                }
 
-            val body = response.body ?: return@withContext null
-            val totalBytes = body.contentLength()
-            var downloadedBytes = 0L
+                val body = resp.body ?: return@withContext null
+                val totalBytes = body.contentLength()
+                var downloadedBytes = 0L
 
-            body.byteStream().use { input ->
-                outFile.outputStream().use { output ->
-                    val buffer = ByteArray(8192)
-                    var lastReportedPercent = -1
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read == -1) break
-                        output.write(buffer, 0, read)
-                        downloadedBytes += read
-                        if (totalBytes > 0) {
-                            val percent = ((downloadedBytes * 100) / totalBytes).toInt()
-                            if (percent != lastReportedPercent) {
-                                lastReportedPercent = percent
-                                withContext(Dispatchers.Main) { onProgress(percent) }
+                body.byteStream().use { input ->
+                    outFile.outputStream().use { output ->
+                        val buffer = ByteArray(8192)
+                        var lastReportedPercent = -1
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read == -1) break
+                            output.write(buffer, 0, read)
+                            downloadedBytes += read
+                            if (totalBytes > 0) {
+                                val percent = ((downloadedBytes * 100) / totalBytes).toInt()
+                                if (percent != lastReportedPercent) {
+                                    lastReportedPercent = percent
+                                    withContext(Dispatchers.Main) { onProgress(percent) }
+                                }
                             }
                         }
                     }
