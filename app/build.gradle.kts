@@ -68,6 +68,11 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.5.1")
     implementation("androidx.media3:media3-ui-leanback:1.5.1")
     implementation("androidx.media3:media3-session:1.5.1")
+    implementation("androidx.media3:media3-cast:1.5.1")
+
+    // Chromecast
+    implementation("com.google.android.gms:play-services-cast-framework:22.0.0")
+    implementation("androidx.mediarouter:mediarouter:1.7.0")
 
     // CardView
     implementation("androidx.cardview:cardview:1.0.0")

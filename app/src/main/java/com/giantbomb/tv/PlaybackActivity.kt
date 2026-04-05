@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.TypedValue
@@ -27,7 +28,11 @@ import androidx.fragment.app.FragmentActivity
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
+import androidx.media3.cast.CastPlayer
+import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -36,6 +41,7 @@ import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.mediarouter.app.MediaRouteButton
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -44,6 +50,8 @@ import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.data.YouTubeExtractor
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.util.DeviceUtil
+import com.google.android.gms.cast.framework.CastButtonFactory
+import com.google.android.gms.cast.framework.CastContext
 import kotlinx.coroutines.*
 
 class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
@@ -65,6 +73,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var progressJob: Job? = null
     private var saveJob: Job? = null
     private var isTv = false
+
+    // Chromecast
+    private var castContext: CastContext? = null
+    private var castPlayer: CastPlayer? = null
+    private var isCasting = false
 
     // Mobile portrait layout views
     private var mobileContentScroll: ScrollView? = null
@@ -97,6 +110,14 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         val prefs = PrefsManager(this)
         api = GiantBombApi(prefs.apiKey ?: "")
+
+        if (!isTv) {
+            try {
+                castContext = CastContext.getSharedInstance(this)
+            } catch (_: Exception) {
+                // Cast not available (e.g. no Google Play Services)
+            }
+        }
 
         @Suppress("DEPRECATION")
         video = intent.getSerializableExtra(EXTRA_VIDEO) as? Video
@@ -185,6 +206,19 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
 
         rootLayout.addView(playerView)
+
+        // Cast button overlay for live streams
+        if (castContext != null) {
+            val castButton = MediaRouteButton(this).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    48.dp(), 48.dp(),
+                    Gravity.TOP or Gravity.END
+                ).apply { setMargins(0, 8.dp(), 8.dp(), 0) }
+                CastButtonFactory.setUpMediaRouteButton(applicationContext, this)
+            }
+            rootLayout.addView(castButton)
+        }
+
         setContentView(rootLayout)
 
         // Hide system bars for immersive playback
@@ -242,6 +276,19 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
 
         playerContainer!!.addView(playerView)
+
+        // Cast button overlay on the player
+        if (castContext != null) {
+            val castButton = MediaRouteButton(this).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    48.dp(), 48.dp(),
+                    Gravity.TOP or Gravity.END
+                ).apply { setMargins(0, 8.dp(), 8.dp(), 0) }
+                CastButtonFactory.setUpMediaRouteButton(applicationContext, this)
+            }
+            playerContainer!!.addView(castButton)
+        }
+
         mainLayout.addView(playerContainer)
 
         // Content below video (only visible in portrait)
@@ -401,6 +448,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     override fun onStart() {
         super.onStart()
+        initializeCastPlayer()
         initializePlayer()
     }
 
@@ -408,6 +456,82 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         super.onStop()
         saveProgressNow()
         releasePlayer()
+        releaseCastPlayer()
+    }
+
+    private fun initializeCastPlayer() {
+        val ctx = castContext ?: return
+        castPlayer = CastPlayer(ctx).apply {
+            setSessionAvailabilityListener(object : SessionAvailabilityListener {
+                override fun onCastSessionAvailable() {
+                    switchToCast()
+                }
+
+                override fun onCastSessionUnavailable() {
+                    switchToLocal()
+                }
+            })
+            // If a Cast session is already active when we open the activity
+            if (isCastSessionAvailable) {
+                switchToCast()
+            }
+        }
+    }
+
+    private fun releaseCastPlayer() {
+        castPlayer?.setSessionAvailabilityListener(null)
+        castPlayer?.release()
+        castPlayer = null
+    }
+
+    private fun switchToCast() {
+        val cp = castPlayer ?: return
+        val exo = player
+
+        // Save current position from local player
+        val position = exo?.currentPosition ?: 0L
+        val wasPlaying = exo?.isPlaying ?: true
+
+        // Pause and detach local player
+        exo?.pause()
+        playerView.player = cp
+        isCasting = true
+
+        // Build a MediaItem with metadata for the Cast receiver
+        val currentUrl = qualityOptions.getOrNull(currentQualityIndex)?.url ?: return
+        val currentOption = qualityOptions[currentQualityIndex]
+        val mimeType = if (currentOption.isHls) MimeTypes.APPLICATION_M3U8 else MimeTypes.VIDEO_MP4
+
+        val castMediaItem = MediaItem.Builder()
+            .setUri(currentUrl)
+            .setMimeType(mimeType)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(video?.title ?: intent.getStringExtra(EXTRA_LIVE_TITLE) ?: "Giant Bomb")
+                    .setArtworkUri(video?.thumbnailUrl?.let { Uri.parse(it) })
+                    .build()
+            )
+            .build()
+
+        cp.setMediaItem(castMediaItem, position)
+        cp.playWhenReady = wasPlaying
+        cp.prepare()
+    }
+
+    private fun switchToLocal() {
+        val cp = castPlayer
+        val position = cp?.currentPosition ?: 0L
+        val wasPlaying = cp?.isPlaying ?: true
+
+        isCasting = false
+
+        // Re-attach local player
+        val exo = player
+        if (exo != null) {
+            playerView.player = exo
+            exo.seekTo(position)
+            exo.playWhenReady = wasPlaying
+        }
     }
 
     private fun initializePlayer() {
@@ -915,9 +1039,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     private fun saveProgressNow() {
         val v = video ?: return
-        val p = player ?: return
-        val currentSec = p.currentPosition / 1000.0
-        val durationSec = if (videoDuration > 0) videoDuration else p.duration / 1000.0
+        val activePlayer: Player = (if (isCasting) castPlayer else player) ?: return
+        val currentSec = activePlayer.currentPosition / 1000.0
+        val durationSec = if (videoDuration > 0) videoDuration else activePlayer.duration / 1000.0
         if (currentSec > 0 && durationSec > 0) {
             saveJob?.cancel()
             saveJob = launch { api.saveProgress(v.id, currentSec, durationSec) }

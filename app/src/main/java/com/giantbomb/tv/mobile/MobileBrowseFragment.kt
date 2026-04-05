@@ -31,6 +31,9 @@ import com.giantbomb.tv.model.Show
 import com.giantbomb.tv.model.UpcomingStream
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.ui.UpcomingCardView
+import com.google.android.gms.cast.framework.CastButtonFactory
+import com.google.android.gms.cast.framework.CastContext
+import androidx.mediarouter.app.MediaRouteButton
 import kotlinx.coroutines.*
 
 class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
@@ -86,6 +89,16 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             val bars = insets.getInsets(WindowInsetsCompat.Type.statusBars())
             v.setPadding(basePadStart, bars.top + (8 * resources.displayMetrics.density).toInt(), basePadEnd, basePadBottom)
             insets
+        }
+
+        // Toolbar Cast button
+        try {
+            val castButton = view.findViewById<MediaRouteButton>(R.id.toolbar_cast)
+            CastButtonFactory.setUpMediaRouteButton(requireContext(), castButton)
+            CastContext.getSharedInstance(requireContext())
+            castButton.visibility = View.VISIBLE
+        } catch (_: Exception) {
+            // Cast not available
         }
 
         // Toolbar search
