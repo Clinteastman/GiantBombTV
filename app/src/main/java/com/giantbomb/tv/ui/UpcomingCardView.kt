@@ -170,16 +170,8 @@ class UpcomingCardView(context: Context) : FrameLayout(context) {
             override fun run() {
                 val remaining = targetTimeMs - System.currentTimeMillis()
                 if (remaining <= 0) {
-                    // Switch to LIVE state
                     countdownGroup.visibility = View.GONE
-                    liveBadge.visibility = View.VISIBLE
-                    timeView.text = "Starting soon - tap to watch"
-                    isLiveNow = true
-                    // Load Twitch preview thumbnail
-                    Glide.with(this@UpcomingCardView)
-                        .load("https://static-cdn.jtvnw.net/previews-ttv/live_user_giantbomb-640x360.jpg")
-                        .centerCrop()
-                        .into(imageView)
+                    timeView.text = "Starting soon"
                     return
                 }
                 val totalSec = remaining / 1000

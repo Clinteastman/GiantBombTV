@@ -834,18 +834,8 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     override fun run() {
                         val remaining = targetMs - System.currentTimeMillis()
                         if (remaining <= 0) {
-                            // Switch to LIVE state
                             holder.countdownGroup.visibility = View.GONE
-                            holder.liveBadge.visibility = View.VISIBLE
-                            holder.time.text = "Starting soon - tap to watch"
-                            // Load Twitch preview thumbnail
-                            if (holder.image.tag != "twitch_preview") {
-                                holder.image.tag = "twitch_preview"
-                                Glide.with(holder.image)
-                                    .load("https://static-cdn.jtvnw.net/previews-ttv/live_user_giantbomb-640x360.jpg")
-                                    .centerCrop()
-                                    .into(holder.image)
-                            }
+                            holder.time.text = "Starting soon"
                             return
                         }
                         val totalSec = remaining / 1000
