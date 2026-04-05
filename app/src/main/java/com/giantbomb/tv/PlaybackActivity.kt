@@ -1096,9 +1096,13 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         return when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
-                saveProgressNow()
-                finish()
-                true
+                if (!isTv && tryEnterPip()) {
+                    true
+                } else {
+                    saveProgressNow()
+                    finish()
+                    true
+                }
             }
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> {
                 player?.let { if (it.isPlaying) it.pause() else it.play() }
