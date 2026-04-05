@@ -1,7 +1,6 @@
 package com.giantbomb.tv
 
 import android.content.Context
-import com.google.android.gms.cast.CastMediaControlIntent
 import com.google.android.gms.cast.framework.CastOptions
 import com.google.android.gms.cast.framework.OptionsProvider
 import com.google.android.gms.cast.framework.SessionProvider
@@ -10,7 +9,7 @@ class CastOptionsProvider : OptionsProvider {
 
     override fun getCastOptions(context: Context): CastOptions {
         return CastOptions.Builder()
-            .setReceiverApplicationId(CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APP_ID)
+            .setReceiverApplicationId("CC1AD845")
             .build()
     }
 
