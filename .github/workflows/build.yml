@@ -23,7 +23,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run unit tests and build debug APK
-        run: ./gradlew clean testDebugUnitTest assembleDebug
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          VERSION_NAME="dev-${SHORT_SHA}" VERSION_CODE=${{ github.run_number }} \
+            ./gradlew clean testDebugUnitTest assembleDebug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

@@ -331,6 +331,16 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     R.drawable.ic_settings_cog
                 )))
 
+                // Version info
+                val packageInfo = requireContext().packageManager.getPackageInfo(requireContext().packageName, 0)
+                val versionText = "v${packageInfo.versionName} (${packageInfo.longVersionCode})"
+                items.add(BrowseItem.SettingRow(SettingsItem(
+                    -1,
+                    "Version",
+                    versionText,
+                    R.drawable.ic_settings_cog
+                )))
+
                 browseItems.clear()
                 browseItems.addAll(items)
                 browseAdapter.notifyDataSetChanged()
