@@ -485,7 +485,18 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        playerView.useController = !isInPictureInPictureMode
+        if (isInPictureInPictureMode) {
+            playerView.useController = false
+        } else {
+            playerView.useController = true
+            // User dismissed PiP — stop playback and finish
+            if (!isFinishing) {
+                saveProgressNow()
+                releasePlayer()
+                releaseCastPlayer()
+                finish()
+            }
+        }
     }
 
     private fun initializeCastPlayer() {
