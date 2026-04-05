@@ -568,8 +568,8 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             }
 
             itemView.setOnClickListener {
-                val intent = Intent(requireContext(), DetailActivity::class.java).apply {
-                    putExtra(DetailActivity.EXTRA_VIDEO, video)
+                val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
+                    putExtra(PlaybackActivity.EXTRA_VIDEO, video)
                 }
                 startActivity(intent)
             }
@@ -700,8 +700,8 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             }
 
             holder.itemView.setOnClickListener {
-                val intent = Intent(requireContext(), DetailActivity::class.java).apply {
-                    putExtra(DetailActivity.EXTRA_VIDEO, video)
+                val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
+                    putExtra(PlaybackActivity.EXTRA_VIDEO, video)
                 }
                 startActivity(intent)
             }
