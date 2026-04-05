@@ -245,7 +245,8 @@ class GiantBombApi(
                     title = l.optString("title", ""),
                     image = l.safeString("image"),
                     date = l.optString("date", ""),
-                    premium = l.optBoolean("premium", false)
+                    premium = l.optBoolean("premium", false),
+                    isLive = true
                 )
             }
             val upcomingArr = json.optJSONArray("upcoming")

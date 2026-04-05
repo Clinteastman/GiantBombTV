@@ -214,12 +214,12 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     return v.withFallbackThumb()
                 }
 
-                // Upcoming / Live Now
+                // Upcoming & Live
                 val upcomingResult = upcomingDeferred.await().getOrNull()
                 if (upcomingResult != null) {
                     val hasContent = upcomingResult.liveNow != null || upcomingResult.upcoming.isNotEmpty()
                     if (hasContent) {
-                        val headerTitle = if (upcomingResult.liveNow != null) "\uD83D\uDD34 Live Now" else "Upcoming"
+                        val headerTitle = if (upcomingResult.liveNow != null) "\uD83D\uDD34 Upcoming & Live" else "Upcoming"
                         items.add(BrowseItem.SectionHeader(headerTitle))
                         items.add(BrowseItem.UpcomingRow(upcomingResult.upcoming, upcomingResult.liveNow))
                     }
@@ -611,9 +611,9 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         }
 
         fun bind(item: BrowseItem.UpcomingRow) {
-            val allStreams = mutableListOf<Pair<UpcomingStream, Boolean>>()
-            item.liveNow?.let { allStreams.add(it to true) }
-            item.streams.forEach { allStreams.add(it to false) }
+            val allStreams = mutableListOf<UpcomingStream>()
+            item.liveNow?.let { allStreams.add(it) }
+            allStreams.addAll(item.streams)
             horizontalRecycler.adapter = UpcomingAdapter(allStreams)
         }
     }
@@ -728,7 +728,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     }
 
     private inner class UpcomingAdapter(
-        private val streams: List<Pair<UpcomingStream, Boolean>>
+        private val streams: List<UpcomingStream>
     ) : RecyclerView.Adapter<UpcomingAdapter.VH>() {
 
         private val handler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -794,20 +794,20 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         override fun getItemCount() = streams.size
 
         override fun onBindViewHolder(holder: VH, position: Int) {
-            val (stream, isLive) = streams[position]
+            val stream = streams[position]
             holder.title.text = stream.title
             holder.premiumBadge.visibility = if (stream.premium) View.VISIBLE else View.GONE
 
             if (!stream.image.isNullOrEmpty()) {
                 Glide.with(holder.image).load(stream.image).centerCrop().into(holder.image)
             } else {
-                holder.image.setImageResource(0)
+                holder.image.setImageResource(R.drawable.banner)
             }
 
             // Stop any previous countdown
             holder.countdownRunnable?.let { handler.removeCallbacks(it) }
 
-            if (isLive) {
+            if (stream.isLive) {
                 holder.liveBadge.visibility = View.VISIBLE
                 holder.countdownGroup.visibility = View.GONE
                 holder.time.text = "Streaming now"
@@ -876,7 +876,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             holder.itemView.setOnClickListener {
                 // Only allow playback for live streams; future items can't be played yet
                 val targetMs = UpcomingCardView.parseDate(stream.date)
-                val isStreamLive = isLive || (targetMs > 0L && targetMs <= System.currentTimeMillis())
+                val isStreamLive = stream.isLive || (targetMs > 0L && targetMs <= System.currentTimeMillis())
                 if (isStreamLive) {
                     launchTwitchStream(stream.title)
                 } else {

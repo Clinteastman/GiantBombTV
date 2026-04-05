@@ -123,10 +123,8 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 }
                 is UpcomingStream -> {
                     val targetMs = com.giantbomb.tv.ui.UpcomingCardView.parseDate(item.date)
-                    val isStreamLive = targetMs > 0L && targetMs <= System.currentTimeMillis()
-                    // Also treat items from the Live Now row as live (targetMs may be 0)
-                    val isLiveRow = (row as? ListRow)?.headerItem?.name?.contains("Live") == true
-                    if (isStreamLive || isLiveRow) {
+                    val isStreamLive = item.isLive || (targetMs > 0L && targetMs <= System.currentTimeMillis())
+                    if (isStreamLive) {
                         launchTwitchStream(item.title)
                     } else {
                         Toast.makeText(requireContext(), "This show hasn't started yet", Toast.LENGTH_SHORT).show()
@@ -269,25 +267,21 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 return if (fallback != null) copy(thumbnailUrl = fallback, isFallbackThumb = true) else this
             }
 
-            // Upcoming / Live Now
+            // Upcoming & Live
             val upcomingResult = upcomingDeferred.await().getOrNull()
             if (upcomingResult != null) {
-                // Live Now row
-                if (upcomingResult.liveNow != null) {
-                    val liveAdapter = ArrayObjectAdapter(UpcomingCardPresenter(isLiveNow = true))
-                    liveAdapter.add(upcomingResult.liveNow)
+                val hasContent = upcomingResult.liveNow != null || upcomingResult.upcoming.isNotEmpty()
+                if (hasContent) {
+                    val headerTitle = if (upcomingResult.liveNow != null) "\uD83D\uDD34 Upcoming & Live" else "Upcoming"
+                    val adapter = ArrayObjectAdapter(UpcomingCardPresenter())
+                    // Live item first
+                    if (upcomingResult.liveNow != null) {
+                        adapter.add(upcomingResult.liveNow)
+                    }
+                    upcomingResult.upcoming.forEach { adapter.add(it) }
                     rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, "\uD83D\uDD34 Live Now"),
-                        liveAdapter
-                    ))
-                }
-                // Upcoming row
-                if (upcomingResult.upcoming.isNotEmpty()) {
-                    val upcomingAdapter = ArrayObjectAdapter(UpcomingCardPresenter())
-                    upcomingResult.upcoming.forEach { upcomingAdapter.add(it) }
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, "Upcoming"),
-                        upcomingAdapter
+                        HeaderItem(headerIdCounter++, headerTitle),
+                        adapter
                     ))
                 }
             }
