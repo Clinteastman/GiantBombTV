@@ -263,7 +263,19 @@ class GiantBombApi(
                     ))
                 }
             }
-            Result.success(UpcomingResponse(liveNow = liveNow, upcoming = upcoming))
+            // Filter stale items — if the scheduled date is more than 6 hours
+            // in the past the stream has almost certainly ended and the API is stale
+            val sixHoursAgo = System.currentTimeMillis() - 6 * 60 * 60 * 1000
+            val filteredLiveNow = liveNow?.let {
+                val dateMs = com.giantbomb.tv.ui.UpcomingCardView.parseDate(it.date)
+                if (dateMs > 0L && dateMs < sixHoursAgo) null else it
+            }
+            val filteredUpcoming = upcoming.filter {
+                val dateMs = com.giantbomb.tv.ui.UpcomingCardView.parseDate(it.date)
+                dateMs == 0L || dateMs >= sixHoursAgo
+            }
+
+            Result.success(UpcomingResponse(liveNow = filteredLiveNow, upcoming = filteredUpcoming))
         } catch (e: Exception) {
             Result.failure(e)
         }

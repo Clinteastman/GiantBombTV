@@ -467,25 +467,25 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode
     }
 
+    private fun tryEnterPip(): Boolean {
+        if (isTv || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        if (player == null && castPlayer == null) return false
+        enterPictureInPictureMode(
+            PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(16, 9))
+                .build()
+        )
+        return true
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (!isTv && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && player?.isPlaying == true) {
-            enterPictureInPictureMode(
-                PictureInPictureParams.Builder()
-                    .setAspectRatio(Rational(16, 9))
-                    .build()
-            )
-        }
+        tryEnterPip()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         playerView.useController = !isInPictureInPictureMode
-        if (!isInPictureInPictureMode) {
-            // Exiting PiP — if the user dismissed PiP without returning to the activity,
-            // the system will call onStop next, which handles cleanup.
-            playerView.useController = true
-        }
     }
 
     private fun initializeCastPlayer() {

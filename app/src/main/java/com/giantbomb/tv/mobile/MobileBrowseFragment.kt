@@ -331,6 +331,15 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     R.drawable.ic_settings_cog
                 )))
 
+                // Last updated timestamp
+                val now = java.text.SimpleDateFormat("EEE, MMM d 'at' h:mm:ss a", java.util.Locale.getDefault()).format(java.util.Date())
+                items.add(BrowseItem.SettingRow(SettingsItem(
+                    -1,
+                    "Last Updated",
+                    now,
+                    R.drawable.ic_settings_refresh
+                )))
+
                 // Version info
                 val packageInfo = requireContext().packageManager.getPackageInfo(requireContext().packageName, 0)
                 val versionText = "v${packageInfo.versionName} (${packageInfo.longVersionCode})"
