@@ -75,6 +75,7 @@
         <activity
             android:name=".PlaybackActivity"
             android:exported="false"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize" />
+            android:supportsPictureInPicture="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|pictureInPicture" />
     </application>
 </manifest>

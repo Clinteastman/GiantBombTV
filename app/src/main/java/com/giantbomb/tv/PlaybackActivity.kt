@@ -1,5 +1,6 @@
 package com.giantbomb.tv
 
+import android.app.PictureInPictureParams
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
@@ -9,6 +10,7 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
@@ -454,9 +456,36 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     override fun onStop() {
         super.onStop()
-        saveProgressNow()
-        releasePlayer()
-        releaseCastPlayer()
+        if (!isInPipMode()) {
+            saveProgressNow()
+            releasePlayer()
+            releaseCastPlayer()
+        }
+    }
+
+    private fun isInPipMode(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (!isTv && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && player?.isPlaying == true) {
+            enterPictureInPictureMode(
+                PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(16, 9))
+                    .build()
+            )
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        playerView.useController = !isInPictureInPictureMode
+        if (!isInPictureInPictureMode) {
+            // Exiting PiP — if the user dismissed PiP without returning to the activity,
+            // the system will call onStop next, which handles cleanup.
+            playerView.useController = true
+        }
     }
 
     private fun initializeCastPlayer() {
