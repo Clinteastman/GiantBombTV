@@ -3,32 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Giant Bomb TV</title>
+    <title>Giant Bomb TV - Unofficial streaming app</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #e0e0e0;
+            background: #121212;
+            line-height: 1.6;
+        }
+        .hero {
+            text-align: center;
+            padding: 3rem 1rem 2rem;
+            background: linear-gradient(180deg, #1a1a1a 0%, #121212 100%);
+        }
+        .hero img {
+            width: 120px;
+            height: 120px;
+            border-radius: 24px;
+        }
+        .hero h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 1rem 0 0.25rem;
+            color: #fff;
+        }
+        .hero h1 span { color: #e53935; }
+        .hero .tagline {
+            font-size: 1.1rem;
+            color: #aaa;
+        }
+        .badges {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 1.5rem;
+        }
+        .badge {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 8px;
+            padding: 8px 18px;
+            color: #ccc;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        .content {
             max-width: 720px;
             margin: 0 auto;
             padding: 2rem 1rem;
-            line-height: 1.6;
-            color: #222;
-            background: #fafafa;
         }
-        h1 { font-size: 1.6rem; }
-        a { color: #1a73e8; }
-        ul { padding-left: 1.5rem; }
+        h2 {
+            font-size: 1.3rem;
+            color: #fff;
+            margin: 2rem 0 0.75rem;
+        }
+        h2:first-child { margin-top: 0; }
+        ul {
+            padding-left: 1.5rem;
+        }
+        li {
+            margin-bottom: 0.4rem;
+        }
+        a { color: #5c9eff; }
+        .cta {
+            display: inline-block;
+            background: #e53935;
+            color: #fff;
+            text-decoration: none;
+            padding: 12px 28px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            margin-top: 1.5rem;
+        }
+        .cta:hover { background: #c62828; }
+        .links {
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .links a {
+            display: inline-block;
+            margin-right: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .disclaimer {
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            font-size: 0.85rem;
+            color: #888;
+        }
     </style>
 </head>
 <body>
 
-<h1>Giant Bomb TV</h1>
-<p>An unofficial Android TV and mobile app for watching Giant Bomb videos.</p>
+<div class="hero">
+    <img src="https://raw.githubusercontent.com/Clinteastman/GiantBombTV/master/store-assets/app_icon_512x512.png" alt="Giant Bomb TV icon" />
+    <h1>Giant Bomb <span>TV</span></h1>
+    <p class="tagline">Stream Giant Bomb on any screen</p>
+    <div class="badges">
+        <span class="badge">Phone</span>
+        <span class="badge">Android TV</span>
+        <span class="badge">Fire TV</span>
+        <span class="badge">Chromecast</span>
+    </div>
+    <a class="cta" href="https://github.com/Clinteastman/GiantBombTV/releases">Download Latest Release</a>
+</div>
 
-<ul>
-    <li><a href="https://github.com/Clinteastman/GiantBombTV">Source code on GitHub</a></li>
-    <li><a href="https://github.com/Clinteastman/GiantBombTV/releases">Download latest release</a></li>
-    <li><a href="privacy.html">Privacy Policy</a></li>
-</ul>
+<div class="content">
+    <h2>Features</h2>
+    <ul>
+        <li>Browse recent videos, shows, and categories</li>
+        <li>Continue Watching with server-synced progress and resume</li>
+        <li>Watchlist management</li>
+        <li>Search across all Giant Bomb videos</li>
+        <li>Stream quality selection: Auto, 1080p, 720p, 480p, 360p</li>
+        <li>Chromecast support for casting to your TV</li>
+        <li>Picture-in-Picture mode on phones</li>
+        <li>Upcoming shows schedule and live streams</li>
+        <li>Show browsing with infinite scroll through episodes</li>
+    </ul>
+
+    <h2>Getting Started</h2>
+    <ol style="padding-left: 1.5rem;">
+        <li>Download the latest release from GitHub</li>
+        <li>Install the APK on your device</li>
+        <li>Log in to <a href="https://www.giantbomb.com">giantbomb.com</a> and find your API key in your profile settings</li>
+        <li>Launch the app and enter your API key</li>
+    </ol>
+    <p style="margin-top: 0.75rem;">A free Giant Bomb account gets you access to some content. <a href="https://giantbomb.com/get-premium">Giant Bomb Premium</a> unlocks exclusive shows, ad-free videos, and the full back catalog.</p>
+
+    <h2>Open Source</h2>
+    <p>Giant Bomb TV is open source. View the source code, report issues, or contribute on GitHub.</p>
+
+    <div class="links">
+        <a href="https://github.com/Clinteastman/GiantBombTV">Source Code</a>
+        <a href="https://github.com/Clinteastman/GiantBombTV/releases">Releases</a>
+        <a href="https://github.com/Clinteastman/GiantBombTV/issues">Report an Issue</a>
+        <a href="privacy.html">Privacy Policy</a>
+    </div>
+
+    <div class="disclaimer">
+        <p>This is a fan-made, unofficial app. It is not affiliated with or endorsed by Giant Bomb. All Giant Bomb content is property of its respective owners.</p>
+    </div>
+</div>
 
 </body>
 </html>
