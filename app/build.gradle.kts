@@ -10,7 +10,7 @@ android {
     defaultConfig {
         applicationId = "com.giantbomb.tv"
         minSdk = 21
-        targetSdk = 34
+        targetSdk = 35
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 9999
         versionName = System.getenv("VERSION_NAME") ?: "0.0.0-dev"
 
