@@ -202,7 +202,7 @@ app/src/main/java/com/giantbomb/tv/
 | Menu | - | Open quality picker |
 | Search orb | Open search | - |
 | Play/Pause | - | Toggle playback |
-| FF/Rewind | - | Skip +-10 seconds |
+| FF/Rewind | - | Skip +/-10 seconds |
 
 ## AI Tools Used
 

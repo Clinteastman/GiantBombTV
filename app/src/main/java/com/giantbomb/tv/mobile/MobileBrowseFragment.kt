@@ -672,10 +672,9 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 return
             }
             if (item.isLoading) return
+            val currentApi = api ?: return
             item.isLoading = true
             horizontalRecycler.adapter = null
-
-            val currentApi = api ?: return
             launch {
                 val result = currentApi.getShowVideos(item.show.id, limit = ROW_PAGE_SIZE)
                 result.onSuccess { videos ->

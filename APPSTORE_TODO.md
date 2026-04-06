@@ -50,7 +50,7 @@ Items that require manual/external action before submitting to the Google Play S
 
 ### Privacy Policy
 - Created at `docs/privacy.html`, hosted via GitHub Pages
-- URL: https://clinteastman.github.io/GiantBombTV/privacy
+- URL: https://clinteastman.github.io/GiantBombTV/privacy.html
 - Linked in app settings (both TV and mobile)
 - Covers API key, progress/watchlist data, Twitch, GitHub update checks, and Chromecast
 

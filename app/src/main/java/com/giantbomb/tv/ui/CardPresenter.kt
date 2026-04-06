@@ -45,7 +45,7 @@ class CardPresenter : Presenter() {
         cardView.setWatched(video.watched)
 
         val imageUrl = video.thumbnailUrl ?: video.posterUrl
-        val listener = object : RequestListener<Drawable> {
+        val listener = if (com.giantbomb.tv.BuildConfig.DEBUG) object : RequestListener<Drawable> {
             override fun onLoadFailed(
                 e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean
             ): Boolean {
@@ -59,7 +59,7 @@ class CardPresenter : Presenter() {
                 resource: Drawable, model: Any, target: Target<Drawable>,
                 dataSource: DataSource, isFirstResource: Boolean
             ): Boolean = false
-        }
+        } else null
 
         if (!imageUrl.isNullOrEmpty()) {
             if (video.isFallbackThumb) {
@@ -70,7 +70,7 @@ class CardPresenter : Presenter() {
                     .fitCenter()
                     .placeholder(defaultCardImage)
                     .error(defaultCardImage)
-                    .listener(listener)
+                    .apply { listener?.let { listener(it) } }
                     .into(cardView.thumbnail)
             } else {
                 cardView.thumbnail.scaleType = ImageView.ScaleType.CENTER_CROP
@@ -80,7 +80,7 @@ class CardPresenter : Presenter() {
                     .centerCrop()
                     .placeholder(defaultCardImage)
                     .error(defaultCardImage)
-                    .listener(listener)
+                    .apply { listener?.let { listener(it) } }
                     .into(cardView.thumbnail)
             }
         } else {
