@@ -14,3 +14,8 @@ local.properties
 *.jks
 *.keystore
 gbtv_*.png
+cloudflare_403_diagnostics.txt
+.claude/
+tmp_*.png
+tmp_*.json
+screenshots/phone_test.png

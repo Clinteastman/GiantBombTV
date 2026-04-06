@@ -49,7 +49,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
-import com.giantbomb.tv.data.YouTubeExtractor
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.util.DeviceUtil
 import com.google.android.gms.cast.framework.CastButtonFactory
@@ -602,27 +601,39 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
                 // YouTube fallback
                 if (qualityOptions.isEmpty() && !playback.youtubeUrl.isNullOrEmpty()) {
-                    val ytUrl = playback.youtubeUrl
-                    if (ytUrl != null) {
-                        val ytResult = YouTubeExtractor().extract(ytUrl)
-                        ytResult.onSuccess { yt ->
-                            if (yt.hlsUrl != null) {
-                                qualityOptions.add(QualityOption("YouTube HLS", yt.hlsUrl, isHls = true))
-                            }
-                            yt.streams
-                                .filter { !it.isAdaptive && it.hasVideo }
-                                .sortedByDescending { it.height }
-                                .forEach { stream ->
-                                    val label = "YT ${stream.qualityLabel ?: "${stream.height}p"}"
-                                    qualityOptions.add(QualityOption(label, stream.url))
+                    if (BuildConfig.ENABLE_INLINE_YOUTUBE) {
+                        // Inline extraction using internal YouTube API (sideload builds only)
+                        val ytUrl = playback.youtubeUrl
+                        if (ytUrl != null) {
+                            val ytResult = com.giantbomb.tv.data.YouTubeExtractor().extract(ytUrl)
+                            ytResult.onSuccess { yt ->
+                                if (yt.hlsUrl != null) {
+                                    qualityOptions.add(QualityOption("YouTube HLS", yt.hlsUrl, isHls = true))
                                 }
-                            if (videoDuration == 0.0 && yt.duration > 0) {
-                                videoDuration = yt.duration.toDouble()
+                                yt.streams
+                                    .filter { !it.isAdaptive && it.hasVideo }
+                                    .sortedByDescending { it.height }
+                                    .forEach { stream ->
+                                        val label = "YT ${stream.qualityLabel ?: "${stream.height}p"}"
+                                        qualityOptions.add(QualityOption(label, stream.url))
+                                    }
+                                if (videoDuration == 0.0 && yt.duration > 0) {
+                                    videoDuration = yt.duration.toDouble()
+                                }
+                            }
+                            ytResult.onFailure { e ->
+                                android.util.Log.w("PlaybackActivity", "YouTube extraction failed: ${e.message}")
                             }
                         }
-                        ytResult.onFailure { e ->
-                            android.util.Log.w("PlaybackActivity", "YouTube extraction failed: ${e.message}")
-                        }
+                    } else {
+                        // Store-compliant: open in YouTube app / browser
+                        val ytIntent = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(playback.youtubeUrl)
+                        )
+                        startActivity(ytIntent)
+                        finish()
+                        return@onSuccess
                     }
                 }
 

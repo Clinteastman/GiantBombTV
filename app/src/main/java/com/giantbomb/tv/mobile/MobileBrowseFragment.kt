@@ -39,6 +39,7 @@ import kotlinx.coroutines.*
 class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
 
     private lateinit var prefs: PrefsManager
+    private var api: GiantBombApi? = null
     private var isLoading = false
 
     private lateinit var recyclerView: RecyclerView
@@ -52,6 +53,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         private const val SETTINGS_REFRESH = 2
         private const val SETTINGS_SETUP = 3
         private const val SETTINGS_QUALITY = 4
+        private const val SETTINGS_PRIVACY = 5
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
         private const val RECENT_VERTICAL_COUNT = 5
@@ -65,6 +67,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         data class VerticalVideo(val video: Video) : BrowseItem()
         data class SettingRow(val item: SettingsItem) : BrowseItem()
         data class UpcomingRow(val streams: List<UpcomingStream>, val liveNow: UpcomingStream?) : BrowseItem()
+        class LazyShowRow(val show: Show, var videos: List<Video>? = null, var isLoading: Boolean = false) : BrowseItem()
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -174,7 +177,8 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         swipeRefresh.isRefreshing = true
 
         val key = prefs.apiKey ?: ""
-        val api = GiantBombApi(key)
+        api = GiantBombApi(key)
+        val api = api!!
 
         launch {
             try {
@@ -283,23 +287,20 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     }
                 }
 
-                // Per-show rows
+                // Per-show rows (lazy loaded when scrolled into view)
                 if (shows != null && shows.isNotEmpty()) {
                     val activeShows = shows.filter { it.active }
-                    val showVideoResults = activeShows.map { s ->
-                        s to async { api.getShowVideos(s.id, limit = ROW_PAGE_SIZE) }
-                    }
-                    for ((s, deferred) in showVideoResults) {
-                        val showVideos = deferred.await().getOrNull() ?: continue
-                        if (showVideos.isEmpty()) continue
-                        items.add(BrowseItem.SectionHeader(s.title))
-                        items.add(BrowseItem.HorizontalVideoRow(showVideos.map { it.withProgress() }))
-                    }
 
-                    // All Shows
+                    // All Shows grid first
                     if (activeShows.isNotEmpty()) {
                         items.add(BrowseItem.SectionHeader("All Shows"))
                         items.add(BrowseItem.HorizontalShowRow(activeShows))
+                    }
+
+                    // Lazy show rows - videos load on scroll
+                    for (s in activeShows) {
+                        items.add(BrowseItem.SectionHeader(s.title))
+                        items.add(BrowseItem.LazyShowRow(s))
                     }
                 }
 
@@ -329,6 +330,12 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     getString(R.string.settings_setup),
                     getString(R.string.settings_setup_desc),
                     R.drawable.ic_settings_cog
+                )))
+                items.add(BrowseItem.SettingRow(SettingsItem(
+                    SETTINGS_PRIVACY,
+                    "Privacy Policy",
+                    "View privacy policy",
+                    R.drawable.ic_settings_about
                 )))
 
                 // Last updated timestamp
@@ -402,6 +409,14 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         requireActivity().startActivityForResult(intent, MainActivity.SETUP_REQUEST)
     }
 
+    private fun openPrivacyPolicy() {
+        val intent = Intent(
+            Intent.ACTION_VIEW,
+            android.net.Uri.parse("https://clinteastman.github.io/GiantBombTV/privacy.html")
+        )
+        startActivity(intent)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         cancel()
@@ -419,6 +434,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         val TYPE_VERTICAL_VIDEO = 3
         val TYPE_SETTING = 4
         val TYPE_UPCOMING_ROW = 5
+        val TYPE_LAZY_SHOW_ROW = 6
 
         override fun getItemViewType(position: Int): Int = when (browseItems[position]) {
             is BrowseItem.SectionHeader -> TYPE_SECTION_HEADER
@@ -427,6 +443,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             is BrowseItem.VerticalVideo -> TYPE_VERTICAL_VIDEO
             is BrowseItem.SettingRow -> TYPE_SETTING
             is BrowseItem.UpcomingRow -> TYPE_UPCOMING_ROW
+            is BrowseItem.LazyShowRow -> TYPE_LAZY_SHOW_ROW
         }
 
         override fun getItemCount() = browseItems.size
@@ -440,6 +457,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 TYPE_VERTICAL_VIDEO -> VerticalVideoVH(inflater.inflate(R.layout.item_mobile_video, parent, false))
                 TYPE_SETTING -> SettingVH(inflater.inflate(R.layout.item_mobile_setting, parent, false))
                 TYPE_UPCOMING_ROW -> UpcomingRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
+                TYPE_LAZY_SHOW_ROW -> LazyShowRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
                 else -> throw IllegalArgumentException("Unknown view type: $viewType")
             }
         }
@@ -452,6 +470,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 is BrowseItem.VerticalVideo -> (holder as VerticalVideoVH).bind(item)
                 is BrowseItem.SettingRow -> (holder as SettingVH).bind(item)
                 is BrowseItem.UpcomingRow -> (holder as UpcomingRowVH).bind(item)
+                is BrowseItem.LazyShowRow -> (holder as LazyShowRowVH).bind(item)
             }
         }
     }
@@ -559,12 +578,14 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
 
             // Thumbnail - use placeholder size to avoid stale cache sizing
             if (!video.thumbnailUrl.isNullOrEmpty()) {
-                Glide.with(thumbnail)
+                Glide.with(thumbnail.context)
                     .load(video.thumbnailUrl)
                     .centerCrop()
+                    .placeholder(R.drawable.default_card)
+                    .error(R.drawable.default_card)
                     .into(thumbnail)
             } else {
-                thumbnail.setImageResource(0)
+                thumbnail.setImageResource(R.drawable.default_card)
             }
 
             itemView.setOnClickListener {
@@ -617,6 +638,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     SETTINGS_REFRESH -> loadContent()
                     SETTINGS_SETUP -> launchSetup()
                     SETTINGS_QUALITY -> cycleQuality()
+                    SETTINGS_PRIVACY -> openPrivacyPolicy()
                 }
             }
         }
@@ -634,6 +656,39 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             item.liveNow?.let { allStreams.add(it) }
             allStreams.addAll(item.streams)
             horizontalRecycler.adapter = UpcomingAdapter(allStreams)
+        }
+    }
+
+    private inner class LazyShowRowVH(view: View) : RecyclerView.ViewHolder(view) {
+        private val horizontalRecycler: RecyclerView = view.findViewById(R.id.horizontal_recycler)
+
+        init {
+            horizontalRecycler.layoutManager = LinearLayoutManager(view.context, LinearLayoutManager.HORIZONTAL, false)
+        }
+
+        fun bind(item: BrowseItem.LazyShowRow) {
+            if (item.videos != null) {
+                horizontalRecycler.adapter = SmallVideoAdapter(item.videos!!)
+                return
+            }
+            if (item.isLoading) return
+            item.isLoading = true
+            horizontalRecycler.adapter = null
+
+            val currentApi = api ?: return
+            launch {
+                val result = currentApi.getShowVideos(item.show.id, limit = ROW_PAGE_SIZE)
+                result.onSuccess { videos ->
+                    item.videos = videos
+                    item.isLoading = false
+                    if (isAdded) {
+                        horizontalRecycler.adapter = SmallVideoAdapter(videos)
+                    }
+                }
+                result.onFailure {
+                    item.isLoading = false
+                }
+            }
         }
     }
 
@@ -691,12 +746,14 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             }
 
             if (!video.thumbnailUrl.isNullOrEmpty()) {
-                Glide.with(holder.thumbnail)
+                Glide.with(holder.thumbnail.context)
                     .load(video.thumbnailUrl)
                     .centerCrop()
+                    .placeholder(R.drawable.default_card)
+                    .error(R.drawable.default_card)
                     .into(holder.thumbnail)
             } else {
-                holder.thumbnail.setImageResource(0)
+                holder.thumbnail.setImageResource(R.drawable.default_card)
             }
 
             holder.itemView.setOnClickListener {
@@ -729,7 +786,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
 
             val imageUrl = show.posterUrl ?: show.logoUrl
             if (!imageUrl.isNullOrEmpty()) {
-                Glide.with(holder.poster)
+                Glide.with(holder.poster.context)
                     .load(imageUrl)
                     .centerCrop()
                     .into(holder.poster)
@@ -818,7 +875,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             holder.premiumBadge.visibility = if (stream.premium) View.VISIBLE else View.GONE
 
             if (!stream.image.isNullOrEmpty()) {
-                Glide.with(holder.image).load(stream.image).centerCrop().into(holder.image)
+                Glide.with(holder.image.context).load(stream.image).centerCrop().into(holder.image)
             } else {
                 holder.image.setImageResource(R.drawable.banner)
             }
@@ -831,7 +888,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 holder.countdownGroup.visibility = View.GONE
                 holder.time.text = "Streaming now"
                 // Load Twitch preview thumbnail for live streams
-                Glide.with(holder.image)
+                Glide.with(holder.image.context)
                     .load("https://static-cdn.jtvnw.net/previews-ttv/live_user_giantbomb-640x360.jpg")
                     .centerCrop()
                     .into(holder.image)

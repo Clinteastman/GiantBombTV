@@ -45,6 +45,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         const val SETTINGS_REFRESH = 2
         const val SETTINGS_SETUP = 3
         const val SETTINGS_QUALITY = 4
+        const val SETTINGS_PRIVACY = 5
         private const val BACKDROP_DELAY_MS = 300L
         private const val CROSSFADE_DURATION = 600L
         private const val BACKDROP_ALPHA = 0.5f
@@ -135,6 +136,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                         SETTINGS_REFRESH -> loadContent()
                         SETTINGS_SETUP -> launchSetup()
                         SETTINGS_QUALITY -> cycleQuality()
+                        SETTINGS_PRIVACY -> openPrivacyPolicy()
                     }
                 }
             }
@@ -142,11 +144,19 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
 
         // Debounced backdrop update on item focus + per-row pagination
         onItemViewSelectedListener = OnItemViewSelectedListener { _, item, _, row ->
+            // Lazy-load empty show rows when they receive focus
+            val header = (row as? ListRow)?.headerItem?.name
+            if (header != null) {
+                val pagination = rowPaginationMap[header]
+                if (pagination != null && !pagination.isLoading && pagination.hasMore && pagination.offset == 0) {
+                    loadMoreForRow(pagination)
+                }
+            }
+
             when (item) {
                 is Video -> {
                     updateBackdropDebounced(item.thumbnailUrl ?: item.posterUrl)
                     // Check if we need to load more for this row
-                    val header = (row as? ListRow)?.headerItem?.name
                     if (header != null) {
                         val pagination = rowPaginationMap[header]
                         if (pagination != null && !pagination.isLoading && pagination.hasMore) {
@@ -360,20 +370,24 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                     GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
             }
 
-            // Per-show video rows - fetch first page for each show in parallel
+            // Per-show video rows - lazy loaded on focus
             rowPaginationMap.clear()
             if (shows != null && shows.isNotEmpty()) {
-                // TODO: re-enable favourite sorting when pin/unpin UI is fixed
-                // val favouriteIds = prefs.getFavouriteShows()
                 val activeShows = shows.filter { it.active }
-                val showVideoResults = activeShows.map { s ->
-                    s to async { api.getShowVideos(s.id, limit = ROW_PAGE_SIZE) }
+
+                // Browse Shows card row
+                val showsAdapter = ArrayObjectAdapter(ShowCardPresenter())
+                activeShows.forEach { showsAdapter.add(it) }
+                if (showsAdapter.size() > 0) {
+                    rowsAdapter.add(ListRow(
+                        HeaderItem(headerIdCounter++, "All Shows"),
+                        showsAdapter
+                    ))
                 }
-                for ((s, deferred) in showVideoResults) {
-                    val showVideos = deferred.await().getOrNull() ?: continue
-                    if (showVideos.isEmpty()) continue
+
+                // Empty show rows - videos load when the row is focused
+                for (s in activeShows) {
                     val listRowAdapter = ArrayObjectAdapter(CardPresenter())
-                    showVideos.forEach { listRowAdapter.add(it.withProgress()) }
                     val rowTitle = s.title
                     rowsAdapter.add(ListRow(
                         HeaderItem(headerIdCounter++, rowTitle),
@@ -383,19 +397,9 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                         showTitle = s.title,
                         showId = s.id,
                         adapter = listRowAdapter,
-                        offset = showVideos.size,
-                        hasMore = showVideos.size >= ROW_PAGE_SIZE
+                        offset = 0,
+                        hasMore = true
                     )
-                }
-
-                // Browse Shows card row - click to pin/unpin
-                val showsAdapter = ArrayObjectAdapter(ShowCardPresenter())
-                activeShows.forEach { showsAdapter.add(it) }
-                if (showsAdapter.size() > 0) {
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, "All Shows"),
-                        showsAdapter
-                    ))
                 }
 
                 // Past shows card row
@@ -452,6 +456,12 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 getString(R.string.settings_setup),
                 getString(R.string.settings_setup_desc),
                 R.drawable.ic_settings_cog
+            ))
+            utilAdapter.add(SettingsItem(
+                SETTINGS_PRIVACY,
+                "Privacy Policy",
+                "View privacy policy",
+                R.drawable.ic_settings_about
             ))
             rowsAdapter.add(ListRow(
                 HeaderItem(headerIdCounter, getString(R.string.settings)),
@@ -548,6 +558,14 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         val intent = Intent(requireContext(), SetupActivity::class.java)
         @Suppress("DEPRECATION")
         requireActivity().startActivityForResult(intent, MainActivity.SETUP_REQUEST)
+    }
+
+    private fun openPrivacyPolicy() {
+        val intent = android.content.Intent(
+            android.content.Intent.ACTION_VIEW,
+            android.net.Uri.parse("https://clinteastman.github.io/GiantBombTV/privacy.html")
+        )
+        startActivity(intent)
     }
 
     override fun onDestroy() {

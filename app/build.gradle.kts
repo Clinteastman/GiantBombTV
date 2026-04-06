@@ -11,8 +11,16 @@ android {
         applicationId = "com.giantbomb.tv"
         minSdk = 21
         targetSdk = 34
-        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
-        versionName = System.getenv("VERSION_NAME") ?: "1.0.0"
+        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 9999
+        versionName = System.getenv("VERSION_NAME") ?: "0.0.0-dev"
+
+        // Inline YouTube playback using internal API (not compliant with store policies).
+        // Set to true if building for sideloading / personal use.
+        buildConfigField("boolean", "ENABLE_INLINE_YOUTUBE", "false")
+
+        // Self-update from GitHub releases. Requires REQUEST_INSTALL_PACKAGES permission.
+        // Disable for store builds (store handles updates). Enable for sideloaded builds.
+        buildConfigField("boolean", "ENABLE_SELF_UPDATE", "false")
     }
 
     signingConfigs {
@@ -38,6 +46,10 @@ android {
                 signingConfigs.getByName("debug")
             }
         }
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {
@@ -79,6 +91,7 @@ dependencies {
 
     // Image loading
     implementation("com.github.bumptech.glide:glide:4.16.0")
+    implementation("com.github.bumptech.glide:okhttp3-integration:4.16.0")
 
     // Networking
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

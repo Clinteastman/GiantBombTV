@@ -8,6 +8,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URI
@@ -294,6 +295,7 @@ class GiantBombApi(
             val show = v.optJSONObject("show")
             val thumb = v.optJSONObject("thumbnail")
             val image = v.optJSONObject("image")
+            val images = v.optJSONObject("images")
 
             val thumbUrl = thumb?.safeString("url")
                 ?: thumb?.safeString("medium_url")
@@ -302,10 +304,31 @@ class GiantBombApi(
                 ?: image?.safeString("medium_url")
                 ?: image?.safeString("small_url")
                 ?: v.safeString("poster_url")
+                ?: v.safeString("youtube_url")?.let { ytUrl ->
+                    // Derive thumbnail from YouTube URL - more reliable than JWPlayer CDN
+                    try {
+                        val host = URI(ytUrl).host?.lowercase() ?: ""
+                        val isYouTube = host == "youtu.be" || host.endsWith("youtube.com")
+                        if (!isYouTube) return@let null
+                        val videoId = ytUrl.substringAfter("v=", "")
+                            .substringBefore("&")
+                            .ifEmpty { ytUrl.substringAfterLast("/", "").substringBefore("?") }
+                        if (videoId.isNotEmpty()) "https://img.youtube.com/vi/$videoId/hqdefault.jpg" else null
+                    } catch (_: Exception) { null }
+                }
+                ?: images?.safeString("poster")
+                ?: images?.optJSONArray("thumbnails")?.let { arr ->
+                    val count = arr.length()
+                    if (count > 0) {
+                        val mid = (count / 2).coerceIn(0, count - 1)
+                        arr.optJSONObject(mid)?.safeString("src")
+                            ?: arr.optJSONObject(0)?.safeString("src")
+                    } else null
+                }
 
             if (thumbUrl == null) {
                 Log.w(TAG, "No thumbnail for video: ${v.optString("title")} (id=${v.optInt("id")})" +
-                    " thumb=${thumb} image=${image} poster=${v.optString("poster_url")}")
+                    " thumb=${thumb} image=${image} images=${images} poster=${v.optString("poster_url")}")
             }
 
             videos.add(Video(
@@ -326,18 +349,50 @@ class GiantBombApi(
         return videos
     }
 
+    private fun logDiagnostics(method: String, path: String, request: Request, response: Response, body: String) {
+        if (!com.giantbomb.tv.BuildConfig.DEBUG) return
+        val safeUrl = request.url.toString().replace(Regex("api_key=[^&]+"), "api_key=REDACTED")
+        Log.w(TAG, "--- DIAGNOSTIC: $method $safeUrl ---")
+        Log.w(TAG, "  Status: ${response.code} ${response.message}")
+
+        // Request headers
+        val reqHeaders = request.headers.joinToString { "${it.first}: ${it.second}" }
+        Log.w(TAG, "  Request headers: $reqHeaders")
+
+        // Response headers (key for diagnosing Cloudflare vs API rejection)
+        for (name in response.headers.names()) {
+            Log.w(TAG, "  Response header: $name: ${response.header(name)}")
+        }
+
+        // Cloudflare signals
+        val cfRay = response.header("cf-ray")
+        val server = response.header("server")
+        val cfCacheStatus = response.header("cf-cache-status")
+        Log.w(TAG, "  Server: $server | CF-Ray: $cfRay | CF-Cache: $cfCacheStatus")
+
+        // Body classification
+        val isCloudflareChallenge = body.contains("challenge-platform", ignoreCase = true) ||
+                body.contains("cf-browser-verification", ignoreCase = true) ||
+                body.contains("Just a moment", ignoreCase = true)
+        val isCloudflareBlock = body.contains("cloudflare", ignoreCase = true) &&
+                body.contains("blocked", ignoreCase = true)
+        val isJsonResponse = body.trimStart().startsWith("{") || body.trimStart().startsWith("[")
+
+        Log.w(TAG, "  Body type: ${when {
+            isCloudflareChallenge -> "CLOUDFLARE_CHALLENGE"
+            isCloudflareBlock -> "CLOUDFLARE_BLOCK"
+            isJsonResponse -> "JSON"
+            else -> "HTML/OTHER"
+        }}")
+        Log.w(TAG, "  Body (first 1000 chars): ${body.take(1000)}")
+        Log.w(TAG, "--- END DIAGNOSTIC ---")
+    }
+
     private fun get(path: String): JSONObject {
         val request = Request.Builder()
             .url("$baseUrl$path")
             .header("User-Agent", USER_AGENT)
             .header("Accept", "application/json")
-            .header("Accept-Language", "en-US,en;q=0.9")
-            .header("Sec-Fetch-Dest", "empty")
-            .header("Sec-Fetch-Mode", "cors")
-            .header("Sec-Fetch-Site", "same-origin")
-            .header("Sec-Ch-Ua", "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"")
-            .header("Sec-Ch-Ua-Mobile", "?0")
-            .header("Sec-Ch-Ua-Platform", "\"Windows\"")
             .get()
             .build()
 
@@ -348,6 +403,7 @@ class GiantBombApi(
 
         if (code != 200) {
             Log.e(TAG, "GET $path error ($code): ${text.take(500)}")
+            logDiagnostics("GET", path, request, response, text)
             val endpoint = path.substringBefore("?").substringBefore("api_key")
             val isCloudflare = text.contains("cloudflare", ignoreCase = true) ||
                     text.contains("cf-browser-verification", ignoreCase = true) ||
@@ -383,10 +439,6 @@ class GiantBombApi(
             .url("$baseUrl$path")
             .header("User-Agent", USER_AGENT)
             .header("Accept", "application/json")
-            .header("Accept-Language", "en-US,en;q=0.9")
-            .header("Sec-Fetch-Dest", "empty")
-            .header("Sec-Fetch-Mode", "cors")
-            .header("Sec-Fetch-Site", "same-origin")
             .post(body.toString().toRequestBody(jsonType))
             .build()
 
@@ -397,6 +449,7 @@ class GiantBombApi(
         if (code != 200) {
             val endpoint = path.substringBefore("?")
             Log.e(TAG, "POST $endpoint error ($code): ${text.take(500)}")
+            logDiagnostics("POST", path, request, response, text)
             throw ApiException(code, endpoint, text.take(300),
                 "Request failed ($code) on $endpoint. Check your API key or try again.")
         }
@@ -408,10 +461,6 @@ class GiantBombApi(
             .url("$baseUrl$path")
             .header("User-Agent", USER_AGENT)
             .header("Accept", "application/json")
-            .header("Accept-Language", "en-US,en;q=0.9")
-            .header("Sec-Fetch-Dest", "empty")
-            .header("Sec-Fetch-Mode", "cors")
-            .header("Sec-Fetch-Site", "same-origin")
             .delete()
             .build()
 
@@ -422,6 +471,7 @@ class GiantBombApi(
         if (code !in 200..299) {
             val endpoint = path.substringBefore("?")
             Log.e(TAG, "DELETE $endpoint error ($code): ${text.take(500)}")
+            logDiagnostics("DELETE", path, request, response, text)
             throw ApiException(code, endpoint, text.take(300),
                 "Request failed ($code) on $endpoint. Check your API key or try again.")
         }
