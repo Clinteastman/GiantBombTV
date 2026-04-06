@@ -1,0 +1,39 @@
+SHORT DESCRIPTION (80 chars max)
+=================================
+Browse and stream Giant Bomb videos on your phone, tablet, and Android TV.
+
+
+LONG DESCRIPTION (4000 chars max)
+==================================
+Giant Bomb TV is an unofficial app for watching Giant Bomb videos on Android phones, tablets, and Android TV devices including Fire TV.
+
+Browse the full Giant Bomb video library, pick up where you left off with synced progress tracking, and manage your watchlist - all from your couch or on the go.
+
+FEATURES
+
+- Browse recent videos, shows, and categories
+- Continue Watching with server-synced progress and resume
+- Watchlist management
+- Search across all Giant Bomb videos
+- Show browsing with infinite scroll through episodes
+- Stream quality selection: Auto (HLS), 1080p, 720p, 480p, 360p
+- Chromecast support for casting to your TV
+- Picture-in-Picture mode on phones (Android 8.0+)
+- Upcoming shows schedule and live stream notifications
+- Watch live Giant Bomb streams directly in the app
+
+DESIGNED FOR EVERY SCREEN
+
+On phones, the app uses a familiar vertical feed layout with horizontal category rows. Videos play at the top of the screen with related episodes below. Rotate to landscape for fullscreen playback, or press back to keep watching in a floating Picture-in-Picture window.
+
+On Android TV and Fire TV, the app features a glassmorphism-inspired interface optimised for D-pad navigation. Browse with your remote, select a video to see details, and enjoy fullscreen playback with quality controls.
+
+WHAT YOU NEED
+
+A Giant Bomb account and API key. Log in to giantbomb.com and find your API key in your profile settings. Free accounts can access some content, but Giant Bomb Premium unlocks exclusive shows, ad-free videos, and the full back catalog.
+
+OPEN SOURCE
+
+Giant Bomb TV is open source and available on GitHub. Contributions and feedback are welcome.
+
+This is a fan-made, unofficial app. It is not affiliated with or endorsed by Giant Bomb.

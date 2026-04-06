@@ -59,7 +59,8 @@ data class UpcomingStream(
     val title: String,
     val image: String?,
     val date: String,
-    val premium: Boolean
+    val premium: Boolean,
+    val isLive: Boolean = false
 ) : Serializable
 
 data class UpcomingResponse(

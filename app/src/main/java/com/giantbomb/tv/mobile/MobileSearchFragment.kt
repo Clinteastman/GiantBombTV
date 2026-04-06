@@ -18,7 +18,7 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.giantbomb.tv.DetailActivity
+import com.giantbomb.tv.PlaybackActivity
 import com.giantbomb.tv.R
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
@@ -168,8 +168,8 @@ class MobileSearchFragment : Fragment(), CoroutineScope by MainScope() {
             }
 
             holder.itemView.setOnClickListener {
-                val intent = Intent(requireContext(), DetailActivity::class.java).apply {
-                    putExtra(DetailActivity.EXTRA_VIDEO, video)
+                val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
+                    putExtra(PlaybackActivity.EXTRA_VIDEO, video)
                 }
                 startActivity(intent)
             }

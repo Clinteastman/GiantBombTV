@@ -3,9 +3,10 @@ package com.giantbomb.tv.ui
 import android.view.ViewGroup
 import androidx.leanback.widget.Presenter
 import com.bumptech.glide.Glide
+import com.giantbomb.tv.R
 import com.giantbomb.tv.model.UpcomingStream
 
-class UpcomingCardPresenter(private val isLiveNow: Boolean = false) : Presenter() {
+class UpcomingCardPresenter : Presenter() {
 
     override fun onCreateViewHolder(parent: ViewGroup): ViewHolder {
         val cardView = UpcomingCardView(parent.context)
@@ -20,10 +21,10 @@ class UpcomingCardPresenter(private val isLiveNow: Boolean = false) : Presenter(
             title = stream.title,
             dateStr = stream.date,
             premium = stream.premium,
-            liveNow = isLiveNow
+            liveNow = stream.isLive
         )
 
-        if (isLiveNow) {
+        if (stream.isLive) {
             // Load Twitch preview thumbnail for live streams
             Glide.with(viewHolder.view.context)
                 .load("https://static-cdn.jtvnw.net/previews-ttv/live_user_giantbomb-640x360.jpg")
@@ -35,7 +36,7 @@ class UpcomingCardPresenter(private val isLiveNow: Boolean = false) : Presenter(
                 .centerCrop()
                 .into(cardView.imageView)
         } else {
-            cardView.imageView.setImageResource(0)
+            cardView.imageView.setImageResource(R.drawable.banner)
         }
     }
 

@@ -29,17 +29,33 @@
                 android:src="@drawable/giant_bomb_logo"
                 android:contentDescription="Giant Bomb" />
 
-            <ImageView
-                android:id="@+id/toolbar_search"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:layout_gravity="end|center_vertical"
-                android:padding="8dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/ic_search"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Search"
-                tools:tint="@color/gb_white" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <androidx.mediarouter.app.MediaRouteButton
+                    android:id="@+id/toolbar_cast"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:visibility="gone"
+                    android:contentDescription="Cast" />
+
+                <ImageView
+                    android:id="@+id/toolbar_search"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_search"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Search"
+                    tools:tint="@color/gb_white" />
+
+            </LinearLayout>
 
         </FrameLayout>
 
