@@ -10,7 +10,7 @@ android {
     defaultConfig {
         applicationId = "com.giantbomb.tv"
         minSdk = 21
-        targetSdk = 34
+        targetSdk = 35
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
         versionName = System.getenv("VERSION_NAME") ?: "1.0.0"
     }
@@ -76,6 +76,9 @@ dependencies {
 
     // CardView
     implementation("androidx.cardview:cardview:1.0.0")
+
+    // Activity (enableEdgeToEdge)
+    implementation("androidx.activity:activity-ktx:1.9.0")
 
     // Image loading
     implementation("com.github.bumptech.glide:glide:4.16.0")

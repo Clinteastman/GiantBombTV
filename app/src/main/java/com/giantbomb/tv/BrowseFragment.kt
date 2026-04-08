@@ -50,7 +50,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         private const val BACKDROP_ALPHA = 0.5f
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
-        private const val LOAD_MORE_THRESHOLD = 5
+        private const val LOAD_MORE_THRESHOLD = 15
     }
 
     // Per-row pagination state for show-grouped rows
@@ -74,6 +74,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         setupBackdrop()
         setupUIElements()
         setupListeners()
+        setupVerticalGridPrefetch()
         // setupKeyInterceptor() // TODO: re-enable when pin/unpin is fixed
 
         // First launch: redirect to setup if no API key
@@ -82,6 +83,20 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         } else {
             loadContent()
         }
+    }
+
+    private fun setupVerticalGridPrefetch() {
+        // Pre-layout extra rows offscreen so they're rendered before the user scrolls to them
+        view?.viewTreeObserver?.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                view?.viewTreeObserver?.removeOnGlobalLayoutListener(this)
+                try {
+                    val rowsFragment = childFragmentManager.fragments.firstOrNull { it is androidx.leanback.app.RowsSupportFragment }
+                    val gridView = (rowsFragment as? androidx.leanback.app.RowsSupportFragment)?.verticalGridView
+                    gridView?.setExtraLayoutSpace(800)
+                } catch (_: Exception) { }
+            }
+        })
     }
 
     private fun setupBackdrop() {
@@ -360,56 +375,6 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                     GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
             }
 
-            // Per-show video rows - fetch first page for each show in parallel
-            rowPaginationMap.clear()
-            if (shows != null && shows.isNotEmpty()) {
-                // TODO: re-enable favourite sorting when pin/unpin UI is fixed
-                // val favouriteIds = prefs.getFavouriteShows()
-                val activeShows = shows.filter { it.active }
-                val showVideoResults = activeShows.map { s ->
-                    s to async { api.getShowVideos(s.id, limit = ROW_PAGE_SIZE) }
-                }
-                for ((s, deferred) in showVideoResults) {
-                    val showVideos = deferred.await().getOrNull() ?: continue
-                    if (showVideos.isEmpty()) continue
-                    val listRowAdapter = ArrayObjectAdapter(CardPresenter())
-                    showVideos.forEach { listRowAdapter.add(it.withProgress()) }
-                    val rowTitle = s.title
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, rowTitle),
-                        listRowAdapter
-                    ))
-                    rowPaginationMap[rowTitle] = RowPagination(
-                        showTitle = s.title,
-                        showId = s.id,
-                        adapter = listRowAdapter,
-                        offset = showVideos.size,
-                        hasMore = showVideos.size >= ROW_PAGE_SIZE
-                    )
-                }
-
-                // Browse Shows card row - click to pin/unpin
-                val showsAdapter = ArrayObjectAdapter(ShowCardPresenter())
-                activeShows.forEach { showsAdapter.add(it) }
-                if (showsAdapter.size() > 0) {
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, "All Shows"),
-                        showsAdapter
-                    ))
-                }
-
-                // Past shows card row
-                val inactiveShows = shows.filter { !it.active }
-                if (inactiveShows.isNotEmpty()) {
-                    val inactiveAdapter = ArrayObjectAdapter(ShowCardPresenter())
-                    inactiveShows.forEach { inactiveAdapter.add(it) }
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, "Past Shows"),
-                        inactiveAdapter
-                    ))
-                }
-            }
-
             // Watchlist
             val watchlist = if (key.isNotEmpty()) watchlistDeferred.await().getOrNull() else null
             if (watchlist != null && watchlist.isNotEmpty()) {
@@ -458,8 +423,66 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 utilAdapter
             ))
 
+            // Set adapter now so top rows are browsable immediately
             adapter = rowsAdapter
             title = null  // clear text title — badge logo is shown instead
+
+            // Per-show video rows — add progressively as each API call resolves
+            // so the user can browse top rows while show rows stream in below
+            rowPaginationMap.clear()
+            if (shows != null && shows.isNotEmpty()) {
+                val activeShows = shows.filter { it.active }
+
+                // Insert position: show rows go before All Shows / Past Shows / Settings
+                // We'll track where to insert and append static rows after all shows load
+                val showInsertIndex = rowsAdapter.size() - 1 // before Settings row
+
+                val showVideoResults = activeShows.map { s ->
+                    s to async { api.getShowVideos(s.id, limit = ROW_PAGE_SIZE) }
+                }
+                var insertOffset = 0
+                for ((s, deferred) in showVideoResults) {
+                    val showVideos = deferred.await().getOrNull() ?: continue
+                    if (showVideos.isEmpty()) continue
+                    val listRowAdapter = ArrayObjectAdapter(CardPresenter())
+                    showVideos.forEach { listRowAdapter.add(it.withProgress()) }
+                    val rowTitle = s.title
+                    rowsAdapter.add(showInsertIndex + insertOffset, ListRow(
+                        HeaderItem(headerIdCounter++, rowTitle),
+                        listRowAdapter
+                    ))
+                    insertOffset++
+                    rowPaginationMap[rowTitle] = RowPagination(
+                        showTitle = s.title,
+                        showId = s.id,
+                        adapter = listRowAdapter,
+                        offset = showVideos.size,
+                        hasMore = showVideos.size >= ROW_PAGE_SIZE
+                    )
+                }
+
+                // Browse Shows card row
+                val showsAdapter = ArrayObjectAdapter(ShowCardPresenter())
+                activeShows.forEach { showsAdapter.add(it) }
+                if (showsAdapter.size() > 0) {
+                    rowsAdapter.add(showInsertIndex + insertOffset, ListRow(
+                        HeaderItem(headerIdCounter++, "All Shows"),
+                        showsAdapter
+                    ))
+                    insertOffset++
+                }
+
+                // Past shows card row
+                val inactiveShows = shows.filter { !it.active }
+                if (inactiveShows.isNotEmpty()) {
+                    val inactiveAdapter = ArrayObjectAdapter(ShowCardPresenter())
+                    inactiveShows.forEach { inactiveAdapter.add(it) }
+                    rowsAdapter.add(showInsertIndex + insertOffset, ListRow(
+                        HeaderItem(headerIdCounter++, "Past Shows"),
+                        inactiveAdapter
+                    ))
+                }
+            }
             } finally {
                 loadingSpinner?.visibility = View.GONE
                 isLoading = false
