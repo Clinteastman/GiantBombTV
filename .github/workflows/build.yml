@@ -22,11 +22,18 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run unit tests and build debug APK
+      - name: Run unit tests, lint, and build debug APK
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
           VERSION_NAME="dev-${SHORT_SHA}" VERSION_CODE=${{ github.run_number }} \
-            ./gradlew clean testDebugUnitTest assembleDebug
+            ./gradlew clean testDebugUnitTest lintDebug assembleDebug
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

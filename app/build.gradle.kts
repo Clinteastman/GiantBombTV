@@ -64,6 +64,13 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+
+    lint {
+        // Existing issues are captured in lint-baseline.xml; CI fails only on new ones.
+        baseline = file("lint-baseline.xml")
+        warningsAsErrors = false
+        abortOnError = true
+    }
 }
 
 dependencies {

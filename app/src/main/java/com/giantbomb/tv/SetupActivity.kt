@@ -31,13 +31,8 @@ class SetupActivity : Activity(), CoroutineScope by MainScope() {
 
         val prefs = PrefsManager(this)
 
-        val deepLinkKey = intent?.data?.getQueryParameter("key")
-        if (!deepLinkKey.isNullOrEmpty()) {
-            prefs.apiKey = deepLinkKey
-            setResult(RESULT_OK)
-            finish()
-            return
-        }
+        // Deep-link key only pre-fills; never auto-save (exported BROWSABLE activity).
+        val deepLinkKey = intent?.data?.getQueryParameter("key")?.takeIf { it.isNotEmpty() }
 
         val cornerRadius = 16f * density
 
@@ -130,7 +125,7 @@ class SetupActivity : Activity(), CoroutineScope by MainScope() {
         }
         val editText = EditText(this).apply {
             hint = "API Key"
-            setText(prefs.apiKey ?: "")
+            setText(deepLinkKey ?: prefs.apiKey ?: "")
             textSize = 18f
             setTextColor(0xFFF1F1F1.toInt())
             setHintTextColor(0xFF555555.toInt())
@@ -147,7 +142,7 @@ class SetupActivity : Activity(), CoroutineScope by MainScope() {
         }
 
         statusText = TextView(this).apply {
-            text = ""
+            text = if (deepLinkKey != null) "Key imported from link. Press Connect to validate and save." else ""
             textSize = 14f
             setTextColor(0xFFA0A0A0.toInt())
             setPadding(0, 0, 0, dp(12))
