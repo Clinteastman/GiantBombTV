@@ -1,0 +1,3249 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 9.0.1" type="baseline" client="gradle" dependencies="false" name="AGP (9.0.1)" variant="all" version="9.0.1">
+
+    <issue
+        id="MissingLeanbackLauncher"
+        message="Expecting an activity to have `android.intent.category.LEANBACK_LAUNCHER` intent filter"
+        errorLine1="&lt;manifest xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2=" ~~~~~~~~">
+        <location
+            file="src/debug/AndroidManifest.xml"
+            line="2"
+            column="2"/>
+    </issue>
+
+    <issue
+        id="CheckResult"
+        message="The result of `listener` is not used"
+        errorLine1="                    .apply { listener?.let { listener(it) } }"
+        errorLine2="                                             ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/ui/CardPresenter.kt"
+            line="73"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="CheckResult"
+        message="The result of `listener` is not used"
+        errorLine1="                    .apply { listener?.let { listener(it) } }"
+        errorLine2="                                             ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/ui/CardPresenter.kt"
+            line="83"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="ImpliedTouchscreenHardware"
+        message="Hardware feature `android.hardware.touchscreen` not explicitly marked as optional "
+        errorLine1="&lt;manifest xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2=" ~~~~~~~~">
+        <location
+            file="src/debug/AndroidManifest.xml"
+            line="2"
+            column="2"/>
+    </issue>
+
+    <issue
+        id="MissingLeanbackSupport"
+        message="Expecting `&lt;uses-feature android:name=&quot;android.software.leanback&quot; android:required=&quot;false&quot; />` tag"
+        errorLine1="&lt;manifest xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2=" ~~~~~~~~">
+        <location
+            file="src/debug/AndroidManifest.xml"
+            line="2"
+            column="2"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 28 (current min is 21): `android.content.pm.PackageInfo#getLongVersionCode`"
+        errorLine1="                val versionText = &quot;v${packageInfo.versionName} (${packageInfo.longVersionCode})&quot;"
+        errorLine2="                                                                              ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileBrowseFragment.kt"
+            line="352"
+            column="79"/>
+    </issue>
+
+    <issue
+        id="OldTargetApi"
+        message="Not targeting the latest versions of Android; compatibility modes apply. Consider testing and updating this version. Consult the `android.os.Build.VERSION_CODES` javadoc for details."
+        errorLine1="        targetSdk = 35"
+        errorLine2="        ~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="13"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="PropertyEscape"
+        message="Windows file separators (`\`) and drive letter separators (&apos;:&apos;) must be escaped (`\\`) in property files; use C\\:/Users/cmoss/AppData/Local/Android/Sdk"
+        errorLine1="sdk.dir=C:/Users/cmoss/AppData/Local/Android/Sdk"
+        errorLine2="         ~">
+        <location
+            file="$HOME/GiantBombTV/local.properties"
+            line="1"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnusedAttribute"
+        message="Attribute `networkSecurityConfig` is only used in API level 24 and higher (current min is 21)"
+        errorLine1="        android:networkSecurityConfig=&quot;@xml/network_security_config&quot;>"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="22"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UnusedAttribute"
+        message="Attribute `supportsPictureInPicture` is only used in API level 24 and higher (current min is 21)"
+        errorLine1="            android:supportsPictureInPicture=&quot;true&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="77"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedAttribute"
+        message="Attribute `width` is only used in API level 23 and higher (current min is 21)"
+        errorLine1="        android:width=&quot;120dp&quot;"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/default_card.xml"
+            line="13"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UnusedAttribute"
+        message="Attribute `height` is only used in API level 23 and higher (current min is 21)"
+        errorLine1="        android:height=&quot;24dp&quot;"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/default_card.xml"
+            line="14"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="InflateParams"
+        message="Avoid passing `null` as the view root (needed to resolve layout parameters on the inflated layout&apos;s root element)"
+        errorLine1="        val livePlayerView = layoutInflater.inflate(R.layout.view_live_player, null) as PlayerView"
+        errorLine2="                                                                               ~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="758"
+            column="80"/>
+    </issue>
+
+    <issue
+        id="PictureInPictureIssue"
+        message="An activity in this app supports picture-in-picture and the targetSdkVersion is 31 or above; it is therefore strongly recommended to call both `setAutoEnterEnabled(true)` and `setSourceRectHint(...)`"
+        errorLine1="    &lt;application"
+        errorLine2="     ~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="16"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="VectorRaster"
+        message="Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more"
+        errorLine1="    android:width=&quot;373dp&quot;"
+        errorLine2="                   ~~~~~">
+        <location
+            file="src/main/res/drawable/ic_giant_bomb_logo.xml"
+            line="2"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of Gradle than 9.2.1 is available: 9.4.1"
+        errorLine1="distributionUrl=https\://services.gradle.org/distributions/gradle-9.2.1-bin.zip"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/GiantBombTV/gradle/wrapper/gradle-wrapper.properties"
+            line="3"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of `compileSdk` than 35 is available: 36"
+        errorLine1="    compileSdk = 35"
+        errorLine2="    ~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="8"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.core:core-ktx than 1.12.0 is available: 1.18.0"
+        errorLine1="    implementation(&quot;androidx.core:core-ktx:1.12.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="77"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.appcompat:appcompat than 1.6.1 is available: 1.7.1"
+        errorLine1="    implementation(&quot;androidx.appcompat:appcompat:1.6.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="78"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.recyclerview:recyclerview than 1.3.2 is available: 1.4.0"
+        errorLine1="    implementation(&quot;androidx.recyclerview:recyclerview:1.3.2&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="79"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.swiperefreshlayout:swiperefreshlayout than 1.1.0 is available: 1.2.0"
+        errorLine1="    implementation(&quot;androidx.swiperefreshlayout:swiperefreshlayout:1.1.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="80"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.leanback:leanback than 1.0.0 is available: 1.2.0"
+        errorLine1="    implementation(&quot;androidx.leanback:leanback:1.0.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="81"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.leanback:leanback-preference than 1.0.0 is available: 1.2.0"
+        errorLine1="    implementation(&quot;androidx.leanback:leanback-preference:1.0.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="82"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.media3:media3-exoplayer than 1.5.1 is available: 1.10.0"
+        errorLine1="    implementation(&quot;androidx.media3:media3-exoplayer:1.5.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="85"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.media3:media3-exoplayer-hls than 1.5.1 is available: 1.10.0"
+        errorLine1="    implementation(&quot;androidx.media3:media3-exoplayer-hls:1.5.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="86"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.media3:media3-ui than 1.5.1 is available: 1.10.0"
+        errorLine1="    implementation(&quot;androidx.media3:media3-ui:1.5.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="87"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.media3:media3-ui-leanback than 1.5.1 is available: 1.10.0"
+        errorLine1="    implementation(&quot;androidx.media3:media3-ui-leanback:1.5.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="88"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.media3:media3-session than 1.5.1 is available: 1.10.0"
+        errorLine1="    implementation(&quot;androidx.media3:media3-session:1.5.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="89"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.media3:media3-cast than 1.5.1 is available: 1.10.0"
+        errorLine1="    implementation(&quot;androidx.media3:media3-cast:1.5.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="90"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.android.gms:play-services-cast-framework than 22.0.0 is available: 22.3.1"
+        errorLine1="    implementation(&quot;com.google.android.gms:play-services-cast-framework:22.0.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="93"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.mediarouter:mediarouter than 1.7.0 is available: 1.8.1"
+        errorLine1="    implementation(&quot;androidx.mediarouter:mediarouter:1.7.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="94"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of com.github.bumptech.glide:glide than 4.16.0 is available: 5.0.5"
+        errorLine1="    implementation(&quot;com.github.bumptech.glide:glide:4.16.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="100"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of com.github.bumptech.glide:okhttp3-integration than 4.16.0 is available: 5.0.5"
+        errorLine1="    implementation(&quot;com.github.bumptech.glide:okhttp3-integration:4.16.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="101"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of com.squareup.okhttp3:okhttp than 4.12.0 is available: 5.3.2"
+        errorLine1="    implementation(&quot;com.squareup.okhttp3:okhttp:4.12.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="104"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.7.3 is available: 1.10.2"
+        errorLine1="    implementation(&quot;org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="107"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-test than 1.7.3 is available: 1.10.2"
+        errorLine1="    testImplementation(&quot;org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="111"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of com.squareup.okhttp3:mockwebserver than 4.12.0 is available: 5.3.2"
+        errorLine1="    testImplementation(&quot;com.squareup.okhttp3:mockwebserver:4.12.0&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="112"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of org.json:json than 20231013 is available: 20251224"
+        errorLine1="    testImplementation(&quot;org.json:json:20231013&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="113"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="RestrictedApi"
+        message="ComponentActivity.dispatchKeyEvent can only be called from within the same library group prefix (referenced groupId=`androidx.core` with prefix androidx from groupId=`GiantBombTV`)"
+        errorLine1="    override fun dispatchKeyEvent(event: KeyEvent): Boolean {"
+        errorLine2="                 ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/MainActivity.kt"
+            line="39"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="RestrictedApi"
+        message="ComponentActivity.dispatchKeyEvent can only be called from within the same library group prefix (referenced groupId=`androidx.core` with prefix androidx from groupId=`GiantBombTV`)"
+        errorLine1="        return super.dispatchKeyEvent(event)"
+        errorLine2="                     ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/MainActivity.kt"
+            line="50"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="    private var castPlayer: CastPlayer? = null"
+        errorLine2="                            ~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="80"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            controllerShowTimeoutMs = 3000"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="159"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            controllerAutoShow = true"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="160"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT"
+        errorLine2="            ~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="161"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT"
+        errorLine2="            ~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="161"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT"
+        errorLine2="                                                ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="161"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            setKeepContentOnPlayerReset(false)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="162"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            controllerShowTimeoutMs = 3000"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="195"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            controllerAutoShow = true"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="196"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT"
+        errorLine2="            ~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="197"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT"
+        errorLine2="            ~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="197"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT"
+        errorLine2="                                                ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="197"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            setKeepContentOnPlayerReset(false)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="198"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            controllerShowTimeoutMs = 3000"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="265"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            controllerAutoShow = true"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="266"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT"
+        errorLine2="            ~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="267"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT"
+        errorLine2="            ~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="267"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT"
+        errorLine2="                                                ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="267"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            setKeepContentOnPlayerReset(false)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="268"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        castPlayer = CastPlayer(ctx).apply {"
+        errorLine2="                     ~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="509"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            setSessionAvailabilityListener(object : SessionAvailabilityListener {"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="510"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            setSessionAvailabilityListener(object : SessionAvailabilityListener {"
+        errorLine2="                                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="510"
+            column="53"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                override fun onCastSessionAvailable() {"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="511"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                override fun onCastSessionUnavailable() {"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="515"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            if (isCastSessionAvailable) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="520"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        castPlayer?.setSessionAvailabilityListener(null)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="527"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        castPlayer?.release()"
+        errorLine2="                    ~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="528"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val cp = castPlayer ?: return"
+        errorLine2="            ~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="533"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        cp.setMediaItem(castMediaItem, position)"
+        errorLine2="           ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="559"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        cp.playWhenReady = wasPlaying"
+        errorLine2="           ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="560"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        cp.prepare()"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="561"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val cp = castPlayer"
+        errorLine2="            ~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="565"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val position = cp?.currentPosition ?: 0L"
+        errorLine2="                           ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="566"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val wasPlaying = cp?.isPlaying ?: true"
+        errorLine2="                             ~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="567"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                val loadControl = DefaultLoadControl.Builder()"
+        errorLine2="                    ~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="658"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                val loadControl = DefaultLoadControl.Builder()"
+        errorLine2="                                                     ~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="658"
+            column="54"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                    .setBufferDurationsMs(30_000, 60_000, 5_000, 10_000)"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="659"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                    .build()"
+        errorLine2="                     ~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="660"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                val audioBufferSize = DefaultAudioTrackBufferSizeProvider.Builder()"
+        errorLine2="                    ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="667"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                val audioBufferSize = DefaultAudioTrackBufferSizeProvider.Builder()"
+        errorLine2="                                                                          ~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="667"
+            column="75"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                    .setMinPcmBufferDurationUs(2_500_000)"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="668"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                    .setMaxPcmBufferDurationUs(5_000_000)"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="669"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                    .build()"
+        errorLine2="                     ~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="670"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                val audioSink = DefaultAudioSink.Builder(this@PlaybackActivity)"
+        errorLine2="                    ~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="672"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                val audioSink = DefaultAudioSink.Builder(this@PlaybackActivity)"
+        errorLine2="                                                 ~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="672"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                    .setAudioTrackBufferSizeProvider(audioBufferSize)"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="673"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                    .build()"
+        errorLine2="                     ~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="674"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                val renderersFactory = object : DefaultRenderersFactory(this@PlaybackActivity) {"
+        errorLine2="                    ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="676"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                val renderersFactory = object : DefaultRenderersFactory(this@PlaybackActivity) {"
+        errorLine2="                                       ^">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="676"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                val renderersFactory = object : DefaultRenderersFactory(this@PlaybackActivity) {"
+        errorLine2="                                                ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="676"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                val renderersFactory = object : DefaultRenderersFactory(this@PlaybackActivity) {"
+        errorLine2="                                                ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="676"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                    override fun buildAudioSink("
+        errorLine2="                                 ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="677"
+            column="34"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                    ): androidx.media3.exoplayer.audio.AudioSink {"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="681"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                }.forceEnableMediaCodecAsynchronousQueueing()"
+        errorLine2="                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="684"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                    .setEnableDecoderFallback(true)"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="685"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                    .setRenderersFactory(renderersFactory)"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="688"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="                    .setLoadControl(loadControl)"
+        errorLine2="                     ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="689"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val loadControl = DefaultLoadControl.Builder()"
+        errorLine2="            ~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="746"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val loadControl = DefaultLoadControl.Builder()"
+        errorLine2="                                             ~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="746"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            .setBufferDurationsMs(10_000, 30_000, 2_000, 5_000)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="747"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            .build()"
+        errorLine2="             ~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="748"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            .setLoadControl(loadControl)"
+        errorLine2="             ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="777"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val loadControl = DefaultLoadControl.Builder()"
+        errorLine2="            ~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="826"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val loadControl = DefaultLoadControl.Builder()"
+        errorLine2="                                             ~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="826"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            .setBufferDurationsMs(30_000, 60_000, 5_000, 10_000)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="827"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            .build()"
+        errorLine2="             ~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="828"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val audioBufferSize = DefaultAudioTrackBufferSizeProvider.Builder()"
+        errorLine2="            ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="830"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val audioBufferSize = DefaultAudioTrackBufferSizeProvider.Builder()"
+        errorLine2="                                                                  ~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="830"
+            column="67"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            .setMinPcmBufferDurationUs(2_500_000)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="831"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            .setMaxPcmBufferDurationUs(5_000_000)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="832"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            .build()"
+        errorLine2="             ~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="833"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val audioSink = DefaultAudioSink.Builder(this)"
+        errorLine2="            ~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="834"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val audioSink = DefaultAudioSink.Builder(this)"
+        errorLine2="                                         ~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="834"
+            column="42"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            .setAudioTrackBufferSizeProvider(audioBufferSize)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="835"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            .build()"
+        errorLine2="             ~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="836"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val renderersFactory = object : DefaultRenderersFactory(this) {"
+        errorLine2="            ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="837"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val renderersFactory = object : DefaultRenderersFactory(this) {"
+        errorLine2="                               ^">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="837"
+            column="32"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val renderersFactory = object : DefaultRenderersFactory(this) {"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="837"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        val renderersFactory = object : DefaultRenderersFactory(this) {"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="837"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            override fun buildAudioSink("
+        errorLine2="                         ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="838"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            ): androidx.media3.exoplayer.audio.AudioSink = audioSink"
+        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="842"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="        }.forceEnableMediaCodecAsynchronousQueueing()"
+        errorLine2="          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="843"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            .setEnableDecoderFallback(true)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="844"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            .setRenderersFactory(renderersFactory)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="852"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        errorLine1="            .setLoadControl(loadControl)"
+        errorLine2="             ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="853"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="DataExtractionRules"
+        message="The attribute `android:allowBackup` is deprecated from Android 12 and higher and may be removed in future versions. Consider adding the attribute `android:dataExtractionRules` specifying an `@xml` resource which configures cloud backups and device transfers on Android 12 and higher."
+        errorLine1="        android:allowBackup=&quot;false&quot;"
+        errorLine2="                             ~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="17"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="NotifyDataSetChanged"
+        message="It will always be more efficient to use more specific change events if you can. Rely on `notifyDataSetChanged` as a last resort."
+        errorLine1="                browseAdapter.notifyDataSetChanged()"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileBrowseFragment.kt"
+            line="362"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="NotifyDataSetChanged"
+        message="It will always be more efficient to use more specific change events if you can. Rely on `notifyDataSetChanged` as a last resort."
+        errorLine1="            adapter.notifyDataSetChanged()"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileSearchFragment.kt"
+            line="90"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="NotifyDataSetChanged"
+        message="It will always be more efficient to use more specific change events if you can. Rely on `notifyDataSetChanged` as a last resort."
+        errorLine1="                adapter.notifyDataSetChanged()"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileSearchFragment.kt"
+            line="106"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="NotifyDataSetChanged"
+        message="It will always be more efficient to use more specific change events if you can. Rely on `notifyDataSetChanged` as a last resort."
+        errorLine1="                adapter.notifyDataSetChanged()"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileSearchFragment.kt"
+            line="118"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (3256 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="        android:pathData=&quot;M31.5984,31.3469C31.4111,30.5832 31.1157,29.9132 30.7123,29.3369C30.3088,28.7461 29.8045,28.249 29.1994,27.8456C28.6086,27.4277 27.917,27.1179 27.1245,26.9162C26.3464,26.7001 25.4891,26.592 24.5525,26.592C22.5353,26.592 20.8135,27.0747 19.387,28.0401C17.9749,29.0055 16.8943,30.3959 16.145,32.2114C15.4102,34.0269 15.0428,36.217 15.0428,38.7818C15.0428,41.3754 15.3958,43.5943 16.1018,45.4387C16.8078,47.283 17.8597,48.695 19.2573,49.6748C20.655,50.6546 22.3912,51.1445 24.4661,51.1445C26.296,51.1445 27.8161,50.878 29.0265,50.3448C30.2512,49.8117 31.1662,49.0553 31.7713,48.0755C32.3765,47.0957 32.6791,45.943 32.6791,44.6174L34.7539,44.8335L24.639,36.2747L44.2637,42.4128C44.2637,46.4473 43.4064,49.8982 41.6918,52.7655C39.9915,55.6184 37.6429,57.8086 34.6459,59.3359C31.6633,60.8488 28.2412,61.6053 24.3796,61.6053C20.0714,61.6053 16.2891,60.6903 13.0327,58.8604C9.77635,57.0305 7.2332,54.4225 5.40329,51.0365C3.58778,47.6504 2.68003,43.6232 2.68003,38.9547C2.68003,35.2949 3.23477,32.0529 4.34424,29.2288C5.46813,26.4047 7.02427,24.02 9.01268,22.0748C11.0011,20.1152 13.2993,18.6384 15.9073,17.6441C18.5153,16.6355 21.3106,16.1312 24.2932,16.1312C26.9156,16.1312 29.3507,16.5059 31.5984,17.2551C33.8606,17.99 35.8562,19.0418 37.5853,20.4106C39.3287,21.7651 40.7336,23.3716 41.7998,25.2304C42.8661,27.0891 43.5145,29.1279 43.745,31.3469L31.5984,31.3469ZM60.058,16.7364L60.058,61.0001L48.0411,61.0001L48.0411,16.7364L60.058,16.7364ZM75.4253,61.0001L62.4575,61.0001L77.0679,16.7364L93.4939,16.7364L108.104,61.0001L95.1365,61.0001L85.4539,28.9262L85.108,28.9262L75.4253,61.0001ZM73.0047,43.5367L97.3843,43.5367L97.3843,52.5278L73.0047,52.5278L73.0047,43.5367ZM148.84,16.7364L148.84,61.0001L138.812,61.0001L122.818,37.7444L122.559,37.7444L122.559,61.0001L110.542,61.0001L110.542,16.7364L120.743,16.7364L136.478,39.9057L136.823,39.9057L136.823,16.7364L148.84,16.7364ZM151.488,26.4191L151.488,16.7364L189.96,16.7364L189.96,26.4191L176.646,26.4191L176.646,61.0001L164.802,61.0001L164.802,26.4191L151.488,26.4191ZM192.656,61.0001L192.656,16.7364L211.849,16.7364C215.22,16.7364 218.052,17.1903 220.343,18.098C222.648,19.0058 224.384,20.2882 225.552,21.9452C226.733,23.6022 227.324,25.5546 227.324,27.8023C227.324,29.4305 226.964,30.9146 226.243,32.2546C225.537,33.5946 224.543,34.7185 223.261,35.6263C221.978,36.5196 220.48,37.1392 218.765,37.485L218.765,37.9173C220.667,37.9893 222.396,38.472 223.952,39.3654C225.508,40.2443 226.747,41.4618 227.67,43.018C228.592,44.5597 229.053,46.3752 229.053,48.4645C229.053,50.8852 228.419,53.0393 227.151,54.9268C225.897,56.8144 224.111,58.2985 221.791,59.3791C219.471,60.4598 216.705,61.0001 213.491,61.0001L192.656,61.0001ZM204.673,51.4039L210.293,51.4039C212.31,51.4039 213.823,51.0293 214.831,50.28C215.84,49.5163 216.344,48.3925 216.344,46.9083C216.344,45.8709 216.107,44.992 215.631,44.2715C215.156,43.5511 214.478,43.0036 213.599,42.6289C212.735,42.2543 211.69,42.067 210.466,42.067L204.673,42.067L204.673,51.4039ZM204.673,34.6321L209.601,34.6321C210.653,34.6321 211.582,34.4664 212.389,34.135C213.196,33.8036 213.823,33.3281 214.27,32.7085C214.731,32.0745 214.961,31.3037 214.961,30.3959C214.961,29.0271 214.471,27.9824 213.491,27.262C212.512,26.5272 211.272,26.1597 209.774,26.1597L204.673,26.1597L204.673,34.6321Z&quot; />"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/ic_giant_bomb_logo.xml"
+            line="10"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (16918 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="        android:pathData=&quot;M264.921,5.41304C265.179,5.66717 265.091,5.59611 265.258,5.83397C265.346,5.95908 265.501,6.03045 265.538,6.19542L265.681,6.20324L265.833,6.02163C265.805,6.18468 265.773,6.35908 265.839,6.5193C265.86,6.56935 266.222,6.91722 266.32,6.9334L266.321,6.6907C266.43,6.6559 266.464,6.7817 266.544,6.79833C266.843,6.86103 266.849,6.25506 266.902,6.08356C266.952,5.92597 267.145,5.86755 267.167,5.80017C267.219,5.63796 267.073,5.56452 267.049,5.43995C267.026,5.3265 267.204,5.36874 267.214,5.19442C267.226,4.9925 267.119,4.71192 267.112,4.50104C267.303,4.46809 267.204,4.56061 267.232,4.65129C267.272,4.77962 267.424,5.59679 267.666,5.2539C267.713,5.18774 267.688,5.05084 267.842,5.00591L267.963,4.56145L267.963,5.68672L268.065,5.77058L268.238,5.73823L268.327,5.8122C268.218,5.98767 268.364,6.13708 268.364,6.23466C268.364,6.27398 268.283,6.31753 268.295,6.38867C268.315,6.50963 268.509,6.70526 268.513,6.83987L268.304,6.9291C268.135,7.1646 268.459,7.1429 268.498,7.18967C268.538,7.23773 268.546,7.56207 268.754,7.63352L268.601,7.84709L268.854,8.07675C269.291,8.02294 269.529,7.61473 269.262,7.23351L268.876,7.29845C268.872,6.97878 269.217,7.30282 269.243,7.02616L268.583,3.92082L268.633,3.71009C268.661,3.68801 268.787,3.81733 268.803,3.87444C268.894,4.19456 268.897,4.72764 268.951,5.06417C268.971,5.19082 269.054,5.32979 269.072,5.46417L269.241,5.47444L269.119,5.86839L269.241,5.93109C269.29,5.89561 269.393,5.69246 269.397,5.62707C269.407,5.42738 269.18,4.94773 269.18,4.83527L269.18,3.92289C269.18,3.8677 269.02,3.72259 269.24,3.64922C269.218,4.36812 269.559,5.05881 269.545,5.77786C269.621,5.85605 270.391,5.47245 269.85,5.35102L270.069,5.07866C269.87,4.7442 270.084,4.76973 270.098,4.65735C270.19,3.93447 270.161,3.07758 270.215,2.34205C270.241,1.98682 270.392,1.46347 270.334,1.12756C270.317,1.03266 270.215,0.957841 270.215,0.881642C270.215,0.795402 270.402,0.600461 270.345,0.430434L270.51,0.420086L270.64,0C270.656,0.526179 270.553,1.31529 271.309,0.912382L271.313,1.21296C271.583,1.26501 271.889,1.39172 272.152,1.50012C272.251,1.5406 272.446,1.56075 272.404,1.70281C272.133,1.65451 271.832,1.49314 271.565,1.47267C271.416,1.46133 271.295,1.53752 271.173,1.50993C271.049,1.48164 270.881,1.21947 270.76,1.30495C270.672,1.36711 270.533,2.24754 270.525,2.40905C270.519,2.54128 270.612,2.69207 270.583,2.81633C270.568,2.88134 270.424,2.85612 270.395,3.00859C270.376,3.11162 270.382,3.71192 270.425,3.77364L270.637,3.86877L270.754,3.79319L270.641,2.91967L270.915,3.53156C271.019,3.64279 271.271,3.44394 271.28,3.77325C272.425,3.5764 272.644,2.18529 273.166,1.33645C273.212,1.25735 273.155,1.18299 273.317,1.21695L272.526,2.82684C272.543,2.92205 272.599,2.91054 272.679,2.85888C272.779,2.79349 273.734,1.74918 273.803,1.82461L273.479,2.30955C273.524,2.58635 273.489,2.62668 273.257,2.76804L273.439,2.94911C273.419,3.0575 272.932,3.49307 272.77,3.40576C272.717,3.20184 272.918,3.34397 272.954,3.24531C272.972,3.19687 272.952,3.11016 272.982,3.04201C273.006,2.98483 273.286,2.54565 273.104,2.55578C273.055,2.55853 272.435,3.15125 272.378,3.22745C272.286,3.35133 271.85,4.17027 271.919,4.25766C272.182,4.17725 272.302,3.90595 272.345,3.64938C272.631,3.67229 272.535,3.92511 272.405,4.07459C272.687,4.08632 272.858,3.7813 272.892,3.52825C272.996,3.50066 272.921,3.6516 272.984,3.65328C273.258,3.66057 274.197,2.269 274.655,2.31193L272.721,4.23964L272.709,4.43995L272.952,4.37946L272.771,4.77525C272.845,4.9199 273.119,4.85459 273.074,5.04823C272.841,5.02071 272.622,5.07459 272.648,5.3524C272.92,5.3961 273.184,5.39219 273.435,5.25697C273.647,5.14213 273.573,5.05436 273.926,4.98767C273.895,5.02623 273.892,5.11676 273.85,5.15348C273.783,5.21396 273.563,5.20446 273.622,5.32136C273.668,5.41212 273.969,5.49966 274.068,5.46816L274.352,5.01948C274.337,4.91569 273.995,4.97456 273.926,4.98767C274.038,4.84585 274.245,4.85972 274.412,4.8043L274.352,4.50151L274.535,4.54366L274.591,4.71929L275.325,4.50165L275.325,4.80468L275.015,4.83382C275.008,5.33462 274.189,4.98338 274.412,5.53455C274.208,5.5084 274.076,5.54919 273.956,5.71729L273.893,5.53102C273.666,5.58798 273.188,5.47881 273.047,5.66042C272.971,5.75769 272.96,6.01611 272.799,6.08196C272.572,6.17456 272.833,5.76644 272.89,5.74774C272.74,5.5994 272.477,5.58 272.519,5.82777L272.04,5.89989L272.04,6.14306C272.34,6.00983 272.359,6.35156 272.648,6.20446L272.627,6.43198L272.766,6.54291L272.952,6.44747L272.771,6.81205L272.526,6.32558C272.175,6.313 272.199,6.71454 272.526,6.5692C272.445,6.80683 272.522,6.89975 272.587,7.11653L272.374,6.87437C272.304,6.87231 272.142,7.16637 272.252,7.23788L272.464,7.11691C272.722,7.46426 272.339,7.65552 272.527,8.02868C272.774,8.04961 272.514,7.76774 272.83,7.84594C272.853,7.86932 272.775,8.18928 272.951,8.21137C272.928,8.09063 273.511,7.48649 273.56,7.54237C273.524,7.66526 273.399,7.91623 273.319,8.0004C273.181,8.14582 272.793,8.18905 272.922,8.45522L273.5,8.33379C273.424,8.45161 273.23,8.48327 273.114,8.58576C272.764,8.79006 273.533,8.77771 273.655,8.7922C273.899,8.79672 273.938,8.80416 274.199,8.82623C274.675,8.86671 275.019,8.60576 275.447,8.69868C275.607,8.84747 274.953,8.87016 274.897,8.91018C274.837,8.95264 274.862,9.07032 274.797,9.12812C274.73,9.18767 274.513,9.23949 274.412,9.24609C274.334,9.42578 274.635,9.55832 274.64,9.64004C274.643,9.68665 274.543,9.78385 274.536,9.88702C274.526,10.0259 274.624,10.2183 274.534,10.4008C274.667,10.4315 274.81,10.3286 274.927,10.341C275.025,10.3513 275.09,10.4597 275.231,10.4656C275.475,10.4759 275.872,10.2416 276.177,10.3399C276.212,10.1481 275.926,10.122 275.883,9.99611C275.82,9.81558 275.939,9.57334 275.893,9.44333C275.88,9.40539 275.393,9.07515 275.721,9.06104C275.972,9.05023 276.062,9.19504 276.298,9.18415L276.177,8.6375C276.794,8.80248 276.37,9.62171 277.292,9.17373C277.753,8.94912 278.127,8.5144 278.671,8.51577C278.717,8.66472 278.635,8.65912 278.602,8.70557C278.539,8.79527 278.353,9.03957 278.285,9.10213C278.219,9.16184 277.6,9.5239 277.698,9.61006C278.365,9.56821 279.017,9.71884 279.676,9.79235C279.983,9.82654 280.257,9.74107 280.558,9.9157C280.534,10.1286 280.223,10.1654 280.04,10.1627C279.285,10.1517 278.485,10.1083 277.735,10.1618L277.663,10.0337L277.394,10.0976L277.637,10.4927C277.859,10.7222 278.17,10.9683 278.184,11.3132C277.753,11.332 277.586,10.8302 277.234,10.6592L276.603,10.7362L276.146,11.3124C275.68,10.9531 276.204,10.84 275.511,10.8807L275.475,10.7012L274.273,10.8392C273.803,10.9431 273.316,11.6518 273.257,12.104C273.412,12.0375 273.617,12.0716 273.758,12.028C273.853,11.9986 274.349,11.6066 274.412,11.8922C274.439,12.0138 274.248,12.0615 274.186,12.1258C274.16,12.154 274.183,12.2516 274.158,12.2726C274.122,12.3035 273.981,12.2901 273.891,12.3419C273.848,12.3663 273.506,12.6575 273.5,12.6825C273.468,12.8037 273.754,12.9574 273.864,12.9564L273.621,13.0789L273.683,13.4424L273.925,13.381C273.872,13.7686 274.34,13.4896 274.351,13.8068C274.198,13.7744 274.038,13.8705 273.9,13.8646C273.876,13.8636 273.459,13.78 273.437,13.77C273.236,13.6756 272.918,13.2466 272.648,13.4119C272.514,13.6511 272.423,13.7664 272.162,13.868L272.07,13.6262L271.857,13.7463L272.091,13.1486C271.828,13.0429 271.212,12.3221 271.37,13.0159C271.199,13.0327 271.086,12.7802 270.945,12.9861L271.309,13.4417C271.246,13.5003 271.011,13.1887 270.899,13.1518C270.834,13.1299 270.706,13.114 270.649,13.1484C270.425,13.5087 270.543,13.8981 270.705,14.2592L270.518,14.4142L270.672,14.4718L270.665,14.7192L270.944,14.842C270.917,14.9704 270.655,14.8738 270.701,15.0834L271.005,15.2664L270.579,15.2672C270.562,15.4088 270.703,15.4973 270.823,15.5113L270.701,15.6626L270.827,15.727L270.71,16.0792L270.883,16.3614C270.557,16.2931 270.516,16.6806 270.214,16.6666C270.412,16.8529 270.208,16.8715 270.214,17.0914L270.701,17.0008C270.851,16.8937 270.58,16.7693 270.487,16.9696C270.23,17.0832 270.592,16.4251 270.731,16.6049C270.824,16.7246 270.767,16.891 270.944,16.9394C270.809,17.0845 270.573,17.1572 270.579,17.3956C270.903,17.4674 270.621,17.1414 270.944,17.2141L270.639,17.7299C271.396,17.9523 270.598,17.9582 270.522,18.0705C270.49,18.1177 270.572,18.2456 270.561,18.3284C270.537,18.4978 270.358,18.7536 270.153,18.6727L270.453,18.1637C270.057,17.9466 270.202,17.4976 270.138,17.1428C270.052,16.6618 269.886,16.1761 269.798,15.7075C269.769,15.5132 269.881,15.1516 269.634,14.9648L269.452,15.0223L269.423,15.328C269.194,15.1698 269.099,15.3878 268.876,15.3885L268.918,15.2056L269.116,15.109C269.041,14.5224 268.637,14.809 268.267,14.9017L268.807,14.433C268.834,14.3257 268.612,13.9196 268.632,13.7168C268.641,13.6257 269.001,13.3258 268.785,13.3222C268.689,13.3206 268.429,13.6219 268.341,13.6819C268.236,13.7401 268.08,13.6799 268.08,13.8641C268.048,13.8844 267.505,13.5713 267.356,13.8378L267.627,14.1693L267.812,14.0514C268.157,13.973 267.442,14.8128 267.413,14.9917C267.321,15.2212 267.214,15.5128 267.232,15.7541C266.918,15.6403 266.822,15.9866 266.654,16.1792C266.551,15.9845 266.448,15.8349 266.199,15.8752L266.144,16.173L266.32,16.331C265.915,16.5961 265.807,16.8202 266.258,17.1223C265.964,17.3132 265.814,17.5879 265.833,17.9438C265.533,17.9994 265.441,17.6877 265.194,17.5799L265.104,17.7293C265.609,18.3429 265.907,17.9426 265.828,18.5737L265.589,18.674C281.696,28.3049 281.928,51.6662 265.165,60.7357C252.237,67.6907 236.047,61.2418 231.334,47.4754C225.685,31.3095 238.763,14.5805 255.688,15.8596C256.141,15.8019 258.474,15.1423 258.856,14.9495C258.945,14.905 258.946,14.7926 259.001,14.7788C260.118,14.7848 261.275,14.1303 262.353,13.8248C262.997,13.6203 263.669,13.4693 264.312,13.2588L264.191,12.9855L264.317,12.9223L264.252,12.7125C264.474,12.6855 264.334,13.0903 264.618,12.9244L264.556,12.6519L264.773,12.8934C265.001,12.9029 265.069,12.5628 265.226,12.4955C265.247,12.4863 265.51,12.6657 265.62,12.412C265.671,12.2951 265.455,12.1204 265.774,12.0116C265.413,11.4984 266.263,11.853 266.258,11.6477C266.156,11.5205 265.383,10.8755 265.469,10.7658C265.649,10.9077 265.683,10.8464 265.834,10.8265C265.833,11.1994 266.599,11.7846 266.746,11.4643L266.2,11.1002L266.442,10.8558C266.495,10.6101 265.987,10.8064 265.834,10.8265C265.834,10.7937 265.924,10.6974 265.889,10.6242C265.841,10.4705 265.382,10.4012 265.225,10.4011C265.209,10.4161 265.343,10.7944 265.165,10.826C265.103,10.7479 264.813,10.3097 264.785,10.2939C264.757,10.2783 264.193,10.151 264.162,10.1572C264.089,10.1717 264.062,10.235 264.129,10.3106C264.228,10.4242 264.391,10.4072 264.434,10.5217L263.954,10.5292C263.93,11.1982 264.375,11.2162 264.921,11.2525C264.959,11.6248 264.322,11.6196 264.07,11.5565L264.069,11.9818C263.964,11.9898 264.015,11.8434 263.953,11.7644C263.42,11.4968 262.278,12.0865 261.79,12.1045C261.68,12.0939 261.586,12.0016 261.573,11.8907C261.573,11.4698 263.091,11.5668 263.217,11.4338C263.233,11.4168 263.247,11.2685 263.144,11.3272L262.183,11.192C262.673,11.1627 263.229,11.2188 263.643,10.9467L263.218,10.3405C263.547,10.311 263.87,10.9905 263.948,10.4011C263.758,10.4329 263.638,10.2476 263.489,10.2204C263.2,10.1679 263.015,10.4032 262.912,10.037L262.791,10.0669L262.856,10.5194C263.053,10.4969 263.262,10.6268 263.308,10.8271L262.792,10.5844L262.732,10.7043C262.635,10.3257 262.313,10.574 262.164,10.5688C261.945,10.5613 261.417,10.3469 261.117,10.3942L260.755,10.6462L260.629,10.4666L260.419,10.5221L260.461,10.3695L260.38,10.2878C260.06,10.2559 259.735,10.2989 259.415,10.2784C258.873,10.2435 258.231,10.1066 257.708,10.0939C257.6,10.0912 257.505,10.0923 257.438,10.1881L257.62,10.2784C257.445,10.3224 257.206,10.177 257.054,10.2149C257,10.2283 257,10.3405 256.909,10.3871C256.878,10.4029 256.48,10.5387 256.464,10.5221L256.578,10.239L256.485,10.105C256.298,10.0466 256.121,10.1792 256.017,10.1618C255.965,10.153 255.96,10.0386 255.913,10.0117C255.529,9.79427 254.948,9.91148 254.517,9.73149L254.517,9.91462L254.274,9.79251C254.315,9.98071 254.413,10.0723 254.334,10.2787C254.222,10.289 254.299,10.143 254.217,10.0672C254.196,10.0478 254.107,10.0968 254.063,10.0379C254.016,9.97319 254.03,9.82738 253.933,9.79504C253.75,9.73441 253.497,10.0864 253.33,10.1571L253.297,9.98086L252.996,9.97434L253.239,9.64134L252.815,9.51769L252.75,9.33939L252.97,9.11915L253.3,9.24486C253.391,8.94267 253.027,9.1255 253.057,8.88051L253.726,8.94076L253.544,7.96782C253.835,8.20025 253.653,8.79174 254,8.94061C254.095,8.78032 253.848,8.53555 254.091,8.45452L254.182,8.75824L254.396,8.27239L254.457,8.63658L254.76,8.45445C254.503,9.2339 255.508,8.30121 255.734,8.27223C255.837,8.37242 255.114,8.71776 255.027,8.81788C254.962,8.89285 254.99,8.96575 254.965,9.00185C254.895,9.10136 254.701,9.09009 254.761,9.30558L255.734,9.24433L255.491,8.91025C255.611,8.81918 255.742,9.06817 255.859,9.14988C255.97,9.22739 256.099,9.25345 256.203,9.32428C256.257,9.36069 256.256,9.49784 256.384,9.53747C256.672,9.62662 257.029,9.48074 257.206,9.55494C257.929,9.85836 258.558,9.8277 259.353,9.91493C259.671,9.94973 260.077,10.0956 260.387,10.0933C260.472,10.0927 260.561,9.95855 260.662,10.0361C260.668,9.89048 260.609,9.67177 260.783,9.61006C260.688,9.98883 261.216,10.3516 261.535,10.1606C261.608,10.1173 261.562,9.98959 261.607,9.91509C261.648,9.84977 261.841,9.87492 261.751,9.64702C261.71,9.54176 261.565,9.59151 261.575,9.48909L261.817,9.39719C261.68,9.16392 261.328,9.31531 261.21,9.06326C261.311,9.09493 261.432,8.96476 261.484,8.96414C261.579,8.96315 261.855,9.27085 262,9.03214L261.15,8.08933L261.788,8.57479C261.953,8.4707 261.929,8.31677 261.969,8.14628L262.17,8.13755L262.213,8.02861C262.293,8.14972 262.366,8.12336 262.487,8.08917C262.568,8.18461 262.068,9.0001 262.487,9.00147L262.669,8.63705C262.789,8.87829 262.739,9.45851 263.117,9.3705C263.183,9.35525 263.155,9.11768 263.616,9.18108C263.742,9.19841 264.077,9.27315 264.21,9.3042C264.27,9.31823 264.261,9.43804 264.353,9.47591C264.444,9.51293 265.334,9.77488 265.388,9.77679C265.528,9.78163 265.896,9.5505 265.896,9.39772L265.712,9.24556L265.955,9.18492L265.347,8.94015L265.53,8.81796C265.58,8.74253 265.183,8.53577 265.073,8.53999C265.026,8.54176 264.761,8.6257 264.8,8.72719C264.88,8.93585 265.539,9.02693 265.651,9.24448C264.407,8.73409 263.135,8.15241 261.94,7.51125C262.502,7.36053 263.806,8.52512 264.422,8.62302C264.63,8.67238 264.831,8.55962 264.98,8.42447L264.738,8.24141L264.949,8.21175L264.982,8.09047C264.81,8.1117 264.778,7.8963 264.723,7.86187C264.668,7.82815 264.567,7.85529 264.499,7.81435C264.421,7.76743 264.377,7.58277 264.282,7.54252C264.172,7.4966 264.166,7.63198 264.193,7.692C264.232,7.77763 264.551,7.892 264.556,8.08879L264.116,7.96376C263.992,7.78644 263.802,7.71677 263.583,7.72404L263.644,7.4204L263.947,7.54168C263.984,7.2677 263.792,7.08564 263.522,7.11577L263.58,6.94091C263.405,6.85229 263.232,6.73646 263.074,6.62117C262.993,6.56222 262.96,6.4434 262.911,6.4132C262.849,6.37395 262.76,6.44808 262.74,6.43666C262.711,6.4204 262.64,6.18069 262.597,6.15601C262.378,6.02807 262.224,6.48679 261.94,6.38568C262.025,6.20676 262.209,5.98353 262.363,5.86525C262.52,5.74405 262.777,5.80147 262.513,5.54137C262.323,5.65283 262.143,5.51446 261.975,5.53439C261.827,5.5521 261.579,5.77694 261.392,5.77878L261.757,6.0815C261.628,6.16705 260.904,5.67843 261.026,6.05183C261.222,6.25773 263.105,7.14482 262.974,7.35915L261.842,6.69522L261.698,6.78162L261.939,7.05528C261.909,7.08365 261.568,6.81573 261.479,6.80898C261.356,6.79963 261.286,6.9117 261.24,6.91224C261.194,6.91278 261.114,6.78591 260.998,6.81175L260.917,6.94904L261.087,8.08925L260.845,7.87544C260.815,7.74382 260.972,7.82677 260.971,7.69821C260.969,7.36905 260.708,6.87959 260.783,6.50779L260.632,6.69101L260.48,7.17655L260.601,6.26487C260.321,6.19281 260.378,6.36053 260.271,6.44892C260.126,6.56928 259.962,6.66356 259.84,6.81143L259.759,6.80071C259.753,6.64593 259.635,6.68472 259.506,6.68962L260.053,6.2043C259.808,6.0493 259.627,6.32596 259.385,6.23428C259.7,5.98851 260.249,6.23129 260.302,5.69246L259.141,4.77448C259.222,4.66885 259.254,4.66977 259.368,4.72803C259.466,4.77747 260.027,5.49752 260.175,5.35165C260.171,5.25321 260.108,5.11132 260.055,5.03197C260.019,4.97847 259.716,4.84746 259.931,4.74428L260.446,5.41573C260.75,5.62094 260.86,5.13501 260.54,5.10756L260.541,5.04884C260.878,5.10281 260.668,3.97494 260.723,3.74067C260.758,3.26746 260.871,2.79012 260.874,2.30971L260.966,2.24991C260.991,2.48908 260.81,3.57418 260.963,3.68418C261.396,3.59457 261.272,3.73209 261.456,3.85842C261.564,3.93247 261.903,4.02576 261.909,3.8316L262.031,4.01366L262.366,3.52734L262.366,4.43972C262.703,4.31461 262.922,5.15708 263.006,5.17195C263.29,5.22186 263.637,4.37954 264.002,4.43343C264.095,4.17824 263.939,4.17057 263.89,4.08932C263.734,3.83611 263.422,3.19656 263.077,3.28164C263.007,3.2989 262.95,3.61089 262.731,3.5268L262.731,2.73707L262.914,2.82959L263.035,2.76574C262.893,2.45228 262.934,2.10602 262.853,1.76374L263.34,2.73661L264.13,2.18981L263.644,2.76705L263.886,2.94926C263.831,3.09775 263.459,2.83105 263.522,3.24953L264.921,5.41304C264.76,5.25444 264.25,4.55869 264.192,4.52696C263.906,4.37073 264.003,4.86617 263.998,4.89062C263.975,4.99617 263.725,4.99893 263.765,5.16935L264.191,5.17027L264.069,5.41204L264.921,5.59525L264.921,5.41304Z&quot; />"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/ic_giant_bomb_logo.xml"
+            line="20"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
+        message="Possible overdraw: Root element paints background `@color/gb_background` with a theme that also paints a background (inferred theme is `@style/Theme_GiantBombTV`)"
+        errorLine1="    android:background=&quot;@color/gb_background&quot;>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_main.xml"
+            line="5"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
+        message="Possible overdraw: Root element paints background `@color/gb_background` with a theme that also paints a background (inferred theme is `@style/Theme_GiantBombTV`)"
+        errorLine1="    android:background=&quot;@color/gb_background&quot;>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_search.xml"
+            line="5"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
+        message="Possible overdraw: Root element paints background `@color/gb_background` with a theme that also paints a background (inferred theme is `@style/Theme_GiantBombTV`)"
+        errorLine1="    android:background=&quot;@color/gb_background&quot;>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_show.xml"
+            line="5"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
+        message="Possible overdraw: Root element paints background `@color/gb_background` with a theme that also paints a background (inferred theme is `@style/Theme.GiantBombTV`)"
+        errorLine1="    android:background=&quot;@color/gb_background&quot;>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/fragment_mobile_browse.xml"
+            line="6"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
+        message="Possible overdraw: Root element paints background `@color/gb_background` with a theme that also paints a background (inferred theme is `@style/Theme.GiantBombTV`)"
+        errorLine1="    android:background=&quot;@color/gb_background&quot;"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/fragment_mobile_search.xml"
+            line="6"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
+        message="Possible overdraw: Root element paints background `?android:attr/selectableItemBackground` with a theme that also paints a background (inferred theme is `@style/Theme.GiantBombTV`)"
+        errorLine1="    android:background=&quot;?android:attr/selectableItemBackground&quot;>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_setting.xml"
+            line="12"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
+        message="Possible overdraw: Root element paints background `?android:attr/selectableItemBackground` with a theme that also paints a background (inferred theme is `@style/Theme.GiantBombTV`)"
+        errorLine1="    android:background=&quot;?android:attr/selectableItemBackground&quot;>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_show_small.xml"
+            line="10"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
+        message="Possible overdraw: Root element paints background `?android:attr/selectableItemBackground` with a theme that also paints a background (inferred theme is `@style/Theme.GiantBombTV`)"
+        errorLine1="    android:background=&quot;?android:attr/selectableItemBackground&quot;>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_video.xml"
+            line="10"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
+        message="Possible overdraw: Root element paints background `?android:attr/selectableItemBackground` with a theme that also paints a background (inferred theme is `@style/Theme.GiantBombTV`)"
+        errorLine1="    android:background=&quot;?android:attr/selectableItemBackground&quot;>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_video_small.xml"
+            line="10"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
+        message="Possible overdraw: Root element paints background `?android:attr/selectableItemBackground` with a theme that also paints a background (inferred theme is `@style/Theme.GiantBombTV`)"
+        errorLine1="    android:background=&quot;?android:attr/selectableItemBackground&quot;>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_related_video.xml"
+            line="9"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.mipmap.bg_logo` appears to be unused">
+        <location
+            file="src/main/res/mipmap-hdpi/bg_logo.png"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.browse_gradient_overlay` appears to be unused"
+        errorLine1="&lt;layer-list xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/browse_gradient_overlay.xml"
+            line="2"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_dark` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_dark&quot;>#1A1A1A&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="5"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_black` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_black&quot;>#000000&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="6"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_grey` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_grey&quot;>#333333&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="8"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_surface_card` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_surface_card&quot;>#252530&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="14"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_overlay` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_overlay&quot;>#CC000000&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="15"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_gold` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_gold&quot;>#FFD700&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="23"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_gold_dark` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_gold_dark&quot;>#C5A600&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="24"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_focus_glow` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_focus_glow&quot;>#40E3192C&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="25"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_glass` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_glass&quot;>#18FFFFFF&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="30"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_glass_border` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_glass_border&quot;>#14FFFFFF&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="31"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_glass_hover` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_glass_hover&quot;>#24FFFFFF&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="32"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_glass_card` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_glass_card&quot;>#12FFFFFF&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="33"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_glass_button` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_glass_button&quot;>#1AFFFFFF&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="34"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_glass_button_hover` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_glass_button_hover&quot;>#2AFFFFFF&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="35"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gb_glass_input` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gb_glass_input&quot;>#10FFFFFF&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="36"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.ic_in_progress` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/ic_in_progress.xml"
+            line="2"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.mipmap.ic_launcher_round` appears to be unused">
+        <location
+            file="src/main/res/mipmap-hdpi/ic_launcher_round.webp"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.ic_premium` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/ic_premium.xml"
+            line="2"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.ic_settings_feed` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/ic_settings_feed.xml"
+            line="2"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.ic_watched` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/ic_watched.xml"
+            line="2"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.browse_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;browse_title&quot;>Giant Bomb&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="4"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.setup_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;setup_title&quot;>Feed Setup&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="5"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.feed_url_hint` appears to be unused"
+        errorLine1="    &lt;string name=&quot;feed_url_hint&quot;>Paste your Giant Bomb Premium RSS Feed URL&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="6"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.save` appears to be unused"
+        errorLine1="    &lt;string name=&quot;save&quot;>Save &amp;amp; Load Feed&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="7"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.loading` appears to be unused"
+        errorLine1="    &lt;string name=&quot;loading&quot;>Loading\u2026&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="8"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.error_no_feed` appears to be unused"
+        errorLine1="    &lt;string name=&quot;error_no_feed&quot;>No RSS feed URL configured.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="9"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.error_loading` appears to be unused"
+        errorLine1="    &lt;string name=&quot;error_loading&quot;>Error loading feed. Check your URL and connection.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="10"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_feed` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_feed&quot;>Change Feed URL&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="16"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_feed_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_feed_desc&quot;>Update your RSS feed&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="17"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_about` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_about&quot;>About&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="22"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_about_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_about_desc&quot;>Giant Bomb TV app info&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="23"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UselessParent"
+        message="This `FrameLayout` layout or its `FrameLayout` parent is possibly unnecessary"
+        errorLine1="    &lt;FrameLayout"
+        errorLine2="     ~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="7"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="UselessParent"
+        message="This `LinearLayout` layout or its `FrameLayout` parent is unnecessary"
+        errorLine1="        &lt;LinearLayout"
+        errorLine2="         ~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="12"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UselessParent"
+        message="This `FrameLayout` layout or its `FrameLayout` parent is possibly unnecessary"
+        errorLine1="    &lt;FrameLayout"
+        errorLine2="     ~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="9"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="UselessParent"
+        message="This `LinearLayout` layout or its `FrameLayout` parent is unnecessary"
+        errorLine1="        &lt;LinearLayout"
+        errorLine2="         ~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="15"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UselessParent"
+        message="This `FrameLayout` layout or its `FrameLayout` parent is possibly unnecessary"
+        errorLine1="    &lt;FrameLayout"
+        errorLine2="     ~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_video_card.xml"
+            line="9"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="UselessParent"
+        message="This `LinearLayout` layout or its `FrameLayout` parent is unnecessary"
+        errorLine1="        &lt;LinearLayout"
+        errorLine2="         ~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_video_card.xml"
+            line="15"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="IconDuplicatesConfig"
+        message="The `banner.png` icon has identical contents in the following configuration folders: drawable-mdpi, drawable">
+        <location
+            file="src/main/res/drawable/banner.png"/>
+        <location
+            file="src/main/res/drawable-mdpi/banner.png"/>
+    </issue>
+
+    <issue
+        id="IconLocation"
+        message="Found bitmap drawable `res/drawable/banner.png` in densityless folder">
+        <location
+            file="src/main/res/drawable/banner.png"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `7sp`"
+        errorLine1="                            android:textSize=&quot;7sp&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="67"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `7sp`"
+        errorLine1="                            android:textSize=&quot;7sp&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="105"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `7sp`"
+        errorLine1="                            android:textSize=&quot;7sp&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="141"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `7sp`"
+        errorLine1="                            android:textSize=&quot;7sp&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="176"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `9sp`"
+        errorLine1="                    android:textSize=&quot;9sp&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="194"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `9sp`"
+        errorLine1="                    android:textSize=&quot;9sp&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="212"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `10sp`"
+        errorLine1="            android:textSize=&quot;10sp&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_video.xml"
+            line="52"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `8sp`"
+        errorLine1="                            android:textSize=&quot;8sp&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="77"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `8sp`"
+        errorLine1="                            android:textSize=&quot;8sp&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="115"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `8sp`"
+        errorLine1="                            android:textSize=&quot;8sp&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="151"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `8sp`"
+        errorLine1="                            android:textSize=&quot;8sp&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="186"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `10sp`"
+        errorLine1="                    android:textSize=&quot;10sp&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="204"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `9sp`"
+        errorLine1="                    android:textSize=&quot;9sp&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="222"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SmallSp"
+        message="Avoid using sizes smaller than `11sp`: `9sp`"
+        errorLine1="                    android:textSize=&quot;9sp&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_video_card.xml"
+            line="67"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="Autofill"
+        message="Missing `autofillHints` attribute"
+        errorLine1="        &lt;EditText"
+        errorLine2="         ~~~~~~~~">
+        <location
+            file="src/main/res/layout/fragment_mobile_search.xml"
+            line="30"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `Bitmap.scale` instead?"
+        errorLine1="        val small = Bitmap.createScaledBitmap(toTransform, w, h, true)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/ui/BlurTransformation.kt"
+            line="19"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            android.net.Uri.parse(&quot;https://clinteastman.github.io/GiantBombTV/privacy.html&quot;)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/BrowseFragment.kt"
+            line="566"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            android.net.Uri.parse(&quot;https://clinteastman.github.io/GiantBombTV/privacy.html&quot;)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileBrowseFragment.kt"
+            line="415"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                    .setArtworkUri(video?.thumbnailUrl?.let { Uri.parse(it) })"
+        errorLine2="                                                              ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="554"
+            column="63"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                            android.net.Uri.parse(playback.youtubeUrl)"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="636"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(value) = prefs.edit().putString(&quot;api_key&quot;, value).apply()"
+        errorLine2="                     ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/data/PrefsManager.kt"
+            line="13"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(value) = prefs.edit().putBoolean(&quot;is_premium&quot;, value).apply()"
+        errorLine2="                     ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/data/PrefsManager.kt"
+            line="17"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(value) = prefs.edit().putString(&quot;preferred_quality&quot;, value).apply()"
+        errorLine2="                     ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/data/PrefsManager.kt"
+            line="22"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putStringSet(&quot;favourite_shows&quot;, current).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/data/PrefsManager.kt"
+            line="40"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="ContentDescription"
+        message="Missing `contentDescription` attribute on image"
+        errorLine1="    &lt;ImageView"
+        errorLine2="     ~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_main.xml"
+            line="8"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="ContentDescription"
+        message="Missing `contentDescription` attribute on image"
+        errorLine1="    &lt;ImageView"
+        errorLine2="     ~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_main.xml"
+            line="15"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="ContentDescription"
+        message="Missing `contentDescription` attribute on image"
+        errorLine1="    &lt;ImageView"
+        errorLine2="     ~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_show.xml"
+            line="8"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="ContentDescription"
+        message="Missing `contentDescription` attribute on image"
+        errorLine1="    &lt;ImageView"
+        errorLine2="     ~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_setting.xml"
+            line="14"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="ContentDescription"
+        message="Missing `contentDescription` attribute on image"
+        errorLine1="    &lt;ImageView"
+        errorLine2="     ~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_show_small.xml"
+            line="12"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="ContentDescription"
+        message="Missing `contentDescription` attribute on image"
+        errorLine1="                &lt;ImageView"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="22"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="ContentDescription"
+        message="Missing `contentDescription` attribute on image"
+        errorLine1="        &lt;ImageView"
+        errorLine2="         ~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_video.xml"
+            line="18"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="ContentDescription"
+        message="Missing `contentDescription` attribute on image"
+        errorLine1="        &lt;ImageView"
+        errorLine2="         ~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_video_small.xml"
+            line="17"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="ContentDescription"
+        message="Missing `contentDescription` attribute on image"
+        errorLine1="    &lt;ImageView"
+        errorLine2="     ~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_related_video.xml"
+            line="11"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="ContentDescription"
+        message="Missing `contentDescription` attribute on image"
+        errorLine1="                &lt;ImageView"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="25"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="ContentDescription"
+        message="Missing `contentDescription` attribute on image"
+        errorLine1="                &lt;ImageView"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_video_card.xml"
+            line="25"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                text = &quot;  PREMIUM  &quot;"
+        errorLine2="                        ~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/DetailActivity.kt"
+            line="163"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                            text = &quot;+ Watchlist&quot;"
+        errorLine2="                                    ~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/DetailActivity.kt"
+            line="288"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="                            text = &quot;\u2713 Watchlist&quot;"
+        errorLine2="                                   ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/DetailActivity.kt"
+            line="298"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                            text = &quot;\u2713 Watchlist&quot;"
+        errorLine2="                                          ~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/DetailActivity.kt"
+            line="298"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="                watchButton.text = &quot;${getString(R.string.resume)} (${resumeMin}m in)&quot;"
+        errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/DetailActivity.kt"
+            line="392"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                watchButton.text = &quot;${getString(R.string.resume)} (${resumeMin}m in)&quot;"
+        errorLine2="                                                                               ~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/DetailActivity.kt"
+            line="392"
+            column="80"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="                watchlistButton.text = &quot;\u2713 Watchlist&quot;"
+        errorLine2="                                       ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/DetailActivity.kt"
+            line="398"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                watchlistButton.text = &quot;\u2713 Watchlist&quot;"
+        errorLine2="                                              ~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/DetailActivity.kt"
+            line="398"
+            column="47"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            text = &quot;Exit Giant Bomb?&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/MainActivity.kt"
+            line="188"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            text = &quot;Update Available&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/MainActivity.kt"
+            line="320"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="            text = &quot;Version ${update.versionName} is ready to install&quot;"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/MainActivity.kt"
+            line="330"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            text = &quot;Version ${update.versionName} is ready to install&quot;"
+        errorLine2="                    ~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/MainActivity.kt"
+            line="330"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            text = &quot;Version ${update.versionName} is ready to install&quot;"
+        errorLine2="                                                 ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/MainActivity.kt"
+            line="330"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            text = &quot;Downloading...&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/MainActivity.kt"
+            line="373"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="                    progressText.text = &quot;Downloading... $percent%&quot;"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/MainActivity.kt"
+            line="434"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                    progressText.text = &quot;Downloading... $percent%&quot;"
+        errorLine2="                                         ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/MainActivity.kt"
+            line="434"
+            column="42"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                    progressText.text = &quot;Installing...&quot;"
+        errorLine2="                                         ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/MainActivity.kt"
+            line="437"
+            column="42"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                holder.time.text = &quot;Streaming now&quot;"
+        errorLine2="                                    ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileBrowseFragment.kt"
+            line="888"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                    holder.time.text = &quot;Time TBD&quot;"
+        errorLine2="                                        ~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileBrowseFragment.kt"
+            line="901"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                            holder.time.text = &quot;Starting soon&quot;"
+        errorLine2="                                                ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileBrowseFragment.kt"
+            line="913"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                            holder.days.text = &quot;%02d&quot;.format(d)"
+        errorLine2="                                                ~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileBrowseFragment.kt"
+            line="925"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                        holder.hours.text = &quot;%02d&quot;.format(h)"
+        errorLine2="                                             ~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileBrowseFragment.kt"
+            line="930"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                        holder.minutes.text = &quot;%02d&quot;.format(m)"
+        errorLine2="                                               ~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileBrowseFragment.kt"
+            line="931"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                        holder.seconds.text = &quot;%02d&quot;.format(s)"
+        errorLine2="                                               ~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileBrowseFragment.kt"
+            line="932"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            emptyView.text = &quot;Search for Giant Bomb videos&quot;"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileSearchFragment.kt"
+            line="91"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="                    emptyView.text = &quot;No results for \&quot;$query\&quot;&quot;"
+        errorLine2="                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileSearchFragment.kt"
+            line="108"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                    emptyView.text = &quot;No results for \&quot;$query\&quot;&quot;"
+        errorLine2="                                      ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileSearchFragment.kt"
+            line="108"
+            column="39"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                emptyView.text = &quot;Search failed&quot;"
+        errorLine2="                                  ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/mobile/MobileSearchFragment.kt"
+            line="119"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            text = &quot;Quality&quot;"
+        errorLine2="                    ~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="349"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            text = &quot;Up Next&quot;"
+        errorLine2="                    ~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="369"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            text = &quot;Stream Quality&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/PlaybackActivity.kt"
+            line="929"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            text = &quot;Connect Your Account&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/SetupActivity.kt"
+            line="101"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="            text = &quot;Find your API key on your Giant Bomb profile page.\n\nLog in at giantbomb.com, go to your profile, and copy the 40-character API key.&quot;"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/SetupActivity.kt"
+            line="109"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            text = &quot;Find your API key on your Giant Bomb profile page.\n\nLog in at giantbomb.com, go to your profile, and copy the 40-character API key.&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/SetupActivity.kt"
+            line="109"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            text = &quot;Find your API key on your Giant Bomb profile page.\n\nLog in at giantbomb.com, go to your profile, and copy the 40-character API key.&quot;"
+        errorLine2="                                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/SetupActivity.kt"
+            line="109"
+            column="75"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                    statusText.text = &quot;Please enter your API key.&quot;"
+        errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/SetupActivity.kt"
+            line="172"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        statusText.text = &quot;Validating\u2026&quot;"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/SetupActivity.kt"
+            line="245"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        statusText.text = &quot;Validating\u2026&quot;"
+        errorLine2="                           ~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/SetupActivity.kt"
+            line="245"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="                statusText.text = &quot;Invalid key or connection error: ${e.message}&quot;"
+        errorLine2="                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/SetupActivity.kt"
+            line="262"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                statusText.text = &quot;Invalid key or connection error: ${e.message}&quot;"
+        errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/SetupActivity.kt"
+            line="262"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            timeView.text = &quot;Streaming now&quot;"
+        errorLine2="                             ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/ui/UpcomingCardView.kt"
+            line="151"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                timeView.text = &quot;Time TBD&quot;"
+        errorLine2="                                 ~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/ui/UpcomingCardView.kt"
+            line="158"
+            column="34"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                    timeView.text = &quot;Starting soon&quot;"
+        errorLine2="                                     ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/ui/UpcomingCardView.kt"
+            line="174"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                    daysView.text = &quot;%02d&quot;.format(days)"
+        errorLine2="                                     ~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/ui/UpcomingCardView.kt"
+            line="186"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                hoursView.text = &quot;%02d&quot;.format(hours)"
+        errorLine2="                                  ~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/ui/UpcomingCardView.kt"
+            line="191"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                minutesView.text = &quot;%02d&quot;.format(mins)"
+        errorLine2="                                    ~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/ui/UpcomingCardView.kt"
+            line="192"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                secondsView.text = &quot;%02d&quot;.format(secs)"
+        errorLine2="                                    ~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/ui/UpcomingCardView.kt"
+            line="193"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;Giant Bomb&quot;, should use `@string` resource"
+        errorLine1="                android:contentDescription=&quot;Giant Bomb&quot; />"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/fragment_mobile_browse.xml"
+            line="30"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;Cast&quot;, should use `@string` resource"
+        errorLine1="                    android:contentDescription=&quot;Cast&quot; />"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/fragment_mobile_browse.xml"
+            line="45"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;Search&quot;, should use `@string` resource"
+        errorLine1="                    android:contentDescription=&quot;Search&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/fragment_mobile_browse.xml"
+            line="55"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;Back&quot;, should use `@string` resource"
+        errorLine1="            android:contentDescription=&quot;Back&quot; />"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/fragment_mobile_search.xml"
+            line="28"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;Search videos...&quot;, should use `@string` resource"
+        errorLine1="            android:hint=&quot;Search videos...&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/fragment_mobile_search.xml"
+            line="37"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;Search for Giant Bomb videos&quot;, should use `@string` resource"
+        errorLine1="        android:text=&quot;Search for Giant Bomb videos&quot;"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/fragment_mobile_search.xml"
+            line="68"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;DAY&quot;, should use `@string` resource"
+        errorLine1="                            android:text=&quot;DAY&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="65"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;:&quot;, should use `@string` resource"
+        errorLine1="                        android:text=&quot;:&quot;"
+        errorLine2="                        ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="75"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;HR&quot;, should use `@string` resource"
+        errorLine1="                            android:text=&quot;HR&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="103"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;:&quot;, should use `@string` resource"
+        errorLine1="                        android:text=&quot;:&quot;"
+        errorLine2="                        ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="112"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;MIN&quot;, should use `@string` resource"
+        errorLine1="                            android:text=&quot;MIN&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="139"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;:&quot;, should use `@string` resource"
+        errorLine1="                        android:text=&quot;:&quot;"
+        errorLine2="                        ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="148"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;SEC&quot;, should use `@string` resource"
+        errorLine1="                            android:text=&quot;SEC&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="174"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;LIVE NOW&quot;, should use `@string` resource"
+        errorLine1="                    android:text=&quot;LIVE NOW&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="192"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;PREMIUM&quot;, should use `@string` resource"
+        errorLine1="                    android:text=&quot;PREMIUM&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_upcoming.xml"
+            line="210"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;\u2713&quot;, should use `@string` resource"
+        errorLine1="            android:text=&quot;\u2713&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_video.xml"
+            line="32"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;PREMIUM&quot;, should use `@string` resource"
+        errorLine1="            android:text=&quot;PREMIUM&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_video.xml"
+            line="50"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;\u2713&quot;, should use `@string` resource"
+        errorLine1="            android:text=&quot;\u2713&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_mobile_video_small.xml"
+            line="47"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;See all&quot;, should use `@string` resource"
+        errorLine1="        android:text=&quot;See all&quot;"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/item_section_header.xml"
+            line="33"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;DAY&quot;, should use `@string` resource"
+        errorLine1="                            android:text=&quot;DAY&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="75"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;:&quot;, should use `@string` resource"
+        errorLine1="                        android:text=&quot;:&quot;"
+        errorLine2="                        ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="85"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;HR&quot;, should use `@string` resource"
+        errorLine1="                            android:text=&quot;HR&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="113"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;:&quot;, should use `@string` resource"
+        errorLine1="                        android:text=&quot;:&quot;"
+        errorLine2="                        ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="122"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;MIN&quot;, should use `@string` resource"
+        errorLine1="                            android:text=&quot;MIN&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="149"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;:&quot;, should use `@string` resource"
+        errorLine1="                        android:text=&quot;:&quot;"
+        errorLine2="                        ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="158"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;SEC&quot;, should use `@string` resource"
+        errorLine1="                            android:text=&quot;SEC&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="184"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;LIVE NOW&quot;, should use `@string` resource"
+        errorLine1="                    android:text=&quot;LIVE NOW&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="202"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;PREMIUM&quot;, should use `@string` resource"
+        errorLine1="                    android:text=&quot;PREMIUM&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_upcoming_card.xml"
+            line="220"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;PREMIUM&quot;, should use `@string` resource"
+        errorLine1="                    android:text=&quot;PREMIUM&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_video_card.xml"
+            line="65"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;\u2713&quot;, should use `@string` resource"
+        errorLine1="                    android:text=&quot;\u2713&quot;"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/view_video_card.xml"
+            line="81"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="RtlEnabled"
+        message="The project references RTL attributes, but does not explicitly enable or disable RTL support with `android:supportsRtl` in the manifest">
+        <location
+            file="src/main/AndroidManifest.xml"/>
+    </issue>
+
+</issues>
