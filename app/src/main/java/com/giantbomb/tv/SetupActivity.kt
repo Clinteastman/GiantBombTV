@@ -1,6 +1,5 @@
 package com.giantbomb.tv
 
-import android.app.Activity
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
@@ -14,12 +13,14 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.ScrollView
+import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.util.DeviceUtil
 import kotlinx.coroutines.*
 
-class SetupActivity : Activity(), CoroutineScope by MainScope() {
+class SetupActivity : ComponentActivity(), CoroutineScope by MainScope() {
 
     private lateinit var statusText: TextView
     private val density by lazy { resources.displayMetrics.density }
@@ -28,6 +29,10 @@ class SetupActivity : Activity(), CoroutineScope by MainScope() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (!DeviceUtil.isTv(this)) {
+            enableEdgeToEdge()
+        }
 
         val prefs = PrefsManager(this)
 

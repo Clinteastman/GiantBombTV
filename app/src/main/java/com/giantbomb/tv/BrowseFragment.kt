@@ -94,8 +94,11 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 try {
                     val rowsFragment = childFragmentManager.fragments.firstOrNull { it is androidx.leanback.app.RowsSupportFragment }
                     val gridView = (rowsFragment as? androidx.leanback.app.RowsSupportFragment)?.verticalGridView
-                    gridView?.setExtraLayoutSpace(800)
-                } catch (_: Exception) { }
+                    val extraPx = (400 * resources.displayMetrics.density).toInt()
+                    gridView?.setExtraLayoutSpace(extraPx)
+                } catch (e: Exception) {
+                    android.util.Log.w("BrowseFragment", "Prefetch setup failed", e)
+                }
             }
         })
     }
