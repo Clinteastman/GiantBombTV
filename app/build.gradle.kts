@@ -89,6 +89,9 @@ dependencies {
     // CardView
     implementation("androidx.cardview:cardview:1.0.0")
 
+    // Activity (enableEdgeToEdge)
+    implementation("androidx.activity:activity-ktx:1.9.0")
+
     // Image loading
     implementation("com.github.bumptech.glide:glide:4.16.0")
     implementation("com.github.bumptech.glide:okhttp3-integration:4.16.0")
