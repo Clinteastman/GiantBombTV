@@ -27,7 +27,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
-import androidx.media3.common.AudioAttributes
+import android.content.ComponentName
+import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -35,14 +36,12 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.cast.CastPlayer
 import androidx.media3.cast.SessionAvailabilityListener
-import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.audio.DefaultAudioSink
-import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
-import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.giantbomb.tv.playback.PlaybackService
+import com.google.common.util.concurrent.ListenableFuture
 import androidx.mediarouter.app.MediaRouteButton
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -64,8 +63,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         private const val PROGRESS_SAVE_INTERVAL = 30_000L
     }
 
-    private var player: ExoPlayer? = null
-    private var mediaSession: MediaSession? = null
+    private var player: MediaController? = null
+    private var controllerFuture: ListenableFuture<MediaController>? = null
     private lateinit var playerView: PlayerView
     private lateinit var rootLayout: FrameLayout
     private lateinit var api: GiantBombApi
@@ -450,7 +449,50 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     override fun onStart() {
         super.onStart()
         initializeCastPlayer()
-        initializePlayer()
+        connectController()
+    }
+
+    private fun connectController() {
+        // Already connected (e.g. returning from PiP): just rebind the view.
+        player?.let {
+            if (!isCasting) playerView.player = it
+            onControllerReady(it)
+            return
+        }
+        val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
+        val future = MediaController.Builder(this, token).buildAsync()
+        controllerFuture = future
+        future.addListener({
+            if (future.isCancelled || !future.isDone) return@addListener
+            try {
+                val c = future.get()
+                player = c
+                if (!isCasting) playerView.player = c
+                onControllerReady(c)
+            } catch (e: Exception) {
+                android.util.Log.e("PlaybackActivity", "Controller connect failed", e)
+                Toast.makeText(this, "Playback service unavailable", Toast.LENGTH_LONG).show()
+                finish()
+            }
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun onControllerReady(c: MediaController) {
+        val v = video
+        val liveHlsUrl = intent.getStringExtra(EXTRA_LIVE_HLS_URL)
+        val desiredMediaId = when {
+            liveHlsUrl != null -> "live:${liveHlsUrl.hashCode()}"
+            v != null -> "vod:${v.id}"
+            else -> null
+        }
+        // Service is already playing the requested content: re-attach listeners only.
+        if (desiredMediaId != null && c.currentMediaItem?.mediaId == desiredMediaId) {
+            if (v != null) attachPlayerListener(c, v)
+            if (progressJob?.isActive != true) startProgressSaving()
+            return
+        }
+        if (liveHlsUrl != null) initializeLivePlayer(liveHlsUrl)
+        else if (v != null) initializePlayer()
     }
 
 
@@ -490,17 +532,14 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     override fun onStop() {
         super.onStop()
-        if (enteredPip && !isChangingConfigurations) {
-            // PiP was dismissed or activity is going away
-            saveProgressNow()
-            releasePlayer()
-            releaseCastPlayer()
-            if (!isFinishing) finish()
-        } else if (!isInPipMode()) {
-            saveProgressNow()
-            releasePlayer()
-            releaseCastPlayer()
-        }
+        // Save progress but do NOT stop the service. The service keeps the player
+        // alive (and a foreground notification) so playback continues when the
+        // activity is backgrounded, in PiP, or after the user closes the app.
+        saveProgressNow()
+        disconnectController()
+        // Cast session lives on the receiver regardless of this CastPlayer
+        // instance, so releasing is safe.
+        releaseCastPlayer()
         enteredPip = false
     }
 
@@ -655,77 +694,34 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                         .takeIf { it >= 0 } ?: 0
                 }
 
-                val loadControl = DefaultLoadControl.Builder()
-                    .setBufferDurationsMs(30_000, 60_000, 5_000, 10_000)
+                val p = player ?: return@onSuccess
+                val mediaItem = MediaItem.Builder()
+                    .setUri(qualityOptions[currentQualityIndex].url)
+                    .setMediaId("vod:${v.id}")
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(v.title)
+                            .setArtist(v.showTitle)
+                            .setArtworkUri(v.thumbnailUrl?.let { Uri.parse(it) })
+                            .build()
+                    )
                     .build()
+                p.setMediaItem(mediaItem)
+                p.prepare()
 
-                val audioAttributes = AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                    .build()
-
-                val audioBufferSize = DefaultAudioTrackBufferSizeProvider.Builder()
-                    .setMinPcmBufferDurationUs(2_500_000)
-                    .setMaxPcmBufferDurationUs(5_000_000)
-                    .build()
-
-                val audioSink = DefaultAudioSink.Builder(this@PlaybackActivity)
-                    .setAudioTrackBufferSizeProvider(audioBufferSize)
-                    .build()
-
-                val renderersFactory = object : DefaultRenderersFactory(this@PlaybackActivity) {
-                    override fun buildAudioSink(
-                        context: android.content.Context,
-                        enableFloatOutput: Boolean,
-                        enableAudioTrackPlaybackParams: Boolean
-                    ): androidx.media3.exoplayer.audio.AudioSink {
-                        return audioSink
-                    }
-                }.forceEnableMediaCodecAsynchronousQueueing()
-                    .setEnableDecoderFallback(true)
-
-                player = ExoPlayer.Builder(this@PlaybackActivity)
-                    .setRenderersFactory(renderersFactory)
-                    .setLoadControl(loadControl)
-                    .setAudioAttributes(audioAttributes, true)
-                    .build().also { exoPlayer ->
-                    playerView.player = exoPlayer
-
-                    mediaSession?.release()
-                    mediaSession = MediaSession.Builder(this@PlaybackActivity, exoPlayer).build()
-
-                    exoPlayer.setMediaItem(MediaItem.fromUri(qualityOptions[currentQualityIndex].url))
-                    exoPlayer.playWhenReady = false
-                    exoPlayer.prepare()
-
-                    val startFromBeginning = intent.getBooleanExtra("start_from_beginning", false)
-                    if (!startFromBeginning) {
-                        val progressResult = api.getProgress()
-                        progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
-                            if (progress.percentComplete < 95 && progress.currentTime > 0) {
-                                exoPlayer.seekTo((progress.currentTime * 1000).toLong())
-                            }
+                val startFromBeginning = intent.getBooleanExtra("start_from_beginning", false)
+                if (!startFromBeginning) {
+                    val progressResult = api.getProgress()
+                    progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
+                        if (progress.percentComplete < 95 && progress.currentTime > 0) {
+                            p.seekTo((progress.currentTime * 1000).toLong())
                         }
                     }
-
-                    exoPlayer.addListener(object : Player.Listener {
-                        override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                            playerView.requestLayout()
-                        }
-
-                        override fun onPlaybackStateChanged(state: Int) {
-                            if (state == Player.STATE_ENDED) {
-                                launch {
-                                    api.markWatched(v.id)
-                                    playNextEpisode(v)
-                                }
-                            }
-                        }
-                    })
-
-                    exoPlayer.playWhenReady = true
-                    startProgressSaving()
                 }
+
+                attachPlayerListener(p, v)
+                p.playWhenReady = true
+                startProgressSaving()
             }
 
             result.onFailure { e ->
@@ -742,15 +738,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         qualityOptions.clear()
         qualityOptions.add(QualityOption("Live", hlsUrl, isHls = true))
         currentQualityIndex = 0
-
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(10_000, 30_000, 2_000, 5_000)
-            .build()
-
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-            .build()
 
         // Replace the SurfaceView-based PlayerView with a TextureView-based one.
         // TextureView handles mid-stream resolution changes properly (SurfaceView
@@ -773,39 +760,35 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         isLiveStream = true
 
-        player = ExoPlayer.Builder(this)
-            .setLoadControl(loadControl)
-            .setAudioAttributes(audioAttributes, true)
-            .build().also { exoPlayer ->
-                playerView.player = exoPlayer
+        val p = player ?: return
+        playerView.player = p
 
-                // Force highest bitrate from the start to prevent adaptive mid-stream
-                // resolution switching. The codec's adaptive playback causes zoomed-in
-                // rendering on some devices when it seamlessly switches to a higher
-                // resolution. By always selecting the highest bitrate, the codec is
-                // initialized at full resolution and never needs to adapt. The user
-                // can still manually switch quality via the quality picker.
-                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
-                    .setForceHighestSupportedBitrate(true)
+        // Force highest bitrate from the start to prevent adaptive mid-stream
+        // resolution switching.
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+            .setForceHighestSupportedBitrate(true)
+            .build()
+
+        val mediaItem = MediaItem.Builder()
+            .setUri(hlsUrl)
+            .setMediaId("live:${hlsUrl.hashCode()}")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(liveTitle)
                     .build()
+            )
+            .build()
+        p.setMediaItem(mediaItem)
+        p.prepare()
+        p.playWhenReady = true
 
-                mediaSession?.release()
-                mediaSession = MediaSession.Builder(this, exoPlayer).build()
-
-                exoPlayer.setMediaItem(MediaItem.fromUri(hlsUrl))
-                exoPlayer.playWhenReady = true
-                exoPlayer.prepare()
-
-                exoPlayer.addListener(object : Player.Listener {
-                    override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
-                        // Build quality options from available HLS renditions
-                        if (qualityOptions.size <= 1) {
-                            buildLiveQualityOptions(exoPlayer)
-                        }
-                    }
-                })
+        p.addListener(object : Player.Listener {
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                if (qualityOptions.size <= 1) {
+                    buildLiveQualityOptions(p)
+                }
             }
-
+        })
     }
 
     private fun switchQuality(index: Int) {
@@ -815,66 +798,20 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         val position = p.currentPosition
         val wasPlaying = p.isPlaying
-
         currentQualityIndex = index
 
-        progressJob?.cancel()
-        mediaSession?.release()
-        mediaSession = null
-        p.release()
-
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(30_000, 60_000, 5_000, 10_000)
-            .build()
-
-        val audioBufferSize = DefaultAudioTrackBufferSizeProvider.Builder()
-            .setMinPcmBufferDurationUs(2_500_000)
-            .setMaxPcmBufferDurationUs(5_000_000)
-            .build()
-        val audioSink = DefaultAudioSink.Builder(this)
-            .setAudioTrackBufferSizeProvider(audioBufferSize)
-            .build()
-        val renderersFactory = object : DefaultRenderersFactory(this) {
-            override fun buildAudioSink(
-                context: android.content.Context,
-                enableFloatOutput: Boolean,
-                enableAudioTrackPlaybackParams: Boolean
-            ): androidx.media3.exoplayer.audio.AudioSink = audioSink
-        }.forceEnableMediaCodecAsynchronousQueueing()
-            .setEnableDecoderFallback(true)
-
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-            .build()
-
-        player = ExoPlayer.Builder(this)
-            .setRenderersFactory(renderersFactory)
-            .setLoadControl(loadControl)
-            .setAudioAttributes(audioAttributes, true)
-            .build().also { newPlayer ->
-                playerView.player = newPlayer
-                mediaSession = MediaSession.Builder(this@PlaybackActivity, newPlayer).build()
-                newPlayer.setMediaItem(MediaItem.fromUri(option.url))
-                newPlayer.prepare()
-                newPlayer.seekTo(position)
-                newPlayer.playWhenReady = wasPlaying
-
-                newPlayer.addListener(object : Player.Listener {
-                    override fun onPlaybackStateChanged(state: Int) {
-                        if (state == Player.STATE_ENDED) {
-                            launch {
-                                video?.let { v ->
-                                    api.markWatched(v.id)
-                                    playNextEpisode(v)
-                                }
-                            }
-                        }
-                    }
-                })
-
-                startProgressSaving()
+        val mediaId = p.currentMediaItem?.mediaId
+        val metadata = p.currentMediaItem?.mediaMetadata
+        val newItem = MediaItem.Builder()
+            .setUri(option.url)
+            .apply {
+                if (mediaId != null) setMediaId(mediaId)
+                if (metadata != null) setMediaMetadata(metadata)
             }
+            .build()
+        p.setMediaItem(newItem, position)
+        p.prepare()
+        p.playWhenReady = wasPlaying
 
         Toast.makeText(this, "Quality: ${option.label}", Toast.LENGTH_SHORT).show()
     }
@@ -1007,11 +944,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         qualityOverlay = overlay
     }
 
-    private fun buildLiveQualityOptions(exoPlayer: ExoPlayer) {
+    private fun buildLiveQualityOptions(p: Player) {
         qualityOptions.clear()
         qualityOptions.add(QualityOption("Auto", "", isHls = true))
 
-        val trackGroups = exoPlayer.currentTracks.groups
+        val trackGroups = p.currentTracks.groups
         val heights = mutableSetOf<Int>()
         for (group in trackGroups) {
             if (group.type == C.TRACK_TYPE_VIDEO) {
@@ -1103,12 +1040,29 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
     }
 
-    private fun releasePlayer() {
+    private fun disconnectController() {
         progressJob?.cancel()
-        mediaSession?.release()
-        mediaSession = null
+        progressJob = null
+        controllerFuture?.let { if (!it.isDone) it.cancel(true) }
+        controllerFuture = null
         player?.release()
         player = null
+    }
+
+    private fun attachPlayerListener(p: Player, v: Video) {
+        p.addListener(object : Player.Listener {
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                playerView.requestLayout()
+            }
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED) {
+                    launch {
+                        api.markWatched(v.id)
+                        playNextEpisode(v)
+                    }
+                }
+            }
+        })
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -1151,6 +1105,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     }
 
     override fun onDestroy() {
+        // Disconnect the controller if we still hold one, but do NOT stop the
+        // service: it keeps playing (with notification) when the activity dies.
+        disconnectController()
+        releaseCastPlayer()
         super.onDestroy()
         cancel()
     }
