@@ -1,15 +1,24 @@
 package com.giantbomb.tv.ui
 
 import android.graphics.drawable.Drawable
+import android.util.Log
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.leanback.widget.Presenter
 import android.widget.ImageView
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.DataSource
+import com.bumptech.glide.load.engine.GlideException
+import com.bumptech.glide.request.RequestListener
+import com.bumptech.glide.request.target.Target
 import com.giantbomb.tv.R
 import com.giantbomb.tv.model.Video
 
 class CardPresenter : Presenter() {
+
+    companion object {
+        private const val TAG = "CardPresenter"
+    }
 
     private var defaultCardImage: Drawable? = null
 
@@ -36,15 +45,32 @@ class CardPresenter : Presenter() {
         cardView.setWatched(video.watched)
 
         val imageUrl = video.thumbnailUrl ?: video.posterUrl
+        val listener = if (com.giantbomb.tv.BuildConfig.DEBUG) object : RequestListener<Drawable> {
+            override fun onLoadFailed(
+                e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean
+            ): Boolean {
+                Log.w(TAG, "Thumbnail load failed for '${video.title}' (id=${video.id}): url=$model error=${e?.message}")
+                e?.rootCauses?.forEach { cause ->
+                    Log.w(TAG, "  Cause: ${cause::class.simpleName}: ${cause.message}")
+                }
+                return false
+            }
+            override fun onResourceReady(
+                resource: Drawable, model: Any, target: Target<Drawable>,
+                dataSource: DataSource, isFirstResource: Boolean
+            ): Boolean = false
+        } else null
+
         if (!imageUrl.isNullOrEmpty()) {
             if (video.isFallbackThumb) {
-                // Show poster fallback — center without cropping
                 cardView.thumbnail.scaleType = ImageView.ScaleType.FIT_CENTER
                 cardView.thumbnail.setBackgroundColor(0x10FFFFFF)
                 Glide.with(viewHolder.view.context)
                     .load(imageUrl)
                     .fitCenter()
+                    .placeholder(defaultCardImage)
                     .error(defaultCardImage)
+                    .apply { listener?.let { listener(it) } }
                     .into(cardView.thumbnail)
             } else {
                 cardView.thumbnail.scaleType = ImageView.ScaleType.CENTER_CROP
@@ -52,7 +78,9 @@ class CardPresenter : Presenter() {
                 Glide.with(viewHolder.view.context)
                     .load(imageUrl)
                     .centerCrop()
+                    .placeholder(defaultCardImage)
                     .error(defaultCardImage)
+                    .apply { listener?.let { listener(it) } }
                     .into(cardView.thumbnail)
             }
         } else {

@@ -71,8 +71,10 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 .replace(R.id.main_fragment_container, fragment)
                 .commit()
 
-            // Check for updates silently
-            checkForUpdate()
+            // Check for updates silently (sideload builds only)
+            if (BuildConfig.ENABLE_SELF_UPDATE) {
+                checkForUpdate()
+            }
         }
     }
 
@@ -428,6 +430,8 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     progressText.text = "Installing..."
                     try {
                         startActivity(checker.getInstallIntent(apkFile))
+                        // Dismiss overlay - system installer takes over
+                        dismissUpdateOverlay()
                     } catch (e: Exception) {
                         Toast.makeText(this@MainActivity,
                             "Could not install update. You may need to enable 'Install unknown apps' in Settings.",

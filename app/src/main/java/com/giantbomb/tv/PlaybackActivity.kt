@@ -50,7 +50,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
-import com.giantbomb.tv.data.YouTubeExtractor
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.util.DeviceUtil
 import com.google.android.gms.cast.framework.CastButtonFactory
@@ -450,14 +449,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         initializePlayer()
     }
 
-    override fun onStop() {
-        super.onStop()
-        if (!isInPipMode()) {
-            saveProgressNow()
-            releasePlayer()
-            releaseCastPlayer()
-        }
-    }
 
     private fun isInPipMode(): Boolean {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode
@@ -479,20 +470,34 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         tryEnterPip()
     }
 
+    private var enteredPip = false
+
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         if (isInPictureInPictureMode) {
+            enteredPip = true
             playerView.useController = false
         } else {
             playerView.useController = true
-            // User dismissed PiP — stop playback and finish
-            if (!isFinishing) {
-                saveProgressNow()
-                releasePlayer()
-                releaseCastPlayer()
-                finish()
-            }
+            // Only finish if the activity is being removed (user dismissed PiP),
+            // not when returning to fullscreen (user tapped PiP window)
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (enteredPip && !isChangingConfigurations) {
+            // PiP was dismissed or activity is going away
+            saveProgressNow()
+            releasePlayer()
+            releaseCastPlayer()
+            if (!isFinishing) finish()
+        } else if (!isInPipMode()) {
+            saveProgressNow()
+            releasePlayer()
+            releaseCastPlayer()
+        }
+        enteredPip = false
     }
 
     private fun initializeCastPlayer() {
@@ -522,20 +527,18 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     private fun switchToCast() {
         val cp = castPlayer ?: return
+        val currentOption = qualityOptions.getOrNull(currentQualityIndex) ?: return
+        val currentUrl = currentOption.url
         val exo = player
 
         // Save current position from local player
         val position = exo?.currentPosition ?: 0L
         val wasPlaying = exo?.isPlaying ?: true
 
-        // Pause and detach local player
+        // Pause and detach local player only after we know we can cast
         exo?.pause()
         playerView.player = cp
         isCasting = true
-
-        // Build a MediaItem with metadata for the Cast receiver
-        val currentUrl = qualityOptions.getOrNull(currentQualityIndex)?.url ?: return
-        val currentOption = qualityOptions[currentQualityIndex]
         val mimeType = if (currentOption.isHls) MimeTypes.APPLICATION_M3U8 else MimeTypes.VIDEO_MP4
 
         val castMediaItem = MediaItem.Builder()
@@ -598,27 +601,39 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
                 // YouTube fallback
                 if (qualityOptions.isEmpty() && !playback.youtubeUrl.isNullOrEmpty()) {
-                    val ytUrl = playback.youtubeUrl
-                    if (ytUrl != null) {
-                        val ytResult = YouTubeExtractor().extract(ytUrl)
-                        ytResult.onSuccess { yt ->
-                            if (yt.hlsUrl != null) {
-                                qualityOptions.add(QualityOption("YouTube HLS", yt.hlsUrl, isHls = true))
-                            }
-                            yt.streams
-                                .filter { !it.isAdaptive && it.hasVideo }
-                                .sortedByDescending { it.height }
-                                .forEach { stream ->
-                                    val label = "YT ${stream.qualityLabel ?: "${stream.height}p"}"
-                                    qualityOptions.add(QualityOption(label, stream.url))
+                    if (BuildConfig.ENABLE_INLINE_YOUTUBE) {
+                        // Inline extraction using internal YouTube API (sideload builds only)
+                        val ytUrl = playback.youtubeUrl
+                        if (ytUrl != null) {
+                            val ytResult = com.giantbomb.tv.data.YouTubeExtractor().extract(ytUrl)
+                            ytResult.onSuccess { yt ->
+                                if (yt.hlsUrl != null) {
+                                    qualityOptions.add(QualityOption("YouTube HLS", yt.hlsUrl, isHls = true))
                                 }
-                            if (videoDuration == 0.0 && yt.duration > 0) {
-                                videoDuration = yt.duration.toDouble()
+                                yt.streams
+                                    .filter { !it.isAdaptive && it.hasVideo }
+                                    .sortedByDescending { it.height }
+                                    .forEach { stream ->
+                                        val label = "YT ${stream.qualityLabel ?: "${stream.height}p"}"
+                                        qualityOptions.add(QualityOption(label, stream.url))
+                                    }
+                                if (videoDuration == 0.0 && yt.duration > 0) {
+                                    videoDuration = yt.duration.toDouble()
+                                }
+                            }
+                            ytResult.onFailure { e ->
+                                android.util.Log.w("PlaybackActivity", "YouTube extraction failed: ${e.message}")
                             }
                         }
-                        ytResult.onFailure { e ->
-                            android.util.Log.w("PlaybackActivity", "YouTube extraction failed: ${e.message}")
-                        }
+                    } else {
+                        // Store-compliant: open in YouTube app / browser
+                        val ytIntent = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(playback.youtubeUrl)
+                        )
+                        startActivity(ytIntent)
+                        finish()
+                        return@onSuccess
                     }
                 }
 

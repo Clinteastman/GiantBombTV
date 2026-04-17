@@ -15,6 +15,11 @@ An unofficial Android TV and mobile app for watching [Giant Bomb](https://www.gi
 - **Show browsing** with infinite scroll through episodes
 - **Stream quality selection** - Auto (HLS), 1080p, 720p, 480p, 360p (per-session and default preference)
 - **Watched indicators** (green checkmark) and red progress bars on all video cards
+- **Chromecast** - cast videos to any Cast-compatible device from the mobile app
+- **Picture-in-Picture** - keep watching in a floating window while using other apps (Android 8.0+)
+- **Upcoming shows and live streams** - see what's coming up and jump into live Twitch streams
+- **Self-update** - checks GitHub releases for new versions and prompts to install
+- **Direct playback** - tap a video on mobile to start playing immediately
 - **Blurred backdrop** with smooth crossfade transitions as you navigate (TV)
 - **D-pad optimized** navigation for TV remotes
 - **Mobile phone layout** - YouTube-style vertical feed with horizontal category rows
@@ -108,6 +113,18 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.giantbomb.tv/.MainActivity
 ```
 
+### Build Configuration
+
+The app has a build flag for inline YouTube playback in `app/build.gradle.kts`:
+
+```kotlin
+buildConfigField("boolean", "ENABLE_INLINE_YOUTUBE", "false")
+```
+
+By default this is **off**. When a video only has a YouTube source, the app opens it in the YouTube app or browser.
+
+If you are building for sideloading or personal use, you can set this to `"true"` to enable inline YouTube playback using YouTube's internal API. This is not compliant with app store policies and should not be enabled for store builds.
+
 ### CI/CD
 
 This project uses GitHub Actions for automated builds and releases:
@@ -130,8 +147,9 @@ To run on an Android TV emulator:
 app/src/main/java/com/giantbomb/tv/
 ├── MainActivity.kt              # Host activity (loads TV or mobile fragment)
 ├── BrowseFragment.kt            # TV browse screen (Leanback BrowseSupportFragment)
+├── CastOptionsProvider.kt       # Google Cast SDK configuration
 ├── DetailActivity.kt            # Video detail screen (responsive TV/mobile)
-├── PlaybackActivity.kt          # ExoPlayer playback (fullscreen TV, portrait+landscape mobile)
+├── PlaybackActivity.kt          # ExoPlayer playback with Cast and PiP support
 ├── SearchActivity.kt            # Search screen host (loads TV or mobile search)
 ├── GiantBombSearchFragment.kt   # Leanback search with debounced API queries (TV)
 ├── ShowActivity.kt              # Show episode browser
@@ -139,10 +157,12 @@ app/src/main/java/com/giantbomb/tv/
 ├── SetupActivity.kt             # API key entry screen (responsive)
 ├── data/
 │   ├── GiantBombApi.kt          # Giant Bomb public API client (OkHttp)
-│   ├── YouTubeExtractor.kt      # YouTube stream extraction (fallback playback)
+│   ├── TwitchExtractor.kt       # Twitch GQL stream extraction (live streams)
+│   ├── UpdateChecker.kt         # GitHub release checker and APK installer
+│   ├── YouTubeExtractor.kt      # YouTube stream extraction (optional, see build config)
 │   └── PrefsManager.kt          # SharedPreferences wrapper
 ├── model/
-│   ├── Video.kt                 # Video, Show, PlaybackInfo, ProgressEntry models
+│   ├── Video.kt                 # Video, Show, PlaybackInfo, ProgressEntry, Upcoming models
 │   └── SettingsItem.kt          # Settings row item model
 ├── mobile/
 │   ├── MobileBrowseFragment.kt  # YouTube-style vertical feed with horizontal rows
@@ -151,7 +171,10 @@ app/src/main/java/com/giantbomb/tv/
 │   ├── VideoCardView.kt         # Custom glassmorphism video card (TV)
 │   ├── CardPresenter.kt         # Leanback presenter for video cards
 │   ├── ShowCardPresenter.kt     # Leanback presenter for show cards
-│   └── SettingsCardPresenter.kt # Leanback presenter for settings cards
+│   ├── SettingsCardPresenter.kt # Leanback presenter for settings cards
+│   ├── UpcomingCardPresenter.kt # Presenter for upcoming/live stream cards
+│   ├── UpcomingCardView.kt      # Card view for upcoming shows and live streams
+│   └── BlurTransformation.kt    # Glide transform for blurred backdrops
 └── util/
     └── DeviceUtil.kt            # Runtime TV/phone detection
 ```
@@ -161,9 +184,11 @@ app/src/main/java/com/giantbomb/tv/
 - **Kotlin** with coroutines
 - **AndroidX Leanback** for TV UI framework
 - **ExoPlayer (Media3)** for HLS and MP4 playback
+- **Google Cast SDK** for Chromecast support
 - **Glide** for image loading
 - **OkHttp** for networking
 - **Giant Bomb Public API** for all content
+- **Twitch GQL API** for live stream extraction
 - **JUnit + MockWebServer** for unit testing
 - **GitHub Actions** for CI/CD
 
@@ -173,11 +198,11 @@ app/src/main/java/com/giantbomb/tv/
 |--------|-----------------|-------------------|
 | D-pad | Navigate cards | Seek / show controls |
 | Select/Enter | Open video detail | Play/pause |
-| Back | Navigate back | Save progress & exit |
+| Back | Navigate back | Enter PiP (mobile) / save progress & exit (TV) |
 | Menu | - | Open quality picker |
 | Search orb | Open search | - |
 | Play/Pause | - | Toggle playback |
-| FF/Rewind | - | Skip ±10 seconds |
+| FF/Rewind | - | Skip +/-10 seconds |
 
 ## AI Tools Used
 
@@ -191,6 +216,7 @@ These tools handle the repetitive parts of solo development (writing tests, revi
 ## Known Issues
 
 - Audio crackle and video stutter on emulators due to software decoding - does not affect real hardware (Fire TV, etc.)
+- Cloudflare may intermittently block API requests, causing 403 errors or missing thumbnails
 - This is an early preview - expect rough edges
 
 ## License
