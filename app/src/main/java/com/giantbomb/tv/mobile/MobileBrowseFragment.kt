@@ -67,6 +67,10 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     // Watchlist row can be rebuilt in place after a toggle without a full
     // loadContent.
     private var watchlistVideos: MutableList<Video> = mutableListOf()
+    // Progress entries (videoId → entry) cached so card taps can pass an
+    // explicit resume position to PlaybackActivity, avoiding a second
+    // network round-trip from the player and the race that comes with it.
+    private var progressByVideoId: Map<Int, ProgressEntry> = emptyMap()
     // Indices of the watchlist header / content row in browseItems, captured
     // at the end of loadContent. -1 if the watchlist section isn't rendered
     // (hidden, or section order put it somewhere we can't find).
@@ -346,6 +350,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                         progressMap = progress.associateBy { it.videoId }
                     }
                 }
+                progressByVideoId = progressMap
 
                 fun Video.withProgress(): Video {
                     val entry = progressMap[id]
@@ -1052,6 +1057,25 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         browseAdapter.notifyItemChanged(rowIdx)
     }
 
+    /**
+     * Builds a PlaybackActivity intent for a video card, attaching the cached
+     * resume position when we have one. Mobile taps go straight to playback
+     * (skipping DetailActivity), so without this helper the player has to do
+     * its own getProgress() round-trip — which races with playback start, so
+     * the user observes "starts from the beginning" even though they had a
+     * saved position.
+     */
+    private fun buildPlaybackIntent(video: Video): Intent {
+        val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
+            putExtra(PlaybackActivity.EXTRA_VIDEO, video)
+        }
+        val entry = progressByVideoId[video.id]
+        if (entry != null && entry.percentComplete in 1..94 && entry.currentTime > 0) {
+            intent.putExtra(PlaybackActivity.EXTRA_RESUME_SECONDS, entry.currentTime)
+        }
+        return intent
+    }
+
     private fun togglePin(show: Show) {
         val nowPinned = prefs.togglePinnedShow(show.id)
         val msg = if (nowPinned) "Pinned: ${show.title}" else "Unpinned: ${show.title}"
@@ -1164,10 +1188,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             bindWatchlistButton(watchlistBtn, video)
 
             itemView.setOnClickListener {
-                val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
-                    putExtra(PlaybackActivity.EXTRA_VIDEO, video)
-                }
-                startActivity(intent)
+                startActivity(buildPlaybackIntent(video))
             }
         }
     }
@@ -1339,10 +1360,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             bindWatchlistButton(holder.watchlistBtn, video)
 
             holder.itemView.setOnClickListener {
-                val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
-                    putExtra(PlaybackActivity.EXTRA_VIDEO, video)
-                }
-                startActivity(intent)
+                startActivity(buildPlaybackIntent(video))
             }
         }
     }

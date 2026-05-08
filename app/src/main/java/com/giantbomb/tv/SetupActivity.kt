@@ -209,6 +209,17 @@ class SetupActivity : ComponentActivity(), CoroutineScope by MainScope() {
             }
         }
 
+        // Pressing Enter / IME Done on the API-key field fires Connect, so a
+        // hardware keyboard or `adb shell input keyevent KEYCODE_ENTER` after
+        // typing the key submits without users having to D-pad over to the
+        // button (which on TV gets intercepted by the on-screen keyboard).
+        editText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                saveButton.performClick()
+                true
+            } else false
+        }
+
         buttonRow.addView(cancelButton)
         buttonRow.addView(saveButton)
 

@@ -617,13 +617,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // shows transport controls. Progress + markWatched are saved
         // service-side via Player.Listener — nothing for us to flush here.
         disconnectController()
-        // Only release the cast player when we're actually finishing. Screen
-        // lock / Home press goes through onStop with isFinishing=false; if we
-        // released here too, we'd lose control of the running cast session
-        // and the receiver would drop the link.
-        if (explicitlyFinishing || wasInPip) {
-            releaseCastPlayer()
-        }
+        // Cast: always release the CastPlayer here so the next onStart can
+        // cleanly re-bind. The WifiLock acquired during switchToCast keeps
+        // the underlying cast session alive across the transient stop —
+        // releasing the sender-side player wrapper itself is fine.
+        releaseCastPlayer()
         enteredPip = false
         if (explicitlyFinishing || wasInPip) {
             // The user dismissed the player UI on purpose — PiP X, PiP swipe-away,
@@ -665,20 +663,32 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     }
 
     private fun acquireCastWifiLock() {
-        if (castWifiLock?.isHeld == true) return
-        val wm = applicationContext.getSystemService(android.content.Context.WIFI_SERVICE)
-            as? android.net.wifi.WifiManager ?: return
-        castWifiLock = wm.createWifiLock(
-            android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,
-            "GiantBombTV:Cast"
-        ).apply {
-            setReferenceCounted(false)
-            acquire()
+        // Defensive try/catch: acquireWifiLock requires WAKE_LOCK which is now
+        // declared in the manifest, but a SecurityException here would crash
+        // the cast-session-started callback and take the activity down. The
+        // wifi lock is a nice-to-have — better to skip it than crash.
+        try {
+            if (castWifiLock?.isHeld == true) return
+            val wm = applicationContext.getSystemService(android.content.Context.WIFI_SERVICE)
+                as? android.net.wifi.WifiManager ?: return
+            castWifiLock = wm.createWifiLock(
+                android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+                "GiantBombTV:Cast"
+            ).apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("PlaybackActivity", "WifiLock acquire failed: ${e.message}")
         }
     }
 
     private fun releaseCastWifiLock() {
-        castWifiLock?.takeIf { it.isHeld }?.release()
+        try {
+            castWifiLock?.takeIf { it.isHeld }?.release()
+        } catch (e: Exception) {
+            android.util.Log.w("PlaybackActivity", "WifiLock release failed: ${e.message}")
+        }
         castWifiLock = null
     }
 
