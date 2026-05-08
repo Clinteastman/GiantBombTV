@@ -29,7 +29,9 @@ import kotlinx.coroutines.launch
 // Most media3.exoplayer + DefaultAudioSink APIs are still marked @UnstableApi.
 // We rely on them deliberately (custom renderer, PCM buffer sizing, load control),
 // so opt in at the class level rather than annotating every call site.
-@OptIn(UnstableApi::class)
+// Uses androidx.annotation.OptIn — Kotlin's stdlib OptIn doesn't satisfy
+// media3's androidx-flavoured @RequiresOptIn marker.
+@androidx.annotation.OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
