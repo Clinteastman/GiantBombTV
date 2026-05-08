@@ -173,10 +173,27 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             // subclass, so the cast is required (super returns Presenter.ViewHolder
             // at compile time but the runtime type matches).
             val vh = super.onCreateViewHolder(parent) as RowHeaderPresenter.ViewHolder
+            vh.view.isClickable = true
             vh.view.isLongClickable = true
+            // Touchscreen / mouse path.
             vh.view.setOnLongClickListener { v ->
                 val tag = v.tag
                 if (tag is HeaderItem) onLongClick(v, tag) else false
+            }
+            // TV remote path. Leanback's HeadersFragment intercepts D-pad
+            // navigation, so setOnLongClickListener doesn't always fire from a
+            // held D-pad-centre. KEYCODE_DPAD_CENTER + isLongPress is the
+            // reliable trigger on Android TV.
+            vh.view.setOnKeyListener { v, keyCode, event ->
+                val isCentre = keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                    keyCode == KeyEvent.KEYCODE_ENTER
+                if (isCentre && event.action == KeyEvent.ACTION_DOWN && event.isLongPress) {
+                    val tag = v.tag
+                    if (tag is HeaderItem) {
+                        onLongClick(v, tag)
+                        true
+                    } else false
+                } else false
             }
             return vh
         }
