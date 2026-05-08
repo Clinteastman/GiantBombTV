@@ -82,6 +82,10 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     // Sealed class representing different row types in the feed
     sealed class BrowseItem {
         data class SectionHeader(val title: String, val showSeeAll: Boolean = false) : BrowseItem()
+        // Per-show header that knows which Show it represents — long-press toggles
+        // pinned state. Visually identical to SectionHeader, distinguished only
+        // because the toggle target needs the Show object at click time.
+        data class ShowSectionHeader(val show: Show, val pinned: Boolean) : BrowseItem()
         data class HorizontalVideoRow(val videos: List<Video>) : BrowseItem()
         data class HorizontalShowRow(val shows: List<Show>) : BrowseItem()
         data class VerticalVideo(val video: Video) : BrowseItem()
@@ -344,7 +348,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                         PrefsManager.SECTION_PINNED -> renderPinnedShowsSection(items, shows, pinnedIds)
                         PrefsManager.SECTION_ACTIVE_SHOWS -> renderActiveShowsSection(items, shows, pinnedIds)
                         PrefsManager.SECTION_PREMIUM -> renderPremiumSection(items, recentVideos)
-                        PrefsManager.SECTION_LEGACY -> renderLegacyShowsSection(items, shows)
+                        PrefsManager.SECTION_LEGACY -> renderLegacyShowsSection(items, shows, pinnedIds)
                         PrefsManager.SECTION_SETTINGS -> renderSettingsSection(items)
                         else -> false
                     }
@@ -447,7 +451,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         val pinnedShows = pinnedIds.mapNotNull { byId[it] }
         if (pinnedShows.isEmpty()) return false
         for (s in pinnedShows) {
-            items.add(BrowseItem.SectionHeader(s.title))
+            items.add(BrowseItem.ShowSectionHeader(s, pinned = true))
             items.add(BrowseItem.LazyShowRow(s))
         }
         return true
@@ -463,7 +467,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         val nonPinnedActive = shows.filter { it.active && it.id !in pinnedSet }
         if (nonPinnedActive.isEmpty()) return false
         for (s in nonPinnedActive) {
-            items.add(BrowseItem.SectionHeader(s.title))
+            items.add(BrowseItem.ShowSectionHeader(s, pinned = false))
             items.add(BrowseItem.LazyShowRow(s))
         }
         return true
@@ -483,10 +487,14 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
 
     private fun renderLegacyShowsSection(
         items: MutableList<BrowseItem>,
-        shows: List<Show>?
+        shows: List<Show>?,
+        pinnedIds: List<Int>
     ): Boolean {
         if (shows == null) return false
-        val legacy = shows.filter { !it.active }
+        val pinnedSet = pinnedIds.toSet()
+        // Legacy shows the user has pinned bubble up to the Pinned section, so
+        // exclude them here to avoid duplicate cards.
+        val legacy = shows.filter { !it.active && it.id !in pinnedSet }
         if (legacy.isEmpty()) return false
         items.add(BrowseItem.SectionHeader("Legacy Shows"))
         items.add(BrowseItem.HorizontalShowRow(legacy))
@@ -675,9 +683,11 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         val TYPE_SETTING = 4
         val TYPE_UPCOMING_ROW = 5
         val TYPE_LAZY_SHOW_ROW = 6
+        val TYPE_SHOW_SECTION_HEADER = 7
 
         override fun getItemViewType(position: Int): Int = when (browseItems[position]) {
             is BrowseItem.SectionHeader -> TYPE_SECTION_HEADER
+            is BrowseItem.ShowSectionHeader -> TYPE_SHOW_SECTION_HEADER
             is BrowseItem.HorizontalVideoRow -> TYPE_HORIZONTAL_VIDEO_ROW
             is BrowseItem.HorizontalShowRow -> TYPE_HORIZONTAL_SHOW_ROW
             is BrowseItem.VerticalVideo -> TYPE_VERTICAL_VIDEO
@@ -692,6 +702,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             val inflater = LayoutInflater.from(parent.context)
             return when (viewType) {
                 TYPE_SECTION_HEADER -> SectionHeaderVH(inflater.inflate(R.layout.item_section_header, parent, false))
+                TYPE_SHOW_SECTION_HEADER -> ShowSectionHeaderVH(inflater.inflate(R.layout.item_section_header, parent, false))
                 TYPE_HORIZONTAL_VIDEO_ROW -> HorizontalVideoRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
                 TYPE_HORIZONTAL_SHOW_ROW -> HorizontalShowRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
                 TYPE_VERTICAL_VIDEO -> VerticalVideoVH(inflater.inflate(R.layout.item_mobile_video, parent, false))
@@ -705,6 +716,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
             when (val item = browseItems[position]) {
                 is BrowseItem.SectionHeader -> (holder as SectionHeaderVH).bind(item)
+                is BrowseItem.ShowSectionHeader -> (holder as ShowSectionHeaderVH).bind(item)
                 is BrowseItem.HorizontalVideoRow -> (holder as HorizontalVideoRowVH).bind(item)
                 is BrowseItem.HorizontalShowRow -> (holder as HorizontalShowRowVH).bind(item)
                 is BrowseItem.VerticalVideo -> (holder as VerticalVideoVH).bind(item)
@@ -726,7 +738,32 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         fun bind(item: BrowseItem.SectionHeader) {
             title.text = item.title
             seeAll.visibility = if (item.showSeeAll) View.VISIBLE else View.GONE
+            itemView.setOnLongClickListener(null)
         }
+    }
+
+    private inner class ShowSectionHeaderVH(view: View) : RecyclerView.ViewHolder(view) {
+        private val title: TextView = view.findViewById(R.id.section_title)
+        private val seeAll: TextView = view.findViewById(R.id.section_see_all)
+
+        fun bind(item: BrowseItem.ShowSectionHeader) {
+            // Star prefix communicates pin state without an extra icon view.
+            title.text = if (item.pinned) "★ ${item.show.title}" else item.show.title
+            seeAll.visibility = View.GONE
+            itemView.setOnLongClickListener {
+                togglePin(item.show)
+                true
+            }
+        }
+    }
+
+    private fun togglePin(show: Show) {
+        val nowPinned = prefs.togglePinnedShow(show.id)
+        val msg = if (nowPinned) "Pinned: ${show.title}" else "Unpinned: ${show.title}"
+        if (isAdded) Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+        // Re-render so the show jumps in/out of the Pinned section. Cheap enough
+        // — pin is a low-frequency action.
+        loadContent()
     }
 
     private inner class VerticalVideoVH(view: View) : RecyclerView.ViewHolder(view) {
@@ -1038,6 +1075,10 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     putExtra(ShowActivity.EXTRA_SHOW, show)
                 }
                 startActivity(intent)
+            }
+            holder.itemView.setOnLongClickListener {
+                togglePin(show)
+                true
             }
         }
     }
