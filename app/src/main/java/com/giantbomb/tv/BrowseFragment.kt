@@ -312,63 +312,25 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 return if (fallback != null) copy(thumbnailUrl = fallback, isFallbackThumb = true) else this
             }
 
-            // Upcoming & Live
+            // Resolve all the deferred fetches so the section dispatcher below
+            // sees plain values (the lazy-load show pagination is set up inside
+            // the relevant render block).
             val upcomingResult = upcomingDeferred.await().getOrNull()
-            if (upcomingResult != null) {
-                val hasContent = upcomingResult.liveNow != null || upcomingResult.upcoming.isNotEmpty()
-                if (hasContent) {
-                    val headerTitle = if (upcomingResult.liveNow != null) "\uD83D\uDD34 Upcoming & Live" else "Upcoming"
-                    val adapter = ArrayObjectAdapter(UpcomingCardPresenter())
-                    // Live item first
-                    if (upcomingResult.liveNow != null) {
-                        adapter.add(upcomingResult.liveNow)
-                    }
-                    upcomingResult.upcoming.forEach { adapter.add(it) }
-                    upcomingRowIndex = rowsAdapter.size()
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, headerTitle),
-                        adapter
-                    ))
-                    upcomingRowAdapter = adapter
-                    upcomingHasLive = upcomingResult.liveNow != null
-                }
+            val recent = recentDeferred.await()
+            recent.onFailure { e ->
+                Toast.makeText(requireContext(),
+                    GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
             }
+            val recentVideosRaw = recent.getOrNull()
 
-            // Continue Watching
             var progressMap = emptyMap<Int, ProgressEntry>()
             if (key.isNotEmpty()) {
                 val progress = progressDeferred.await().getOrNull()
                 if (progress != null && progress.isNotEmpty()) {
                     progressMap = progress.associateBy { it.videoId }
-                    val inProgressEntries = progress
-                        .filter { it.percentComplete in 1..94 }
-                        .sortedByDescending { it.currentTime }
-                        .take(20)
-
-                    val inProgressIds = inProgressEntries.map { it.videoId }.toSet()
-
-                    if (inProgressIds.isNotEmpty()) {
-                        val recentVideos = recentDeferred.await().getOrNull()
-                        val continueVideos = recentVideos?.filter { it.id in inProgressIds }
-                            ?.map { video ->
-                                val entry = progressMap[video.id]
-                                val v = if (entry != null) video.copy(progressPercent = entry.percentComplete) else video
-                                v.withFallbackThumb()
-                            }
-
-                        if (continueVideos != null && continueVideos.isNotEmpty()) {
-                            val continueAdapter = ArrayObjectAdapter(CardPresenter())
-                            continueVideos.forEach { continueAdapter.add(it) }
-                            rowsAdapter.add(ListRow(
-                                HeaderItem(headerIdCounter++, getString(R.string.continue_watching)),
-                                continueAdapter
-                            ))
-                        }
-                    }
                 }
             }
 
-            // Helper to apply progress + watched status + fallback thumb to any video
             fun Video.withProgress(): Video {
                 val entry = progressMap[id]
                 val v = when {
@@ -379,132 +341,202 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 return v.withFallbackThumb()
             }
 
-            // Recent videos
-            val recent = recentDeferred.await()
-            recent.onSuccess { videos ->
-                if (videos.isNotEmpty()) {
-                    val recentAdapter = ArrayObjectAdapter(CardPresenter())
-                    videos.forEach { recentAdapter.add(it.withProgress()) }
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, getString(R.string.recent)),
-                        recentAdapter
-                    ))
-                }
+            val recentVideos = recentVideosRaw?.map { it.withProgress() }
+            val watchlist = if (key.isNotEmpty()) {
+                watchlistDeferred.await().getOrNull()?.map { it.withProgress() }
+            } else null
 
-                // Premium row right after Recent
-                val premiumVideos = videos.filter { it.premium }
-                if (premiumVideos.size >= 2) {
-                    val premiumAdapter = ArrayObjectAdapter(CardPresenter())
-                    premiumVideos.forEach { premiumAdapter.add(it.withProgress()) }
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, "Premium"),
-                        premiumAdapter
-                    ))
-                }
-            }
+            val pinnedIds = prefs.getPinnedShowIds()
+            val hidden = prefs.getHiddenSections()
 
-            recent.onFailure { e ->
-                Toast.makeText(requireContext(),
-                    GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
-            }
-
-            // Per-show video rows - lazy loaded on focus
+            // Show pagination map drives lazy-loading of per-show video rows on
+            // focus. Reset before each render so the new ListRows own their
+            // adapters.
             rowPaginationMap.clear()
-            if (shows != null && shows.isNotEmpty()) {
-                val activeShows = shows.filter { it.active }
 
-                // Browse Shows card row
-                val showsAdapter = ArrayObjectAdapter(ShowCardPresenter())
-                activeShows.forEach { showsAdapter.add(it) }
-                if (showsAdapter.size() > 0) {
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, "All Shows"),
-                        showsAdapter
-                    ))
-                }
-
-                // Empty show rows - videos load when the row is focused
-                for (s in activeShows) {
-                    val listRowAdapter = ArrayObjectAdapter(CardPresenter())
-                    val rowTitle = s.title
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, rowTitle),
-                        listRowAdapter
-                    ))
-                    rowPaginationMap[rowTitle] = RowPagination(
-                        showTitle = s.title,
-                        showId = s.id,
-                        adapter = listRowAdapter,
-                        offset = 0,
-                        hasMore = true
-                    )
-                }
-
-                // Past shows card row
-                val inactiveShows = shows.filter { !it.active }
-                if (inactiveShows.isNotEmpty()) {
-                    val inactiveAdapter = ArrayObjectAdapter(ShowCardPresenter())
-                    inactiveShows.forEach { inactiveAdapter.add(it) }
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, "Past Shows"),
-                        inactiveAdapter
-                    ))
+            // Render sections in user-defined order, mirroring the mobile
+            // section model. The TV-specific bits:
+            //   - the chip bar's job is done by Leanback's headers fragment;
+            //   - SECTION_ACTIVE_SHOWS prepends a "Browse Shows" grid row so
+            //     users have a place to long-press D-pad-centre on a show
+            //     card to pin / unpin it.
+            for (sectionId in prefs.getSectionOrder()) {
+                if (sectionId in hidden) continue
+                when (sectionId) {
+                    PrefsManager.SECTION_LIVE -> {
+                        if (upcomingResult != null) {
+                            val hasContent = upcomingResult.liveNow != null || upcomingResult.upcoming.isNotEmpty()
+                            if (hasContent) {
+                                val headerTitle = if (upcomingResult.liveNow != null) "\uD83D\uDD34 Upcoming & Live" else "Upcoming"
+                                val adapter = ArrayObjectAdapter(UpcomingCardPresenter())
+                                if (upcomingResult.liveNow != null) adapter.add(upcomingResult.liveNow)
+                                upcomingResult.upcoming.forEach { adapter.add(it) }
+                                upcomingRowIndex = rowsAdapter.size()
+                                rowsAdapter.add(ListRow(
+                                    HeaderItem(headerIdCounter++, headerTitle),
+                                    adapter
+                                ))
+                                upcomingRowAdapter = adapter
+                                upcomingHasLive = upcomingResult.liveNow != null
+                            }
+                        }
+                    }
+                    PrefsManager.SECTION_CONTINUE -> {
+                        if (key.isNotEmpty() && progressMap.isNotEmpty() && recentVideos != null) {
+                            val inProgressIds = progressMap.values
+                                .filter { it.percentComplete in 1..94 }
+                                .sortedByDescending { it.currentTime }
+                                .take(20)
+                                .map { it.videoId }
+                                .toSet()
+                            val continueVideos = recentVideos.filter { it.id in inProgressIds }
+                            if (continueVideos.isNotEmpty()) {
+                                val continueAdapter = ArrayObjectAdapter(CardPresenter())
+                                continueVideos.forEach { continueAdapter.add(it) }
+                                rowsAdapter.add(ListRow(
+                                    HeaderItem(headerIdCounter++, getString(R.string.continue_watching)),
+                                    continueAdapter
+                                ))
+                            }
+                        }
+                    }
+                    PrefsManager.SECTION_WATCHLIST -> {
+                        if (!watchlist.isNullOrEmpty()) {
+                            val wlAdapter = ArrayObjectAdapter(CardPresenter())
+                            watchlist.forEach { wlAdapter.add(it) }
+                            rowsAdapter.add(ListRow(
+                                HeaderItem(headerIdCounter++, "My Watchlist"),
+                                wlAdapter
+                            ))
+                        }
+                    }
+                    PrefsManager.SECTION_RECENT -> {
+                        if (!recentVideos.isNullOrEmpty()) {
+                            val recentAdapter = ArrayObjectAdapter(CardPresenter())
+                            recentVideos.forEach { recentAdapter.add(it) }
+                            rowsAdapter.add(ListRow(
+                                HeaderItem(headerIdCounter++, getString(R.string.recent)),
+                                recentAdapter
+                            ))
+                        }
+                    }
+                    PrefsManager.SECTION_PINNED -> {
+                        if (shows != null && pinnedIds.isNotEmpty()) {
+                            val byId = shows.associateBy { it.id }
+                            val pinnedShows = pinnedIds.mapNotNull { byId[it] }
+                            for (s in pinnedShows) {
+                                val listRowAdapter = ArrayObjectAdapter(CardPresenter())
+                                val rowTitle = "\u2605 ${s.title}"
+                                rowsAdapter.add(ListRow(
+                                    HeaderItem(headerIdCounter++, rowTitle),
+                                    listRowAdapter
+                                ))
+                                rowPaginationMap[rowTitle] = RowPagination(
+                                    showTitle = s.title,
+                                    showId = s.id,
+                                    adapter = listRowAdapter,
+                                    offset = 0,
+                                    hasMore = true
+                                )
+                            }
+                        }
+                    }
+                    PrefsManager.SECTION_ACTIVE_SHOWS -> {
+                        if (shows != null) {
+                            val pinnedSet = pinnedIds.toSet()
+                            val activeNonPinned = shows.filter { it.active && it.id !in pinnedSet }
+                            if (activeNonPinned.isNotEmpty()) {
+                                // Browse Shows grid \u2014 the discovery surface for
+                                // pin/unpin via D-pad-centre long-press.
+                                val showsAdapter = ArrayObjectAdapter(
+                                    ShowCardPresenter(onLongClick = { togglePin(it) })
+                                )
+                                activeNonPinned.forEach { showsAdapter.add(it) }
+                                rowsAdapter.add(ListRow(
+                                    HeaderItem(headerIdCounter++, "Browse Shows"),
+                                    showsAdapter
+                                ))
+                                // Per-show rows \u2014 videos lazy-load on focus.
+                                for (s in activeNonPinned) {
+                                    val listRowAdapter = ArrayObjectAdapter(CardPresenter())
+                                    val rowTitle = s.title
+                                    rowsAdapter.add(ListRow(
+                                        HeaderItem(headerIdCounter++, rowTitle),
+                                        listRowAdapter
+                                    ))
+                                    rowPaginationMap[rowTitle] = RowPagination(
+                                        showTitle = s.title,
+                                        showId = s.id,
+                                        adapter = listRowAdapter,
+                                        offset = 0,
+                                        hasMore = true
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    PrefsManager.SECTION_PREMIUM -> {
+                        if (recentVideos != null) {
+                            val premiumVideos = recentVideos.filter { it.premium }
+                            if (premiumVideos.size >= 2) {
+                                val premiumAdapter = ArrayObjectAdapter(CardPresenter())
+                                premiumVideos.forEach { premiumAdapter.add(it) }
+                                rowsAdapter.add(ListRow(
+                                    HeaderItem(headerIdCounter++, "Premium"),
+                                    premiumAdapter
+                                ))
+                            }
+                        }
+                    }
+                    PrefsManager.SECTION_LEGACY -> {
+                        if (shows != null) {
+                            val pinnedSet = pinnedIds.toSet()
+                            val legacy = shows.filter { !it.active && it.id !in pinnedSet }
+                            if (legacy.isNotEmpty()) {
+                                val legacyAdapter = ArrayObjectAdapter(
+                                    ShowCardPresenter(onLongClick = { togglePin(it) })
+                                )
+                                legacy.forEach { legacyAdapter.add(it) }
+                                rowsAdapter.add(ListRow(
+                                    HeaderItem(headerIdCounter++, "Legacy Shows"),
+                                    legacyAdapter
+                                ))
+                            }
+                        }
+                    }
+                    PrefsManager.SECTION_SETTINGS -> {
+                        val utilAdapter = ArrayObjectAdapter(SettingsCardPresenter())
+                        utilAdapter.add(SettingsItem(
+                            SETTINGS_REFRESH,
+                            getString(R.string.settings_refresh),
+                            getString(R.string.settings_refresh_desc),
+                            R.drawable.ic_settings_refresh
+                        ))
+                        utilAdapter.add(SettingsItem(
+                            SETTINGS_QUALITY,
+                            "Stream Quality",
+                            "Default: ${PrefsManager.qualityLabel(prefs.preferredQuality)}",
+                            R.drawable.ic_settings_quality
+                        ))
+                        utilAdapter.add(SettingsItem(
+                            SETTINGS_SETUP,
+                            getString(R.string.settings_setup),
+                            getString(R.string.settings_setup_desc),
+                            R.drawable.ic_settings_cog
+                        ))
+                        utilAdapter.add(SettingsItem(
+                            SETTINGS_PRIVACY,
+                            "Privacy Policy",
+                            "View privacy policy",
+                            R.drawable.ic_settings_about
+                        ))
+                        rowsAdapter.add(ListRow(
+                            HeaderItem(headerIdCounter++, getString(R.string.settings)),
+                            utilAdapter
+                        ))
+                    }
                 }
             }
-
-            // Watchlist
-            val watchlist = if (key.isNotEmpty()) watchlistDeferred.await().getOrNull() else null
-            if (watchlist != null && watchlist.isNotEmpty()) {
-                val wlAdapter = ArrayObjectAdapter(CardPresenter())
-                watchlist.forEach { wlAdapter.add(it.withProgress()) }
-                rowsAdapter.add(ListRow(
-                    HeaderItem(headerIdCounter++, "My Watchlist"),
-                    wlAdapter
-                ))
-            }
-
-            // Free Videos row
-            recent.onSuccess { videos ->
-                val freeVideos = videos.filter { !it.premium }
-                if (freeVideos.size >= 2) {
-                    val freeAdapter = ArrayObjectAdapter(CardPresenter())
-                    freeVideos.forEach { freeAdapter.add(it.withProgress()) }
-                    rowsAdapter.add(ListRow(
-                        HeaderItem(headerIdCounter++, "Free Videos"),
-                        freeAdapter
-                    ))
-                }
-            }
-
-            val utilAdapter = ArrayObjectAdapter(SettingsCardPresenter())
-            utilAdapter.add(SettingsItem(
-                SETTINGS_REFRESH,
-                getString(R.string.settings_refresh),
-                getString(R.string.settings_refresh_desc),
-                R.drawable.ic_settings_refresh
-            ))
-            utilAdapter.add(SettingsItem(
-                SETTINGS_QUALITY,
-                "Stream Quality",
-                "Default: ${PrefsManager.qualityLabel(prefs.preferredQuality)}",
-                R.drawable.ic_settings_quality
-            ))
-            utilAdapter.add(SettingsItem(
-                SETTINGS_SETUP,
-                getString(R.string.settings_setup),
-                getString(R.string.settings_setup_desc),
-                R.drawable.ic_settings_cog
-            ))
-            utilAdapter.add(SettingsItem(
-                SETTINGS_PRIVACY,
-                "Privacy Policy",
-                "View privacy policy",
-                R.drawable.ic_settings_about
-            ))
-            rowsAdapter.add(ListRow(
-                HeaderItem(headerIdCounter, getString(R.string.settings)),
-                utilAdapter
-            ))
 
             // Set adapter last so show rows (appended lazily as they load) are present.
             adapter = rowsAdapter
@@ -644,6 +676,21 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 pagination.isLoading = false
             }
         }
+    }
+
+    /**
+     * Pin or unpin a show from the TV side. Triggered by long-press
+     * (D-pad-centre held) on a show card in either the Browse Shows
+     * grid or the Legacy Shows grid. Reloads the rows so the show
+     * jumps in/out of its dedicated Pinned section.
+     */
+    private fun togglePin(show: Show) {
+        val nowPinned = prefs.togglePinnedShow(show.id)
+        if (isAdded) {
+            val msg = if (nowPinned) "Pinned: ${show.title}" else "Unpinned: ${show.title}"
+            Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+        }
+        loadContent()
     }
 
     private fun launchTwitchStream(title: String) {
