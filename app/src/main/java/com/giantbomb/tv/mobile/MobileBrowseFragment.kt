@@ -73,6 +73,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         private const val SETTINGS_SETUP = 3
         private const val SETTINGS_QUALITY = 4
         private const val SETTINGS_PRIVACY = 5
+        private const val SETTINGS_CUSTOMIZE = 6
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
         private const val RECENT_VERTICAL_COUNT = 5
@@ -504,6 +505,12 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     private fun renderSettingsSection(items: MutableList<BrowseItem>): Boolean {
         items.add(BrowseItem.SectionHeader(getString(R.string.settings)))
         items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_CUSTOMIZE,
+            "Customize Browse",
+            "Reorder or hide browse sections",
+            R.drawable.ic_settings_cog
+        )))
+        items.add(BrowseItem.SettingRow(SettingsItem(
             SETTINGS_REFRESH,
             getString(R.string.settings_refresh),
             getString(R.string.settings_refresh_desc),
@@ -916,9 +923,14 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     SETTINGS_SETUP -> launchSetup()
                     SETTINGS_QUALITY -> cycleQuality()
                     SETTINGS_PRIVACY -> openPrivacyPolicy()
+                    SETTINGS_CUSTOMIZE -> launchCustomizeBrowse()
                 }
             }
         }
+    }
+
+    private fun launchCustomizeBrowse() {
+        startActivity(Intent(requireContext(), CustomizeBrowseActivity::class.java))
     }
 
     private inner class UpcomingRowVH(view: View) : RecyclerView.ViewHolder(view) {

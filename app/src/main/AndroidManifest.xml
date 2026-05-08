@@ -67,6 +67,11 @@
             android:exported="false" />
 
         <activity
+            android:name=".CustomizeBrowseActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize" />
+
+        <activity
             android:name=".DetailActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize" />
