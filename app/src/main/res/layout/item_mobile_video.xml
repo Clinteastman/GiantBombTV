@@ -54,12 +54,13 @@
             android:visibility="gone"
             tools:visibility="visible" />
 
-        <!-- Duration badge -->
+        <!-- Duration badge — bottom-start so it shares the bottom edge with
+             the watchlist toggle (bottom-end) without overlap. -->
         <TextView
             android:id="@+id/video_duration"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom|end"
+            android:layout_gravity="bottom|start"
             android:layout_margin="8dp"
             android:paddingStart="4dp"
             android:paddingEnd="4dp"
@@ -89,14 +90,14 @@
             android:background="@color/gb_red"
             android:visibility="gone" />
 
-        <!-- Watchlist toggle: tap to add/remove. Bottom-start so it sits
-             clear of the watched/premium/duration corners and above the
-             progress bar. Background + glyph set in code per state. -->
+        <!-- Watchlist toggle: tap to add/remove. Bottom-end with duration
+             on bottom-start so they don't overlap. Background + glyph set
+             in code per state. -->
         <TextView
             android:id="@+id/video_watchlist_btn"
             android:layout_width="36dp"
             android:layout_height="36dp"
-            android:layout_gravity="bottom|start"
+            android:layout_gravity="bottom|end"
             android:layout_margin="8dp"
             android:gravity="center"
             android:textColor="@color/gb_white"

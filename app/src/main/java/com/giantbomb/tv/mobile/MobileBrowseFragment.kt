@@ -63,6 +63,15 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     // bookmark overlay's filled/outlined state. Refreshed at every loadContent
     // and mutated optimistically when the user taps the bookmark button.
     private var watchlistIds: MutableSet<Int> = mutableSetOf()
+    // Materialised watchlist videos, kept in sync with watchlistIds so the
+    // Watchlist row can be rebuilt in place after a toggle without a full
+    // loadContent.
+    private var watchlistVideos: MutableList<Video> = mutableListOf()
+    // Indices of the watchlist header / content row in browseItems, captured
+    // at the end of loadContent. -1 if the watchlist section isn't rendered
+    // (hidden, or section order put it somewhere we can't find).
+    private var watchlistHeaderItemIndex: Int = -1
+    private var watchlistContentItemIndex: Int = -1
 
     // Upcoming/Live row tracked separately so we can refresh just that row
     // (and its header) every minute without rebuilding the whole grid.
@@ -362,6 +371,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     watchlistDeferred.await().getOrNull()?.map { it.withProgress() }
                 } else null
                 watchlistIds = watchlist?.map { it.id }?.toMutableSet() ?: mutableSetOf()
+                watchlistVideos = watchlist?.toMutableList() ?: mutableListOf()
 
                 val pinnedIds = prefs.getPinnedShowIds()
                 val hidden = prefs.getHiddenSections()
@@ -395,6 +405,13 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 indices[PrefsManager.SECTION_LIVE]?.let { liveStart ->
                     upcomingHeaderItemIndex = liveStart
                     upcomingRowItemIndex = liveStart + 1
+                }
+                indices[PrefsManager.SECTION_WATCHLIST]?.let { wlStart ->
+                    watchlistHeaderItemIndex = wlStart
+                    watchlistContentItemIndex = wlStart + 1
+                } ?: run {
+                    watchlistHeaderItemIndex = -1
+                    watchlistContentItemIndex = -1
                 }
 
                 browseItems.clear()
@@ -965,8 +982,18 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             // Optimistic flip — animate immediately, revert on API failure.
             v.isClickable = false
             val nowOn = video.id !in watchlistIds
-            if (nowOn) watchlistIds.add(video.id) else watchlistIds.remove(video.id)
+            if (nowOn) {
+                watchlistIds.add(video.id)
+                // Add to the local watchlist (newest first matches the API).
+                if (watchlistVideos.none { it.id == video.id }) {
+                    watchlistVideos.add(0, video)
+                }
+            } else {
+                watchlistIds.remove(video.id)
+                watchlistVideos.removeAll { it.id == video.id }
+            }
             bindWatchlistButton(btn, video)
+            refreshWatchlistRow()
             launch {
                 val api = api ?: GiantBombApi(prefs.apiKey ?: "")
                 val result = if (nowOn) api.addToWatchlist(video.id) else api.removeFromWatchlist(video.id)
@@ -981,9 +1008,18 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     }
                 }
                 result.onFailure {
-                    // Revert
-                    if (nowOn) watchlistIds.remove(video.id) else watchlistIds.add(video.id)
+                    // Revert local state and re-render.
+                    if (nowOn) {
+                        watchlistIds.remove(video.id)
+                        watchlistVideos.removeAll { it.id == video.id }
+                    } else {
+                        watchlistIds.add(video.id)
+                        if (watchlistVideos.none { it.id == video.id }) {
+                            watchlistVideos.add(0, video)
+                        }
+                    }
                     bindWatchlistButton(btn, video)
+                    refreshWatchlistRow()
                     if (isAdded) {
                         Toast.makeText(
                             requireContext(),
@@ -994,6 +1030,26 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 }
             }
         }
+    }
+
+    /**
+     * Replaces the Watchlist content row in browseItems based on watchlistVideos
+     * and notifies the adapter, so the row redraws without a full loadContent.
+     * Handles the empty ↔ non-empty transition by swapping between
+     * EmptyStateRow and HorizontalVideoRow at the same row index.
+     */
+    private fun refreshWatchlistRow() {
+        val rowIdx = watchlistContentItemIndex
+        if (rowIdx !in browseItems.indices) return
+        val newRow: BrowseItem = if (watchlistVideos.isEmpty()) {
+            BrowseItem.EmptyStateRow(
+                "Your watchlist is empty. Tap the + on any video to save it for later."
+            )
+        } else {
+            BrowseItem.HorizontalVideoRow(watchlistVideos.toList())
+        }
+        browseItems[rowIdx] = newRow
+        browseAdapter.notifyItemChanged(rowIdx)
     }
 
     private fun togglePin(show: Show) {
