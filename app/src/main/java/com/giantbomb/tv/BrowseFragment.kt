@@ -587,14 +587,23 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                     PrefsManager.SECTION_ACTIVE_SHOWS -> {
                         if (shows != null) {
                             val pinnedSet = pinnedIds.toSet()
-                            val activeNonPinned = shows.filter { it.active && it.id !in pinnedSet }
-                            if (activeNonPinned.isNotEmpty()) {
+                            val activeShows = shows.filter { it.active }
+                            // Pinned shows appear FIRST in the grid (in pin
+                            // order) with their \u2605 prefix from ShowCardPresenter,
+                            // so users can long-press the same card to unpin
+                            // even after pinning. Non-pinned active shows
+                            // follow.
+                            val byId = activeShows.associateBy { it.id }
+                            val pinnedActive = pinnedIds.mapNotNull { byId[it] }
+                            val activeNonPinned = activeShows.filter { it.id !in pinnedSet }
+                            val gridShows = pinnedActive + activeNonPinned
+                            if (gridShows.isNotEmpty()) {
                                 // Browse Shows grid \u2014 the discovery surface for
                                 // pin/unpin via D-pad-centre long-press.
                                 val showsAdapter = ArrayObjectAdapter(
                                     ShowCardPresenter(onLongClick = { togglePin(it) })
                                 )
-                                activeNonPinned.forEach { showsAdapter.add(it) }
+                                gridShows.forEach { showsAdapter.add(it) }
                                 val browseHid = headerIdCounter++
                                 headerContexts[browseHid] = HeaderContext.Section(PrefsManager.SECTION_ACTIVE_SHOWS)
                                 rowsAdapter.add(ListRow(
@@ -644,12 +653,19 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                     PrefsManager.SECTION_LEGACY -> {
                         if (shows != null) {
                             val pinnedSet = pinnedIds.toSet()
-                            val legacy = shows.filter { !it.active && it.id !in pinnedSet }
-                            if (legacy.isNotEmpty()) {
+                            val legacyShows = shows.filter { !it.active }
+                            // Same treatment as Browse Shows: pinned legacy
+                            // shows stay visible (with ★ prefix) so long-press
+                            // can unpin them from the same card.
+                            val byId = legacyShows.associateBy { it.id }
+                            val pinnedLegacy = pinnedIds.mapNotNull { byId[it] }
+                            val legacyNonPinned = legacyShows.filter { it.id !in pinnedSet }
+                            val gridShows = pinnedLegacy + legacyNonPinned
+                            if (gridShows.isNotEmpty()) {
                                 val legacyAdapter = ArrayObjectAdapter(
                                     ShowCardPresenter(onLongClick = { togglePin(it) })
                                 )
-                                legacy.forEach { legacyAdapter.add(it) }
+                                gridShows.forEach { legacyAdapter.add(it) }
                                 val hid = headerIdCounter++
                                 headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_LEGACY)
                                 rowsAdapter.add(ListRow(
