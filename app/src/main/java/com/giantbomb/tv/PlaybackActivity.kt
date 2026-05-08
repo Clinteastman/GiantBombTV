@@ -584,15 +584,22 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     override fun onStop() {
         super.onStop()
-        // The service keeps the player alive (and a foreground notification)
-        // so playback continues when the activity is backgrounded, in PiP, or
-        // after the user closes the app. Progress + markWatched are saved
+        val explicitlyFinishing = isFinishing
+        // While the activity is just backgrounded (Home press, PiP visible),
+        // the service keeps the player alive and the foreground notification
+        // shows transport controls. Progress + markWatched are saved
         // service-side via Player.Listener — nothing for us to flush here.
         disconnectController()
         // Cast session lives on the receiver regardless of this CastPlayer
         // instance, so releasing is safe.
         releaseCastPlayer()
         enteredPip = false
+        if (explicitlyFinishing) {
+            // The user dismissed the player UI on purpose — PiP X, PiP swipe-away,
+            // or Back when PiP couldn't engage. Stop the service so audio doesn't
+            // keep playing with no obvious way to silence it.
+            stopService(Intent(this, PlaybackService::class.java))
+        }
     }
 
     private fun initializeCastPlayer() {
