@@ -54,6 +54,7 @@ import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Video
+import com.giantbomb.tv.util.DateFormat
 import com.giantbomb.tv.util.DeviceUtil
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
@@ -346,7 +347,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val metaView = TextView(this).apply {
             val parts = mutableListOf<String>()
             if (!v.showTitle.isNullOrEmpty()) parts.add(v.showTitle)
-            if (v.publishDate.isNotEmpty()) parts.add(v.publishDate.take(10))
+            if (v.publishDate.isNotEmpty()) parts.add(DateFormat.formatPublishDate(v.publishDate))
             if (!v.author.isNullOrEmpty()) parts.add(v.author)
             text = parts.joinToString("  \u2022  ")
             textSize = 13f
@@ -1202,7 +1203,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         override fun onBindViewHolder(holder: VH, position: Int) {
             val video = videos[position]
             holder.title.text = video.title
-            holder.meta.text = if (video.publishDate.isNotEmpty()) video.publishDate.take(10) else ""
+            holder.meta.text = if (video.publishDate.isNotEmpty()) DateFormat.formatPublishDate(video.publishDate) else ""
 
             if (!video.thumbnailUrl.isNullOrEmpty()) {
                 Glide.with(holder.thumbnail)

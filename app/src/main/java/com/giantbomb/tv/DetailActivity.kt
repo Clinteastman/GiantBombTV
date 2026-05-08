@@ -24,6 +24,7 @@ import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Video
+import com.giantbomb.tv.util.DateFormat
 import com.giantbomb.tv.util.DeviceUtil
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.*
@@ -192,7 +193,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // Meta
         val metaView = TextView(this).apply {
             val parts = mutableListOf<String>()
-            if (video.publishDate.isNotEmpty()) parts.add(video.publishDate.take(10))
+            if (video.publishDate.isNotEmpty()) parts.add(DateFormat.formatPublishDate(video.publishDate))
             if (!video.author.isNullOrEmpty()) parts.add(video.author)
             text = parts.joinToString("  \u2022  ")
             textSize = 15f
@@ -374,7 +375,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 val m = (totalSec % 3600) / 60
                 val durationStr = if (h > 0) "${h}h ${m}m" else "${m}m"
                 val parts = mutableListOf(durationStr)
-                if (video.publishDate.isNotEmpty()) parts.add(video.publishDate.take(10))
+                if (video.publishDate.isNotEmpty()) parts.add(DateFormat.formatPublishDate(video.publishDate))
                 if (!video.author.isNullOrEmpty()) parts.add(video.author)
                 metaView.text = parts.joinToString("  \u2022  ")
             }
