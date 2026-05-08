@@ -604,9 +604,13 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                                     showsAdapter
                                 ))
                                 // Per-show rows \u2014 videos lazy-load on focus.
+                                // Outlined \u2606 prefix mirrors mobile's pinnable
+                                // affordance: a quick visual signal that this
+                                // show can be pinned to the top via the
+                                // header's long-press menu.
                                 for (s in activeNonPinned) {
                                     val listRowAdapter = ArrayObjectAdapter(CardPresenter())
-                                    val rowTitle = s.title
+                                    val rowTitle = "\u2606 ${s.title}"
                                     val showHid = headerIdCounter++
                                     headerContexts[showHid] = HeaderContext.Show(s, pinned = false)
                                     rowsAdapter.add(ListRow(
