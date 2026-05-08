@@ -180,27 +180,41 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 val tag = v.tag
                 if (tag is HeaderItem) onLongClick(v, tag) else false
             }
-            // TV remote path. Leanback's HeadersFragment dispatches the regular
-            // click at ACTION_DOWN, so event.isLongPress on the synthesised
-            // second ACTION_DOWN never fires here. Instead, measure the held
-            // duration on ACTION_UP — if the centre key was held past the
-            // long-press threshold we fire the context menu and consume the
-            // event so the regular short-click flow (which dives into the row)
-            // doesn't also kick in.
+            // TV remote path. Leanback's HeadersFragment fires the regular
+            // click at ACTION_DOWN and may swallow ACTION_UP entirely, so
+            // duration-on-UP isn't reliable. Schedule a long-press runnable
+            // on ACTION_DOWN; if ACTION_UP arrives within the timeout we
+            // cancel it (regular click goes through). If the runnable runs,
+            // the user held the centre key — fire the menu.
+            val handler = Handler(Looper.getMainLooper())
+            var pendingLongPress: Runnable? = null
             vh.view.setOnKeyListener { v, keyCode, event ->
                 val isCentre = keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
                     keyCode == KeyEvent.KEYCODE_ENTER
-                if (isCentre && event.action == KeyEvent.ACTION_UP) {
-                    val held = event.eventTime - event.downTime
-                    if (held >= android.view.ViewConfiguration.getLongPressTimeout()) {
-                        val tag = v.tag
-                        if (tag is HeaderItem) {
-                            onLongClick(v, tag)
-                            return@setOnKeyListener true
+                if (!isCentre) return@setOnKeyListener false
+                when (event.action) {
+                    KeyEvent.ACTION_DOWN -> {
+                        if (event.repeatCount == 0 && pendingLongPress == null) {
+                            val r = Runnable {
+                                pendingLongPress = null
+                                val tag = v.tag
+                                if (tag is HeaderItem) onLongClick(v, tag)
+                            }
+                            pendingLongPress = r
+                            handler.postDelayed(
+                                r,
+                                android.view.ViewConfiguration.getLongPressTimeout().toLong()
+                            )
                         }
+                        false
                     }
+                    KeyEvent.ACTION_UP -> {
+                        pendingLongPress?.let { handler.removeCallbacks(it) }
+                        pendingLongPress = null
+                        false
+                    }
+                    else -> false
                 }
-                false
             }
             return vh
         }

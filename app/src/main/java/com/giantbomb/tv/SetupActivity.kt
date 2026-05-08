@@ -62,10 +62,21 @@ class SetupActivity : ComponentActivity(), CoroutineScope by MainScope() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = LayerDrawable(arrayOf(cardFill, cardBorder))
-            setPadding(dp(40), dp(30), dp(40), dp(30))
+            // Less vertical padding on TV — the card needs to stay above the
+            // on-screen keyboard, which covers the bottom ~40% of the screen
+            // on Android TV when the EditText is focused.
+            if (isTv) {
+                setPadding(dp(32), dp(20), dp(32), dp(20))
+            } else {
+                setPadding(dp(40), dp(30), dp(40), dp(30))
+            }
             layoutParams = if (isTv) {
-                FrameLayout.LayoutParams(dp(450), FrameLayout.LayoutParams.WRAP_CONTENT).apply {
-                    gravity = Gravity.CENTER
+                // Wider, top-anchored, with a small top margin so the card sits
+                // in the upper third of the screen and the keyboard doesn't
+                // overlap the input + buttons when focused.
+                FrameLayout.LayoutParams(dp(640), FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                    topMargin = dp(48)
                 }
             } else {
                 FrameLayout.LayoutParams(
@@ -99,9 +110,11 @@ class SetupActivity : ComponentActivity(), CoroutineScope by MainScope() {
             setImageResource(R.drawable.giant_bomb_logo)
             contentDescription = "Giant Bomb logo"
             adjustViewBounds = true
-            layoutParams = LinearLayout.LayoutParams(dp(220), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(16)
-            }
+            // Smaller logo on TV so the form fits above the on-screen keyboard.
+            layoutParams = LinearLayout.LayoutParams(
+                if (isTv) dp(140) else dp(220),
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = if (isTv) dp(8) else dp(16) }
         }
 
         val title = TextView(this).apply {
@@ -113,10 +126,16 @@ class SetupActivity : ComponentActivity(), CoroutineScope by MainScope() {
         }
 
         val instructions = TextView(this).apply {
-            text = "Find your API key on your Giant Bomb profile page.\n\nLog in at giantbomb.com, go to your profile, and copy the 40-character API key."
-            textSize = 16f
+            // Tighter copy on TV — the on-screen keyboard claims half the
+            // viewport, so we trade flavour text for vertical room.
+            text = if (isTv) {
+                "Get your API key from giantbomb.com — log in and visit your profile."
+            } else {
+                "Find your API key on your Giant Bomb profile page.\n\nLog in at giantbomb.com, go to your profile, and copy the 40-character API key."
+            }
+            textSize = if (isTv) 14f else 16f
             setTextColor(0xFFA0A0A0.toInt())
-            setPadding(0, 0, 0, dp(16))
+            setPadding(0, 0, 0, if (isTv) dp(10) else dp(16))
             setLineSpacing(0f, 1.3f)
         }
 
@@ -149,7 +168,13 @@ class SetupActivity : ComponentActivity(), CoroutineScope by MainScope() {
         }
 
         statusText = TextView(this).apply {
-            text = if (deepLinkKey != null) "Key imported from link. Press Connect to validate and save." else ""
+            text = when {
+                deepLinkKey != null ->
+                    "Key imported from link. Press Connect to validate and save."
+                !prefs.apiKey.isNullOrBlank() ->
+                    "Your API key is already saved. Press Connect to re-validate or replace."
+                else -> ""
+            }
             textSize = 14f
             setTextColor(0xFFA0A0A0.toInt())
             setPadding(0, 0, 0, dp(12))
