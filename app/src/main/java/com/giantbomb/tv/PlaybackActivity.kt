@@ -577,14 +577,29 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             playerView.useController = false
         } else {
             playerView.useController = true
-            // Only finish if the activity is being removed (user dismissed PiP),
-            // not when returning to fullscreen (user tapped PiP window)
+            // PiP→fullscreen on phones often leaves playerContainer at stale
+            // dimensions until something else triggers a re-layout (rotation
+            // works, but onConfigurationChanged isn't reliable across OEMs for
+            // a PiP exit). Re-apply the orientation-driven sizing here.
+            updateMobileOrientation(newConfig.orientation)
+            if (isFinishing) {
+                // Tap-X / swipe-away / drag-to-remove: dismisses PiP and finishes
+                // the activity. Stop the service here too — Samsung doesn't
+                // always fire onStop with isFinishing=true for the PiP-X path,
+                // so onStop alone is unreliable as a stop signal.
+                stopPlaybackService()
+            } else {
+                // Tapped the PiP tile to return to fullscreen — no stop wanted,
+                // and clear the flag so a later non-PiP onStop doesn't fire it.
+                enteredPip = false
+            }
         }
     }
 
     override fun onStop() {
         super.onStop()
         val explicitlyFinishing = isFinishing
+        val wasInPip = enteredPip
         // While the activity is just backgrounded (Home press, PiP visible),
         // the service keeps the player alive and the foreground notification
         // shows transport controls. Progress + markWatched are saved
@@ -594,12 +609,17 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // instance, so releasing is safe.
         releaseCastPlayer()
         enteredPip = false
-        if (explicitlyFinishing) {
+        if (explicitlyFinishing || wasInPip) {
             // The user dismissed the player UI on purpose — PiP X, PiP swipe-away,
-            // or Back when PiP couldn't engage. Stop the service so audio doesn't
-            // keep playing with no obvious way to silence it.
-            stopService(Intent(this, PlaybackService::class.java))
+            // drag-to-remove, or Back when PiP couldn't engage. Stop the service
+            // so audio doesn't keep playing with no obvious way to silence it.
+            // Idempotent: onPictureInPictureModeChanged may have already stopped it.
+            stopPlaybackService()
         }
+    }
+
+    private fun stopPlaybackService() {
+        stopService(Intent(this, PlaybackService::class.java))
     }
 
     private fun initializeCastPlayer() {
