@@ -65,6 +65,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     private var player: MediaController? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
+    // Single Player.Listener instance so we can remove on disconnect / re-attach.
+    // Avoids stacking duplicates on PiP-return paths through onControllerReady().
+    private var playbackListener: Player.Listener? = null
     private lateinit var playerView: PlayerView
     private lateinit var rootLayout: FrameLayout
     private lateinit var api: GiantBombApi
@@ -463,7 +466,16 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val future = MediaController.Builder(this, token).buildAsync()
         controllerFuture = future
         future.addListener({
-            if (future.isCancelled || !future.isDone) return@addListener
+            // Late-completion guard: if disconnectController() ran while we
+            // were waiting (controllerFuture cleared / replaced), don't
+            // resurrect the controller — release it and bail.
+            if (controllerFuture !== future) {
+                if (future.isDone && !future.isCancelled) {
+                    runCatching { future.get() }.getOrNull()?.release()
+                }
+                return@addListener
+            }
+            if (future.isCancelled) return@addListener
             try {
                 val c = future.get()
                 player = c
@@ -485,9 +497,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             v != null -> "vod:${v.id}"
             else -> null
         }
-        // Service is already playing the requested content: re-attach listeners only.
+        // Service is already playing the requested content: re-attach listener only.
+        // attachPlayerListener() removes any prior instance, so PiP-return paths
+        // don't stack duplicate listeners that would multi-fire on STATE_ENDED.
         if (desiredMediaId != null && c.currentMediaItem?.mediaId == desiredMediaId) {
-            if (v != null) attachPlayerListener(c, v)
+            if (v != null) attachPlayerListener(c)
             if (progressJob?.isActive != true) startProgressSaving()
             return
         }
@@ -719,7 +733,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     }
                 }
 
-                attachPlayerListener(p, v)
+                attachPlayerListener(p)
                 p.playWhenReady = true
                 startProgressSaving()
             }
@@ -797,7 +811,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val option = qualityOptions.getOrNull(index) ?: return
 
         val position = p.currentPosition
-        val wasPlaying = p.isPlaying
+        // playWhenReady captures user intent ("they want to be playing"),
+        // unlike isPlaying which is false during buffering — switching quality
+        // mid-buffer with isPlaying would leave playback paused on resume.
+        val resumePlayback = p.playWhenReady
         currentQualityIndex = index
 
         val mediaId = p.currentMediaItem?.mediaId
@@ -811,7 +828,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             .build()
         p.setMediaItem(newItem, position)
         p.prepare()
-        p.playWhenReady = wasPlaying
+        p.playWhenReady = resumePlayback
 
         Toast.makeText(this, "Quality: ${option.label}", Toast.LENGTH_SHORT).show()
     }
@@ -1045,24 +1062,39 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         progressJob = null
         controllerFuture?.let { if (!it.isDone) it.cancel(true) }
         controllerFuture = null
+        // Drop the listener reference too — release() makes the player unusable,
+        // but a stale field would still be removed-from on the next attach.
+        playbackListener = null
         player?.release()
         player = null
     }
 
-    private fun attachPlayerListener(p: Player, v: Video) {
-        p.addListener(object : Player.Listener {
+    private fun attachPlayerListener(p: Player) {
+        // Remove any previously attached instance — PiP return / re-binding
+        // can re-enter this path on the same controller, and the old listener
+        // would otherwise still be wired up and fire alongside the new one.
+        playbackListener?.let { p.removeListener(it) }
+        val listener = object : Player.Listener {
             override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
                 playerView.requestLayout()
             }
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
+                    // Read the current video at callback time rather than capturing,
+                    // so a media-item swap on the same controller can't fire
+                    // markWatched/playNextEpisode against a stale Video.
+                    val current = video ?: return
+                    val currentMediaId = p.currentMediaItem?.mediaId
+                    if (currentMediaId != "vod:${current.id}") return
                     launch {
-                        api.markWatched(v.id)
-                        playNextEpisode(v)
+                        api.markWatched(current.id)
+                        playNextEpisode(current)
                     }
                 }
             }
-        })
+        }
+        playbackListener = listener
+        p.addListener(listener)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
