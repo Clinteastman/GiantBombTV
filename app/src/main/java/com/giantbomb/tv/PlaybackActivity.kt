@@ -1,8 +1,10 @@
 package com.giantbomb.tv
 
+import android.Manifest
 import android.app.PictureInPictureParams
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
@@ -23,6 +25,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -74,6 +77,13 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var videoDuration: Double = 0.0
     private var isTv = false
 
+    // Android 13+ runtime permission for the foreground-service media notification.
+    // Must be registered before STARTED, so it lives at field-init time.
+    // Result is intentionally ignored: denial just means no media notification —
+    // playback still works through the service.
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* ignore */ }
+
     // Chromecast
     private var castContext: CastContext? = null
     private var castPlayer: CastPlayer? = null
@@ -110,6 +120,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         val prefs = PrefsManager(this)
         api = GiantBombApi(prefs.apiKey ?: "")
+
+        requestNotificationPermissionIfNeeded()
 
         if (!isTv) {
             try {
@@ -450,6 +462,21 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         super.onStart()
         initializeCastPlayer()
         connectController()
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        // Android 13 (API 33) introduced runtime permission for POST_NOTIFICATIONS.
+        // Without it the foreground-service media notification is silently
+        // suppressed, defeating the whole point of the background-playback
+        // service. We request once on entry and don't gate playback on the
+        // result — denial just degrades to no notification.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     private fun connectController() {
