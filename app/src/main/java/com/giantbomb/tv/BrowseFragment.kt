@@ -180,20 +180,27 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 val tag = v.tag
                 if (tag is HeaderItem) onLongClick(v, tag) else false
             }
-            // TV remote path. Leanback's HeadersFragment intercepts D-pad
-            // navigation, so setOnLongClickListener doesn't always fire from a
-            // held D-pad-centre. KEYCODE_DPAD_CENTER + isLongPress is the
-            // reliable trigger on Android TV.
+            // TV remote path. Leanback's HeadersFragment dispatches the regular
+            // click at ACTION_DOWN, so event.isLongPress on the synthesised
+            // second ACTION_DOWN never fires here. Instead, measure the held
+            // duration on ACTION_UP — if the centre key was held past the
+            // long-press threshold we fire the context menu and consume the
+            // event so the regular short-click flow (which dives into the row)
+            // doesn't also kick in.
             vh.view.setOnKeyListener { v, keyCode, event ->
                 val isCentre = keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
                     keyCode == KeyEvent.KEYCODE_ENTER
-                if (isCentre && event.action == KeyEvent.ACTION_DOWN && event.isLongPress) {
-                    val tag = v.tag
-                    if (tag is HeaderItem) {
-                        onLongClick(v, tag)
-                        true
-                    } else false
-                } else false
+                if (isCentre && event.action == KeyEvent.ACTION_UP) {
+                    val held = event.eventTime - event.downTime
+                    if (held >= android.view.ViewConfiguration.getLongPressTimeout()) {
+                        val tag = v.tag
+                        if (tag is HeaderItem) {
+                            onLongClick(v, tag)
+                            return@setOnKeyListener true
+                        }
+                    }
+                }
+                false
             }
             return vh
         }

@@ -102,10 +102,17 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
             return
         }
 
-        // On TV, show exit confirmation instead of immediately closing
+        // On TV, show exit confirmation instead of immediately closing —
+        // but only when we're already on the side-menu (headers) view. If the
+        // user has dived into a row's cards, Back should slide the side menu
+        // back in via Leanback's headers transition, not exit the app.
         if (isTv) {
             val fragment = supportFragmentManager.findFragmentById(R.id.main_fragment_container)
             if (fragment is BrowseFragment) {
+                if (!fragment.isShowingHeaders) {
+                    fragment.startHeadersTransition(true)
+                    return
+                }
                 showExitConfirmation()
                 return
             }
