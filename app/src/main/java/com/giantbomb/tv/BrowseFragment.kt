@@ -401,13 +401,31 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                         }
                     }
                     PrefsManager.SECTION_WATCHLIST -> {
-                        if (!watchlist.isNullOrEmpty()) {
-                            val wlAdapter = ArrayObjectAdapter(CardPresenter())
-                            watchlist.forEach { wlAdapter.add(it) }
-                            rowsAdapter.add(ListRow(
-                                HeaderItem(headerIdCounter++, "My Watchlist"),
-                                wlAdapter
-                            ))
+                        // Always render the row when we could reach the API
+                        // (i.e. there's a key) so users know the section exists.
+                        // null = couldn't fetch — hide; empty = fetched-but-empty
+                        // — show a hint card.
+                        if (watchlist != null && key.isNotEmpty()) {
+                            if (watchlist.isNotEmpty()) {
+                                val wlAdapter = ArrayObjectAdapter(CardPresenter())
+                                watchlist.forEach { wlAdapter.add(it) }
+                                rowsAdapter.add(ListRow(
+                                    HeaderItem(headerIdCounter++, "My Watchlist"),
+                                    wlAdapter
+                                ))
+                            } else {
+                                val hintAdapter = ArrayObjectAdapter(SettingsCardPresenter())
+                                hintAdapter.add(SettingsItem(
+                                    -1,
+                                    "Your watchlist is empty",
+                                    "Open a video and tap Add to Watchlist",
+                                    R.drawable.ic_watched
+                                ))
+                                rowsAdapter.add(ListRow(
+                                    HeaderItem(headerIdCounter++, "My Watchlist"),
+                                    hintAdapter
+                                ))
+                            }
                         }
                     }
                     PrefsManager.SECTION_RECENT -> {

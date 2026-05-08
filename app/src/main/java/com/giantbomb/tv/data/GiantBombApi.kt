@@ -250,13 +250,19 @@ class GiantBombApi(
             // child's exception is stored in its Deferred and rethrown by
             // await(), where the outer try/catch returns Result.failure cleanly.
             supervisorScope {
-                // Fetch the GB feed and the authoritative Twitch live signal in parallel.
-                val feedDeferred = async { get("/upcoming_json") }
+                // Fetch the GB feed and the authoritative Twitch live signal in
+                // parallel. /upcoming_json sits behind giantbomb.com's Cloudflare
+                // challenge and can fail with a 403 challenge HTML at any time —
+                // when that happens we still want a usable response, derived
+                // from Twitch alone.
+                val feedDeferred = async { runCatching { get("/upcoming_json") } }
                 val twitchDeferred = async { TwitchExtractor().getLiveStatus(LIVE_TWITCH_CHANNEL) }
-                val json = feedDeferred.await()
+                val feedAttempt = feedDeferred.await()
                 val twitchStatus = twitchDeferred.await()
 
-            val apiLiveNow = json.optJSONObject("liveNow")?.let { l ->
+                val json: JSONObject? = feedAttempt.getOrNull()
+
+            val apiLiveNow = json?.optJSONObject("liveNow")?.let { l ->
                 UpcomingStream(
                     type = l.optString("type", ""),
                     title = l.optString("title", ""),
@@ -266,7 +272,7 @@ class GiantBombApi(
                     isLive = true
                 )
             }
-            val upcomingArr = json.optJSONArray("upcoming")
+            val upcomingArr = json?.optJSONArray("upcoming")
             val upcoming = mutableListOf<UpcomingStream>()
             if (upcomingArr != null) {
                 for (i in 0 until upcomingArr.length()) {
