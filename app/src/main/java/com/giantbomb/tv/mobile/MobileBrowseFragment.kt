@@ -58,6 +58,10 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     private val refreshHandler = Handler(Looper.getMainLooper())
     private var upcomingRefreshRunnable: Runnable? = null
 
+    // Section header positions, populated each time loadContent runs. Drives the
+    // chip-bar quick-jump and any other "scroll to section X" affordance.
+    private var sectionStartIndices: Map<String, Int> = emptyMap()
+
     companion object {
         private const val SETTINGS_REFRESH = 2
         private const val SETTINGS_SETUP = 3
@@ -294,148 +298,53 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     return v.withFallbackThumb()
                 }
 
-                // Upcoming & Live
+                // Resolve all the deferred fetches we'll need before rendering.
                 val upcomingResult = upcomingDeferred.await().getOrNull()
-                upcomingHeaderItemIndex = -1
-                upcomingRowItemIndex = -1
-                if (upcomingResult != null) {
-                    val hasContent = upcomingResult.liveNow != null || upcomingResult.upcoming.isNotEmpty()
-                    if (hasContent) {
-                        val headerTitle = if (upcomingResult.liveNow != null) "\uD83D\uDD34 Upcoming & Live" else "Upcoming"
-                        upcomingHeaderItemIndex = items.size
-                        items.add(BrowseItem.SectionHeader(headerTitle))
-                        upcomingRowItemIndex = items.size
-                        items.add(BrowseItem.UpcomingRow(upcomingResult.upcoming, upcomingResult.liveNow))
-                    }
-                }
-
-                // Continue Watching
-                if (key.isNotEmpty() && progressMap.isNotEmpty()) {
-                    val inProgressEntries = progressMap.values
-                        .filter { it.percentComplete in 1..94 }
-                        .sortedByDescending { it.currentTime }
-                        .take(20)
-                    val inProgressIds = inProgressEntries.map { it.videoId }.toSet()
-
-                    if (inProgressIds.isNotEmpty()) {
-                        val recentVideos = recentDeferred.await().getOrNull()
-                        val continueVideos = recentVideos?.filter { it.id in inProgressIds }
-                            ?.map { video ->
-                                val entry = progressMap[video.id]
-                                val v = if (entry != null) video.copy(progressPercent = entry.percentComplete) else video
-                                v.withFallbackThumb()
-                            }
-
-                        if (continueVideos != null && continueVideos.isNotEmpty()) {
-                            items.add(BrowseItem.SectionHeader(getString(R.string.continue_watching)))
-                            items.add(BrowseItem.HorizontalVideoRow(continueVideos))
-                        }
-                    }
-                }
-
-                // Recent Videos
-                val recent = recentDeferred.await()
-                recent.onSuccess { videos ->
-                    if (videos.isNotEmpty()) {
-                        items.add(BrowseItem.SectionHeader(getString(R.string.recent)))
-
-                        // First N as full-width vertical cards
-                        val verticalVideos = videos.take(RECENT_VERTICAL_COUNT)
-                        for (v in verticalVideos) {
-                            items.add(BrowseItem.VerticalVideo(v.withProgress()))
-                        }
-
-                        // Rest in horizontal row
-                        val remaining = videos.drop(RECENT_VERTICAL_COUNT)
-                        if (remaining.isNotEmpty()) {
-                            items.add(BrowseItem.HorizontalVideoRow(remaining.map { it.withProgress() }))
-                        }
-
-                        // Premium row
-                        val premiumVideos = videos.filter { it.premium }
-                        if (premiumVideos.size >= 2) {
-                            items.add(BrowseItem.SectionHeader("Premium"))
-                            items.add(BrowseItem.HorizontalVideoRow(premiumVideos.map { it.withProgress() }))
-                        }
-                    }
-                }
-
-                recent.onFailure { e ->
+                val recentResult = recentDeferred.await()
+                recentResult.onFailure { e ->
                     if (isAdded) {
                         Toast.makeText(requireContext(),
                             GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
                     }
                 }
+                val recentVideos = recentResult.getOrNull()?.map { it.withProgress() }
+                val watchlist = if (key.isNotEmpty()) {
+                    watchlistDeferred.await().getOrNull()?.map { it.withProgress() }
+                } else null
 
-                // Per-show rows (lazy loaded when scrolled into view)
-                if (shows != null && shows.isNotEmpty()) {
-                    val activeShows = shows.filter { it.active }
+                val pinnedIds = prefs.getPinnedShowIds()
+                val hidden = prefs.getHiddenSections()
 
-                    // All Shows grid first
-                    if (activeShows.isNotEmpty()) {
-                        items.add(BrowseItem.SectionHeader("All Shows"))
-                        items.add(BrowseItem.HorizontalShowRow(activeShows))
+                // Render sections in user-defined order. Each helper appends to `items`
+                // and returns true if it produced anything; we track the first item's
+                // index so the chip bar can scroll-to-section.
+                val indices = mutableMapOf<String, Int>()
+                upcomingHeaderItemIndex = -1
+                upcomingRowItemIndex = -1
+
+                for (sectionId in prefs.getSectionOrder()) {
+                    if (sectionId in hidden) continue
+                    val startIdx = items.size
+                    val added = when (sectionId) {
+                        PrefsManager.SECTION_LIVE -> renderLiveSection(items, upcomingResult)
+                        PrefsManager.SECTION_CONTINUE -> renderContinueSection(items, recentVideos, progressMap, key)
+                        PrefsManager.SECTION_WATCHLIST -> renderWatchlistSection(items, watchlist)
+                        PrefsManager.SECTION_RECENT -> renderRecentSection(items, recentVideos)
+                        PrefsManager.SECTION_PINNED -> renderPinnedShowsSection(items, shows, pinnedIds)
+                        PrefsManager.SECTION_ACTIVE_SHOWS -> renderActiveShowsSection(items, shows, pinnedIds)
+                        PrefsManager.SECTION_PREMIUM -> renderPremiumSection(items, recentVideos)
+                        PrefsManager.SECTION_LEGACY -> renderLegacyShowsSection(items, shows)
+                        PrefsManager.SECTION_SETTINGS -> renderSettingsSection(items)
+                        else -> false
                     }
-
-                    // Lazy show rows - videos load on scroll
-                    for (s in activeShows) {
-                        items.add(BrowseItem.SectionHeader(s.title))
-                        items.add(BrowseItem.LazyShowRow(s))
-                    }
+                    if (added) indices[sectionId] = startIdx
                 }
 
-                // Watchlist
-                val watchlist = if (key.isNotEmpty()) watchlistDeferred.await().getOrNull() else null
-                if (watchlist != null && watchlist.isNotEmpty()) {
-                    items.add(BrowseItem.SectionHeader("My Watchlist"))
-                    items.add(BrowseItem.HorizontalVideoRow(watchlist.map { it.withProgress() }))
+                sectionStartIndices = indices
+                indices[PrefsManager.SECTION_LIVE]?.let { liveStart ->
+                    upcomingHeaderItemIndex = liveStart
+                    upcomingRowItemIndex = liveStart + 1
                 }
-
-                // Settings
-                items.add(BrowseItem.SectionHeader(getString(R.string.settings)))
-                items.add(BrowseItem.SettingRow(SettingsItem(
-                    SETTINGS_REFRESH,
-                    getString(R.string.settings_refresh),
-                    getString(R.string.settings_refresh_desc),
-                    R.drawable.ic_settings_refresh
-                )))
-                items.add(BrowseItem.SettingRow(SettingsItem(
-                    SETTINGS_QUALITY,
-                    "Stream Quality",
-                    "Default: ${PrefsManager.qualityLabel(prefs.preferredQuality)}",
-                    R.drawable.ic_settings_quality
-                )))
-                items.add(BrowseItem.SettingRow(SettingsItem(
-                    SETTINGS_SETUP,
-                    getString(R.string.settings_setup),
-                    getString(R.string.settings_setup_desc),
-                    R.drawable.ic_settings_cog
-                )))
-                items.add(BrowseItem.SettingRow(SettingsItem(
-                    SETTINGS_PRIVACY,
-                    "Privacy Policy",
-                    "View privacy policy",
-                    R.drawable.ic_settings_about
-                )))
-
-                // Last updated timestamp
-                val now = java.text.SimpleDateFormat("EEE, MMM d 'at' h:mm:ss a", java.util.Locale.getDefault()).format(java.util.Date())
-                items.add(BrowseItem.SettingRow(SettingsItem(
-                    -1,
-                    "Last Updated",
-                    now,
-                    R.drawable.ic_settings_refresh
-                )))
-
-                // Version info
-                val packageInfo = requireContext().packageManager.getPackageInfo(requireContext().packageName, 0)
-                val versionText = "v${packageInfo.versionName} (${packageInfo.longVersionCode})"
-                items.add(BrowseItem.SettingRow(SettingsItem(
-                    -1,
-                    "Version",
-                    versionText,
-                    R.drawable.ic_settings_cog
-                )))
 
                 browseItems.clear()
                 browseItems.addAll(items)
@@ -448,6 +357,172 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 }
             }
         }
+    }
+
+    // ----------------------------------------------------------------------
+    // Section renderers
+    // Each appends to `items` and returns true if it produced anything. The
+    // driver in loadContent() iterates prefs.getSectionOrder() and calls these
+    // in the user-defined order, then records each section's start index for
+    // the chip-bar quick-jump and the upcoming-row mid-flight refresh.
+    // ----------------------------------------------------------------------
+
+    private fun renderLiveSection(
+        items: MutableList<BrowseItem>,
+        upcoming: com.giantbomb.tv.model.UpcomingResponse?
+    ): Boolean {
+        val u = upcoming ?: return false
+        if (u.liveNow == null && u.upcoming.isEmpty()) return false
+        val title = if (u.liveNow != null) "🔴 Upcoming & Live" else "Upcoming"
+        items.add(BrowseItem.SectionHeader(title))
+        items.add(BrowseItem.UpcomingRow(u.upcoming, u.liveNow))
+        return true
+    }
+
+    private fun renderContinueSection(
+        items: MutableList<BrowseItem>,
+        recentVideos: List<Video>?,
+        progressMap: Map<Int, ProgressEntry>,
+        apiKey: String
+    ): Boolean {
+        if (apiKey.isEmpty() || progressMap.isEmpty() || recentVideos.isNullOrEmpty()) return false
+        val inProgressIds = progressMap.values
+            .filter { it.percentComplete in 1..94 }
+            .sortedByDescending { it.currentTime }
+            .take(20)
+            .map { it.videoId }
+            .toSet()
+        if (inProgressIds.isEmpty()) return false
+        val videos = recentVideos.filter { it.id in inProgressIds }
+        if (videos.isEmpty()) return false
+        items.add(BrowseItem.SectionHeader(getString(R.string.continue_watching)))
+        items.add(BrowseItem.HorizontalVideoRow(videos))
+        return true
+    }
+
+    private fun renderWatchlistSection(
+        items: MutableList<BrowseItem>,
+        watchlist: List<Video>?
+    ): Boolean {
+        if (watchlist.isNullOrEmpty()) return false
+        items.add(BrowseItem.SectionHeader("My Watchlist"))
+        items.add(BrowseItem.HorizontalVideoRow(watchlist))
+        return true
+    }
+
+    private fun renderRecentSection(
+        items: MutableList<BrowseItem>,
+        recentVideos: List<Video>?
+    ): Boolean {
+        if (recentVideos.isNullOrEmpty()) return false
+        items.add(BrowseItem.SectionHeader(getString(R.string.recent)))
+        recentVideos.take(RECENT_VERTICAL_COUNT).forEach { items.add(BrowseItem.VerticalVideo(it)) }
+        val remaining = recentVideos.drop(RECENT_VERTICAL_COUNT)
+        if (remaining.isNotEmpty()) {
+            items.add(BrowseItem.HorizontalVideoRow(remaining))
+        }
+        return true
+    }
+
+    private fun renderPinnedShowsSection(
+        items: MutableList<BrowseItem>,
+        shows: List<Show>?,
+        pinnedIds: List<Int>
+    ): Boolean {
+        if (shows == null || pinnedIds.isEmpty()) return false
+        // Render in pin order, not API order.
+        val byId = shows.associateBy { it.id }
+        val pinnedShows = pinnedIds.mapNotNull { byId[it] }
+        if (pinnedShows.isEmpty()) return false
+        for (s in pinnedShows) {
+            items.add(BrowseItem.SectionHeader(s.title))
+            items.add(BrowseItem.LazyShowRow(s))
+        }
+        return true
+    }
+
+    private fun renderActiveShowsSection(
+        items: MutableList<BrowseItem>,
+        shows: List<Show>?,
+        pinnedIds: List<Int>
+    ): Boolean {
+        if (shows == null) return false
+        val pinnedSet = pinnedIds.toSet()
+        val nonPinnedActive = shows.filter { it.active && it.id !in pinnedSet }
+        if (nonPinnedActive.isEmpty()) return false
+        for (s in nonPinnedActive) {
+            items.add(BrowseItem.SectionHeader(s.title))
+            items.add(BrowseItem.LazyShowRow(s))
+        }
+        return true
+    }
+
+    private fun renderPremiumSection(
+        items: MutableList<BrowseItem>,
+        recentVideos: List<Video>?
+    ): Boolean {
+        if (recentVideos == null) return false
+        val premium = recentVideos.filter { it.premium }
+        if (premium.size < 2) return false
+        items.add(BrowseItem.SectionHeader("Premium"))
+        items.add(BrowseItem.HorizontalVideoRow(premium))
+        return true
+    }
+
+    private fun renderLegacyShowsSection(
+        items: MutableList<BrowseItem>,
+        shows: List<Show>?
+    ): Boolean {
+        if (shows == null) return false
+        val legacy = shows.filter { !it.active }
+        if (legacy.isEmpty()) return false
+        items.add(BrowseItem.SectionHeader("Legacy Shows"))
+        items.add(BrowseItem.HorizontalShowRow(legacy))
+        return true
+    }
+
+    private fun renderSettingsSection(items: MutableList<BrowseItem>): Boolean {
+        items.add(BrowseItem.SectionHeader(getString(R.string.settings)))
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_REFRESH,
+            getString(R.string.settings_refresh),
+            getString(R.string.settings_refresh_desc),
+            R.drawable.ic_settings_refresh
+        )))
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_QUALITY,
+            "Stream Quality",
+            "Default: ${PrefsManager.qualityLabel(prefs.preferredQuality)}",
+            R.drawable.ic_settings_quality
+        )))
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_SETUP,
+            getString(R.string.settings_setup),
+            getString(R.string.settings_setup_desc),
+            R.drawable.ic_settings_cog
+        )))
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_PRIVACY,
+            "Privacy Policy",
+            "View privacy policy",
+            R.drawable.ic_settings_about
+        )))
+        val now = java.text.SimpleDateFormat("EEE, MMM d 'at' h:mm:ss a", java.util.Locale.getDefault()).format(java.util.Date())
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            -1,
+            "Last Updated",
+            now,
+            R.drawable.ic_settings_refresh
+        )))
+        val packageInfo = requireContext().packageManager.getPackageInfo(requireContext().packageName, 0)
+        val versionText = "v${packageInfo.versionName} (${packageInfo.longVersionCode})"
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            -1,
+            "Version",
+            versionText,
+            R.drawable.ic_settings_cog
+        )))
+        return true
     }
 
     fun getMiniPlayerContainer(): FrameLayout? = miniPlayerContainer
