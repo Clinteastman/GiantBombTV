@@ -32,7 +32,9 @@ class SetupActivity : Activity(), CoroutineScope by MainScope() {
         val prefs = PrefsManager(this)
 
         // Deep-link key only pre-fills; never auto-save (exported BROWSABLE activity).
-        val deepLinkKey = intent?.data?.getQueryParameter("key")?.takeIf { it.isNotEmpty() }
+        // isNotBlank() rejects whitespace-only values (e.g. ?key=%20) which would
+        // otherwise trip the "imported" status banner before validation strips them.
+        val deepLinkKey = intent?.data?.getQueryParameter("key")?.takeIf { it.isNotBlank() }
 
         val cornerRadius = 16f * density
 
