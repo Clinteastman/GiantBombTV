@@ -62,7 +62,12 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         private const val LOAD_MORE_THRESHOLD = 15
         // How often to re-poll the upcoming/live feed while the screen is foregrounded.
         // Twitch's preview thumbnail also refreshes ~every minute, so this aligns nicely.
-        private const val UPCOMING_REFRESH_MS = 60_000L
+        // Match the mobile interval (was 60s). Together with the failure
+        // backoff below this drops our /upcoming_json request rate to about
+        // a third per device, which keeps Cloudflare's bot challenge off
+        // when both phone and TV are running on the same LAN.
+        private const val UPCOMING_REFRESH_MS = 180_000L
+        private const val UPCOMING_FAILURE_BACKOFF_MS = 300_000L
     }
 
     // Per-row pagination state for show-grouped rows
@@ -598,13 +603,21 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         handler.postDelayed(r, UPCOMING_REFRESH_MS)
     }
 
+    private var lastUpcomingFailureMs: Long = 0L
+
     private fun refreshUpcomingRow() {
         val key = prefs.apiKey ?: return
         if (key.isEmpty()) return
+        // Don't keep hammering /upcoming_json while we're in the bad-state window.
+        if (System.currentTimeMillis() - lastUpcomingFailureMs < UPCOMING_FAILURE_BACKOFF_MS) return
         val rowsAdapter = rowsAdapterRef ?: return
         val api = GiantBombApi(key)
         launch {
-            val result = api.getUpcoming().getOrNull() ?: return@launch
+            val result = api.getUpcoming().getOrNull()
+            if (result == null) {
+                lastUpcomingFailureMs = System.currentTimeMillis()
+                return@launch
+            }
             if (!isAdded) return@launch
 
             val hasContent = result.liveNow != null || result.upcoming.isNotEmpty()
