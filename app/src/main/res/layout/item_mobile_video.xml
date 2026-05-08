@@ -6,7 +6,7 @@
     android:orientation="vertical"
     android:paddingStart="12dp"
     android:paddingEnd="12dp"
-    android:paddingBottom="16dp"
+    android:paddingBottom="28dp"
     android:background="?android:attr/selectableItemBackground">
 
     <!-- Thumbnail container with 16:9 aspect ratio enforced programmatically -->
