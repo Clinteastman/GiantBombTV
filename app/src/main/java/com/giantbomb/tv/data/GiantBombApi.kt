@@ -4,6 +4,7 @@ import android.util.Log
 import com.giantbomb.tv.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -243,11 +244,17 @@ class GiantBombApi(
 
     suspend fun getUpcoming(): Result<UpcomingResponse> = withContext(Dispatchers.IO) {
         try {
-            // Fetch the GB feed and the authoritative Twitch live signal in parallel.
-            val feedDeferred = async { get("/upcoming_json") }
-            val twitchDeferred = async { TwitchExtractor().getLiveStatus(LIVE_TWITCH_CHANNEL) }
-            val json = feedDeferred.await()
-            val twitchStatus = twitchDeferred.await()
+            // supervisorScope so a failure in either child (e.g. a Cloudflare 403
+            // on /upcoming_json or a network error reaching Twitch) doesn't
+            // propagate up as scope cancellation and crash the activity. Each
+            // child's exception is stored in its Deferred and rethrown by
+            // await(), where the outer try/catch returns Result.failure cleanly.
+            supervisorScope {
+                // Fetch the GB feed and the authoritative Twitch live signal in parallel.
+                val feedDeferred = async { get("/upcoming_json") }
+                val twitchDeferred = async { TwitchExtractor().getLiveStatus(LIVE_TWITCH_CHANNEL) }
+                val json = feedDeferred.await()
+                val twitchStatus = twitchDeferred.await()
 
             val apiLiveNow = json.optJSONObject("liveNow")?.let { l ->
                 UpcomingStream(
@@ -298,19 +305,32 @@ class GiantBombApi(
                 else -> null
             }
 
-            // Drop upcoming entries the API forgot to retire.
-            // - If Twitch is live, anything in the past is either the current stream
-            //   (already handled by liveNow) or recently-ended — drop with a tiny grace.
-            // - If Twitch is offline or unknown, the same rule applies; the only thing
-            //   that changes is which liveNow we kept above.
+            // Drop upcoming entries the API forgot to retire — and dedup the
+            // current live show, which the GB feed often keeps listing under its
+            // scheduled start time even after Twitch is broadcasting it. Without
+            // this you get the live card AND the "starting soon" card side-by-
+            // side for the same show.
+            //   - When liveNow is set: drop anything scheduled before *now* —
+            //     the duplicate (and any other slightly-past entries the API
+            //     hasn't cleaned up) all go.
+            //   - When liveNow is null: keep a 30-minute grace so a stream
+            //     scheduled to start at the top of the hour doesn't disappear
+            //     during the few minutes before Twitch flips on.
+            //   - Also dedup by title against the live show, in case the
+            //     scheduled time is somehow in the future (timezone weirdness)
+            //     but the GB feed and Twitch are talking about the same item.
             val now = System.currentTimeMillis()
-            val cutoff = now - 30 * 60 * 1000  // 30 min grace
+            val cutoff = if (resolvedLiveNow != null) now else (now - 30 * 60 * 1000)
+            val liveTitle = resolvedLiveNow?.title?.trim()?.lowercase().orEmpty()
             val filteredUpcoming = upcoming.filter {
                 val dateMs = com.giantbomb.tv.ui.UpcomingCardView.parseDate(it.date)
-                dateMs == 0L || dateMs >= cutoff
+                if (dateMs != 0L && dateMs < cutoff) return@filter false
+                if (liveTitle.isNotEmpty() && it.title.trim().lowercase() == liveTitle) return@filter false
+                true
             }
 
-            Result.success(UpcomingResponse(liveNow = resolvedLiveNow, upcoming = filteredUpcoming))
+                Result.success(UpcomingResponse(liveNow = resolvedLiveNow, upcoming = filteredUpcoming))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }

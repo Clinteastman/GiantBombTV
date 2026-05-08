@@ -102,6 +102,9 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         data class SettingRow(val item: SettingsItem) : BrowseItem()
         data class UpcomingRow(val streams: List<UpcomingStream>, val liveNow: UpcomingStream?) : BrowseItem()
         class LazyShowRow(val show: Show, var videos: List<Video>? = null, var isLoading: Boolean = false) : BrowseItem()
+        // Used when a section is intentionally rendered with a friendly message
+        // instead of being hidden — e.g. an empty watchlist after a fresh install.
+        data class EmptyStateRow(val message: String) : BrowseItem()
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -439,9 +442,18 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         items: MutableList<BrowseItem>,
         watchlist: List<Video>?
     ): Boolean {
-        if (watchlist.isNullOrEmpty()) return false
+        // null means we couldn't fetch (no key / network error) — hide.
+        if (watchlist == null) return false
         items.add(BrowseItem.SectionHeader("My Watchlist"))
-        items.add(BrowseItem.HorizontalVideoRow(watchlist))
+        if (watchlist.isEmpty()) {
+            // Empty but reachable — render a friendly hint instead of hiding so
+            // users know where the watchlist lives and how to add to it.
+            items.add(BrowseItem.EmptyStateRow(
+                "Your watchlist is empty. Tap the + on any video to save it for later."
+            ))
+        } else {
+            items.add(BrowseItem.HorizontalVideoRow(watchlist))
+        }
         return true
     }
 
@@ -776,6 +788,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         val TYPE_UPCOMING_ROW = 5
         val TYPE_LAZY_SHOW_ROW = 6
         val TYPE_SHOW_SECTION_HEADER = 7
+        val TYPE_EMPTY_STATE = 8
 
         override fun getItemViewType(position: Int): Int = when (browseItems[position]) {
             is BrowseItem.SectionHeader -> TYPE_SECTION_HEADER
@@ -786,6 +799,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             is BrowseItem.SettingRow -> TYPE_SETTING
             is BrowseItem.UpcomingRow -> TYPE_UPCOMING_ROW
             is BrowseItem.LazyShowRow -> TYPE_LAZY_SHOW_ROW
+            is BrowseItem.EmptyStateRow -> TYPE_EMPTY_STATE
         }
 
         override fun getItemCount() = browseItems.size
@@ -801,6 +815,25 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 TYPE_SETTING -> SettingVH(inflater.inflate(R.layout.item_mobile_setting, parent, false))
                 TYPE_UPCOMING_ROW -> UpcomingRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
                 TYPE_LAZY_SHOW_ROW -> LazyShowRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
+                TYPE_EMPTY_STATE -> {
+                    val ctx = parent.context
+                    val density = ctx.resources.displayMetrics.density
+                    val tv = TextView(ctx).apply {
+                        setPadding(
+                            (20 * density).toInt(),
+                            (8 * density).toInt(),
+                            (20 * density).toInt(),
+                            (16 * density).toInt()
+                        )
+                        textSize = 14f
+                        setTextColor(0xFFA0A0A0.toInt())
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT
+                        )
+                    }
+                    EmptyStateVH(tv)
+                }
                 else -> throw IllegalArgumentException("Unknown view type: $viewType")
             }
         }
@@ -815,7 +848,14 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 is BrowseItem.SettingRow -> (holder as SettingVH).bind(item)
                 is BrowseItem.UpcomingRow -> (holder as UpcomingRowVH).bind(item)
                 is BrowseItem.LazyShowRow -> (holder as LazyShowRowVH).bind(item)
+                is BrowseItem.EmptyStateRow -> (holder as EmptyStateVH).bind(item)
             }
+        }
+    }
+
+    private inner class EmptyStateVH(val text: TextView) : RecyclerView.ViewHolder(text) {
+        fun bind(item: BrowseItem.EmptyStateRow) {
+            text.text = item.message
         }
     }
 
