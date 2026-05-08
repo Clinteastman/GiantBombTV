@@ -62,31 +62,25 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
             if (browse != null && browse.isShowingHeaders) {
                 when (event.action) {
                     KeyEvent.ACTION_DOWN -> {
-                        Log.d("GBHeaderLP", "DOWN repeat=${event.repeatCount} pending=${pendingHeaderLongPress != null}")
                         if (event.repeatCount == 0 && pendingHeaderLongPress == null) {
                             headerLongPressFired = false
                             val r = Runnable {
-                                Log.d("GBHeaderLP", "runnable firing — calling tryShowFocusedHeaderMenu")
                                 pendingHeaderLongPress = null
-                                val handled = browse.tryShowFocusedHeaderMenu()
-                                Log.d("GBHeaderLP", "tryShowFocusedHeaderMenu returned $handled")
-                                headerLongPressFired = handled
+                                headerLongPressFired = browse.tryShowFocusedHeaderMenu()
                             }
                             pendingHeaderLongPress = r
-                            val delay = ViewConfiguration.getLongPressTimeout().toLong()
-                            Log.d("GBHeaderLP", "scheduled at +${delay}ms")
-                            longPressHandler.postDelayed(r, delay)
+                            longPressHandler.postDelayed(
+                                r, ViewConfiguration.getLongPressTimeout().toLong()
+                            )
                         }
                         return true
                     }
                     KeyEvent.ACTION_UP -> {
                         val pending = pendingHeaderLongPress
-                        Log.d("GBHeaderLP", "UP pending=${pending != null} fired=$headerLongPressFired")
                         if (pending != null) {
                             longPressHandler.removeCallbacks(pending)
                             pendingHeaderLongPress = null
                             if (!headerLongPressFired) {
-                                Log.d("GBHeaderLP", "short press — performClick on ${currentFocus}")
                                 currentFocus?.performClick()
                             }
                         }

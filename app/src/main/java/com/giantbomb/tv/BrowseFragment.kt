@@ -192,16 +192,25 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
      * Returns true if we found a header to act on.
      */
     fun tryShowFocusedHeaderMenu(): Boolean {
-        android.util.Log.d("GBHeaderLP", "tryShowFocusedHeaderMenu: isShowingHeaders=$isShowingHeaders")
         if (!isShowingHeaders) return false
-        val hf = headersSupportFragment
-        val hfFocus = hf?.view?.findFocus()
-        val rootFocus = view?.findFocus()
-        android.util.Log.d("GBHeaderLP", "headersFragment=$hf hfFocus=$hfFocus rootFocus=$rootFocus tag=${hfFocus?.tag ?: rootFocus?.tag}")
-        val focused = hfFocus ?: rootFocus ?: return false
-        val header = focused.tag as? HeaderItem ?: return false
+        // Leanback wraps the presenter's TextView (where we set the HeaderItem
+        // tag) in a focusable LinearLayout, so the directly-focused view almost
+        // never carries the tag. Walk the focused subtree until we find one
+        // that does.
+        val focused = headersSupportFragment?.view?.findFocus() ?: view?.findFocus() ?: return false
+        val header = findHeaderTag(focused) ?: return false
         showHeaderContextMenu(header)
         return true
+    }
+
+    private fun findHeaderTag(view: View): HeaderItem? {
+        (view.tag as? HeaderItem)?.let { return it }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                findHeaderTag(view.getChildAt(i))?.let { return it }
+            }
+        }
+        return null
     }
 
     private fun showHeaderContextMenu(header: HeaderItem) {
