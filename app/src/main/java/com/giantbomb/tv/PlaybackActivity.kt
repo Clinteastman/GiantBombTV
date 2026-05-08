@@ -25,6 +25,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
@@ -118,6 +119,22 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         api = GiantBombApi(prefs.apiKey ?: "")
 
         requestNotificationPermissionIfNeeded()
+
+        // Modern Android (gesture nav) routes back through OnBackPressedDispatcher,
+        // not onKeyDown(KEYCODE_BACK). Wire PiP entry + quality-picker dismissal here
+        // so swipe-back on phones reliably triggers PiP. Falls through to default
+        // (finish the activity) when neither applies.
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (isQualityPickerShowing()) {
+                    dismissQualityPicker()
+                    return
+                }
+                if (!isTv && tryEnterPip()) return
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+            }
+        })
 
         if (!isTv) {
             try {
@@ -1094,8 +1111,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // BACK is handled by the OnBackPressedDispatcher callback (see onCreate).
+        // ESCAPE only fires from hardware keyboards and isn't dispatched there.
         if (isQualityPickerShowing()) {
-            if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE) {
+            if (keyCode == KeyEvent.KEYCODE_ESCAPE) {
                 dismissQualityPicker()
                 return true
             }
@@ -1103,16 +1122,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
 
         return when (keyCode) {
-            KeyEvent.KEYCODE_BACK -> {
-                if (!isTv && tryEnterPip()) {
-                    true
-                } else {
-                    // Service-side periodic saver covers final-position
-                    // persistence; just finish the activity.
-                    finish()
-                    true
-                }
-            }
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> {
                 player?.let { if (it.isPlaying) it.pause() else it.play() }
                 true
