@@ -33,6 +33,61 @@ class TwitchExtractor {
         val hlsUrl: String
     )
 
+    data class LiveStatus(
+        val isLive: Boolean,
+        val title: String?,
+        val previewImageUrl: String?
+    )
+
+    /**
+     * Returns the live state of [channel] using Twitch's public GQL StreamMetadata query.
+     * Returns null if the check itself failed (network error, etc.) — callers should
+     * treat this as "unknown" and fall back to whatever the upstream feed claims.
+     * When [LiveStatus.isLive] is true, [previewImageUrl] points at Twitch's public
+     * live preview frame, cache-busted per minute so Glide refetches the JPG.
+     */
+    suspend fun getLiveStatus(channel: String): LiveStatus? = withContext(Dispatchers.IO) {
+        try {
+            val body = JSONArray().apply {
+                put(JSONObject().apply {
+                    put("operationName", "StreamMetadata")
+                    put("extensions", JSONObject().apply {
+                        put("persistedQuery", JSONObject().apply {
+                            put("version", 1)
+                            put("sha256Hash", "252a46e3f5b1ddc431b396e688331d8d020daec27079893ac7d4e6db759a7402")
+                        })
+                    })
+                    put("variables", JSONObject().apply { put("channelLogin", channel) })
+                })
+            }
+            val request = Request.Builder()
+                .url(GQL_URL)
+                .header("Client-ID", CLIENT_ID)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .post(body.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            val response = client.newCall(request).execute()
+            val text = response.use { it.body?.string() ?: "" }
+            if (response.code != 200) return@withContext null
+            val arr = JSONArray(text)
+            val stream = arr.optJSONObject(0)
+                ?.optJSONObject("data")
+                ?.optJSONObject("user")
+                ?.optJSONObject("stream")
+            if (stream == null || stream.toString() == "null") {
+                LiveStatus(isLive = false, title = null, previewImageUrl = null)
+            } else {
+                val title = stream.optString("title", "").ifBlank { null }
+                val minuteBucket = System.currentTimeMillis() / 60_000
+                val preview = "https://static-cdn.jtvnw.net/previews-ttv/live_user_$channel-1280x720.jpg?t=$minuteBucket"
+                LiveStatus(isLive = true, title = title, previewImageUrl = preview)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Live status check failed for $channel: ${e.message}")
+            null
+        }
+    }
+
     /**
      * Get the HLS stream URL for a live Twitch channel.
      * Returns failure if the channel is not live.

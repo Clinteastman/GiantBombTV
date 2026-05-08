@@ -3,6 +3,7 @@ package com.giantbomb.tv.data
 import android.util.Log
 import com.giantbomb.tv.model.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -34,6 +35,9 @@ class GiantBombApi(
         private const val TAG = "GiantBombApi"
         private const val DEFAULT_BASE = "https://giantbomb.com"
         private const val USER_AGENT = "GBTV"
+        // Channel that hosts Giant Bomb's live streams. Used as the authoritative
+        // signal for whether liveNow in /upcoming_json is actually live right now.
+        private const val LIVE_TWITCH_CHANNEL = "giantbomb"
 
         private val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -239,8 +243,13 @@ class GiantBombApi(
 
     suspend fun getUpcoming(): Result<UpcomingResponse> = withContext(Dispatchers.IO) {
         try {
-            val json = get("/upcoming_json")
-            val liveNow = json.optJSONObject("liveNow")?.let { l ->
+            // Fetch the GB feed and the authoritative Twitch live signal in parallel.
+            val feedDeferred = async { get("/upcoming_json") }
+            val twitchDeferred = async { TwitchExtractor().getLiveStatus(LIVE_TWITCH_CHANNEL) }
+            val json = feedDeferred.await()
+            val twitchStatus = twitchDeferred.await()
+
+            val apiLiveNow = json.optJSONObject("liveNow")?.let { l ->
                 UpcomingStream(
                     type = l.optString("type", ""),
                     title = l.optString("title", ""),
@@ -264,19 +273,44 @@ class GiantBombApi(
                     ))
                 }
             }
-            // Filter stale items — if the scheduled date is more than 6 hours
-            // in the past the stream has almost certainly ended and the API is stale
-            val sixHoursAgo = System.currentTimeMillis() - 6 * 60 * 60 * 1000
-            val filteredLiveNow = liveNow?.let {
-                val dateMs = com.giantbomb.tv.ui.UpcomingCardView.parseDate(it.date)
-                if (dateMs > 0L && dateMs < sixHoursAgo) null else it
-            }
-            val filteredUpcoming = upcoming.filter {
-                val dateMs = com.giantbomb.tv.ui.UpcomingCardView.parseDate(it.date)
-                dateMs == 0L || dateMs >= sixHoursAgo
+
+            // Twitch is the source of truth for live state on the giantbomb channel:
+            //   - live  → keep liveNow, swap thumbnail to the live preview frame, prefer
+            //             Twitch's title (it's always current; the GB feed is sometimes
+            //             still showing the previous show's title).
+            //   - offline → drop liveNow regardless of what the GB feed claims so
+            //               finished streams stop sticking around.
+            //   - check failed (null) → fall back to the GB feed's liveNow as before.
+            val resolvedLiveNow: UpcomingStream? = when {
+                twitchStatus == null -> apiLiveNow
+                twitchStatus.isLive -> {
+                    val base = apiLiveNow ?: UpcomingStream(
+                        type = "live", title = "", image = null, date = "",
+                        premium = false, isLive = true
+                    )
+                    base.copy(
+                        title = twitchStatus.title?.takeIf { it.isNotBlank() }
+                            ?: base.title.ifBlank { "Giant Bomb Live" },
+                        image = twitchStatus.previewImageUrl ?: base.image,
+                        isLive = true
+                    )
+                }
+                else -> null
             }
 
-            Result.success(UpcomingResponse(liveNow = filteredLiveNow, upcoming = filteredUpcoming))
+            // Drop upcoming entries the API forgot to retire.
+            // - If Twitch is live, anything in the past is either the current stream
+            //   (already handled by liveNow) or recently-ended — drop with a tiny grace.
+            // - If Twitch is offline or unknown, the same rule applies; the only thing
+            //   that changes is which liveNow we kept above.
+            val now = System.currentTimeMillis()
+            val cutoff = now - 30 * 60 * 1000  // 30 min grace
+            val filteredUpcoming = upcoming.filter {
+                val dateMs = com.giantbomb.tv.ui.UpcomingCardView.parseDate(it.date)
+                dateMs == 0L || dateMs >= cutoff
+            }
+
+            Result.success(UpcomingResponse(liveNow = resolvedLiveNow, upcoming = filteredUpcoming))
         } catch (e: Exception) {
             Result.failure(e)
         }

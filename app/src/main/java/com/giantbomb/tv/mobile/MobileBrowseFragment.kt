@@ -5,6 +5,8 @@ import android.content.res.Configuration
 import android.graphics.drawable.GradientDrawable
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -49,6 +51,13 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     private val browseItems = mutableListOf<BrowseItem>()
     private lateinit var browseAdapter: BrowseAdapter
 
+    // Upcoming/Live row tracked separately so we can refresh just that row
+    // (and its header) every minute without rebuilding the whole grid.
+    private var upcomingRowItemIndex: Int = -1
+    private var upcomingHeaderItemIndex: Int = -1
+    private val refreshHandler = Handler(Looper.getMainLooper())
+    private var upcomingRefreshRunnable: Runnable? = null
+
     companion object {
         private const val SETTINGS_REFRESH = 2
         private const val SETTINGS_SETUP = 3
@@ -57,6 +66,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
         private const val RECENT_VERTICAL_COUNT = 5
+        private const val UPCOMING_REFRESH_MS = 60_000L
     }
 
     // Sealed class representing different row types in the feed
@@ -157,6 +167,8 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     override fun onPause() {
         super.onPause()
         wasInBackground = true
+        upcomingRefreshRunnable?.let { refreshHandler.removeCallbacks(it) }
+        upcomingRefreshRunnable = null
     }
 
     override fun onResume() {
@@ -169,6 +181,70 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         }
         hasBeenVisible = true
         wasInBackground = false
+        scheduleUpcomingRefresh()
+    }
+
+    private fun scheduleUpcomingRefresh() {
+        upcomingRefreshRunnable?.let { refreshHandler.removeCallbacks(it) }
+        val r = object : Runnable {
+            override fun run() {
+                refreshUpcomingRow()
+                refreshHandler.postDelayed(this, UPCOMING_REFRESH_MS)
+            }
+        }
+        upcomingRefreshRunnable = r
+        refreshHandler.postDelayed(r, UPCOMING_REFRESH_MS)
+    }
+
+    private fun refreshUpcomingRow() {
+        val key = prefs.apiKey ?: return
+        if (key.isEmpty()) return
+        val apiInstance = api ?: GiantBombApi(key)
+        launch {
+            val result = apiInstance.getUpcoming().getOrNull() ?: return@launch
+            if (!isAdded) return@launch
+
+            val hasContent = result.liveNow != null || result.upcoming.isNotEmpty()
+            val rowIdx = upcomingRowItemIndex
+            val hdrIdx = upcomingHeaderItemIndex
+            val rowPresent = rowIdx in browseItems.indices && browseItems[rowIdx] is BrowseItem.UpcomingRow
+
+            when {
+                rowPresent && hasContent -> {
+                    browseItems[rowIdx] = BrowseItem.UpcomingRow(result.upcoming, result.liveNow)
+                    browseAdapter.notifyItemChanged(rowIdx)
+                    if (hdrIdx in browseItems.indices) {
+                        val newTitle = if (result.liveNow != null) "🔴 Upcoming & Live" else "Upcoming"
+                        val current = browseItems[hdrIdx] as? BrowseItem.SectionHeader
+                        if (current != null && current.title != newTitle) {
+                            browseItems[hdrIdx] = current.copy(title = newTitle)
+                            browseAdapter.notifyItemChanged(hdrIdx)
+                        }
+                    }
+                }
+                rowPresent && !hasContent -> {
+                    // Remove header + row pair (header sits immediately before the row).
+                    val removeFrom = if (hdrIdx in browseItems.indices && hdrIdx == rowIdx - 1) hdrIdx else rowIdx
+                    val removeCount = if (removeFrom == hdrIdx) 2 else 1
+                    repeat(removeCount) { browseItems.removeAt(removeFrom) }
+                    browseAdapter.notifyItemRangeRemoved(removeFrom, removeCount)
+                    upcomingRowItemIndex = -1
+                    upcomingHeaderItemIndex = -1
+                    // Other tracked indices would shift, but we don't track any others.
+                }
+                !rowPresent && hasContent -> {
+                    // Insert header + row at the top of the list.
+                    val title = if (result.liveNow != null) "🔴 Upcoming & Live" else "Upcoming"
+                    browseItems.add(0, BrowseItem.SectionHeader(title))
+                    browseItems.add(1, BrowseItem.UpcomingRow(result.upcoming, result.liveNow))
+                    browseAdapter.notifyItemRangeInserted(0, 2)
+                    upcomingHeaderItemIndex = 0
+                    upcomingRowItemIndex = 1
+                    // Other tracked indices would shift; none tracked.
+                }
+                // !rowPresent && !hasContent → nothing to do
+            }
+        }
     }
 
     fun loadContent() {
@@ -220,11 +296,15 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
 
                 // Upcoming & Live
                 val upcomingResult = upcomingDeferred.await().getOrNull()
+                upcomingHeaderItemIndex = -1
+                upcomingRowItemIndex = -1
                 if (upcomingResult != null) {
                     val hasContent = upcomingResult.liveNow != null || upcomingResult.upcoming.isNotEmpty()
                     if (hasContent) {
                         val headerTitle = if (upcomingResult.liveNow != null) "\uD83D\uDD34 Upcoming & Live" else "Upcoming"
+                        upcomingHeaderItemIndex = items.size
                         items.add(BrowseItem.SectionHeader(headerTitle))
+                        upcomingRowItemIndex = items.size
                         items.add(BrowseItem.UpcomingRow(upcomingResult.upcoming, upcomingResult.liveNow))
                     }
                 }
@@ -419,6 +499,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
 
     override fun onDestroy() {
         super.onDestroy()
+        upcomingRefreshRunnable?.let { refreshHandler.removeCallbacks(it) }
         cancel()
     }
 

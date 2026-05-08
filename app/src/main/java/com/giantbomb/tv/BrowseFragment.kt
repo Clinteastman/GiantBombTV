@@ -41,6 +41,14 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     private var currentBackdropUrl: String? = null
     private var loadingSpinner: ProgressBar? = null
 
+    // Upcoming/Live row tracked separately so we can refresh just that one without
+    // rebuilding the whole grid (which would lose focus and re-fetch every endpoint).
+    private var rowsAdapterRef: ArrayObjectAdapter? = null
+    private var upcomingRowAdapter: ArrayObjectAdapter? = null
+    private var upcomingRowIndex: Int = -1
+    private var upcomingHasLive: Boolean = false
+    private var upcomingRefreshRunnable: Runnable? = null
+
     companion object {
         const val SETTINGS_REFRESH = 2
         const val SETTINGS_SETUP = 3
@@ -52,6 +60,9 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
         private const val LOAD_MORE_THRESHOLD = 15
+        // How often to re-poll the upcoming/live feed while the screen is foregrounded.
+        // Twitch's preview thumbnail also refreshes ~every minute, so this aligns nicely.
+        private const val UPCOMING_REFRESH_MS = 60_000L
     }
 
     // Per-row pagination state for show-grouped rows
@@ -279,6 +290,12 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             }
             val rowsAdapter = ArrayObjectAdapter(rowPresenter)
             var headerIdCounter = 0L
+            // Reset row tracking — rowsAdapter is brand new and the upcoming row, if any,
+            // will be added below. We'll capture references then for partial refresh.
+            rowsAdapterRef = rowsAdapter
+            upcomingRowAdapter = null
+            upcomingRowIndex = -1
+            upcomingHasLive = false
 
             val upcomingDeferred = async { api.getUpcoming() }
             val watchlistDeferred = async { api.getWatchlist() }
@@ -307,10 +324,13 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                         adapter.add(upcomingResult.liveNow)
                     }
                     upcomingResult.upcoming.forEach { adapter.add(it) }
+                    upcomingRowIndex = rowsAdapter.size()
                     rowsAdapter.add(ListRow(
                         HeaderItem(headerIdCounter++, headerTitle),
                         adapter
                     ))
+                    upcomingRowAdapter = adapter
+                    upcomingHasLive = upcomingResult.liveNow != null
                 }
             }
 
@@ -507,6 +527,78 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             loadContent()
         }
         hasBeenVisible = true
+        scheduleUpcomingRefresh()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        upcomingRefreshRunnable?.let { handler.removeCallbacks(it) }
+        upcomingRefreshRunnable = null
+    }
+
+    private fun scheduleUpcomingRefresh() {
+        upcomingRefreshRunnable?.let { handler.removeCallbacks(it) }
+        val r = object : Runnable {
+            override fun run() {
+                refreshUpcomingRow()
+                handler.postDelayed(this, UPCOMING_REFRESH_MS)
+            }
+        }
+        upcomingRefreshRunnable = r
+        handler.postDelayed(r, UPCOMING_REFRESH_MS)
+    }
+
+    private fun refreshUpcomingRow() {
+        val key = prefs.apiKey ?: return
+        if (key.isEmpty()) return
+        val rowsAdapter = rowsAdapterRef ?: return
+        val api = GiantBombApi(key)
+        launch {
+            val result = api.getUpcoming().getOrNull() ?: return@launch
+            if (!isAdded) return@launch
+
+            val hasContent = result.liveNow != null || result.upcoming.isNotEmpty()
+            val isLive = result.liveNow != null
+            val current = upcomingRowAdapter
+
+            when {
+                current != null && hasContent && isLive == upcomingHasLive -> {
+                    // Same live state — swap items in place; preserves focus.
+                    current.clear()
+                    result.liveNow?.let { current.add(it) }
+                    result.upcoming.forEach { current.add(it) }
+                }
+                current != null && hasContent -> {
+                    // Live state flipped — replace the row so the header updates too.
+                    val newAdapter = ArrayObjectAdapter(UpcomingCardPresenter())
+                    result.liveNow?.let { newAdapter.add(it) }
+                    result.upcoming.forEach { newAdapter.add(it) }
+                    val title = if (isLive) "🔴 Upcoming & Live" else "Upcoming"
+                    rowsAdapter.replace(
+                        upcomingRowIndex,
+                        ListRow(HeaderItem(0, title), newAdapter)
+                    )
+                    upcomingRowAdapter = newAdapter
+                    upcomingHasLive = isLive
+                }
+                current != null && !hasContent -> {
+                    rowsAdapter.removeItems(upcomingRowIndex, 1)
+                    upcomingRowAdapter = null
+                    upcomingRowIndex = -1
+                    upcomingHasLive = false
+                }
+                current == null && hasContent -> {
+                    val newAdapter = ArrayObjectAdapter(UpcomingCardPresenter())
+                    result.liveNow?.let { newAdapter.add(it) }
+                    result.upcoming.forEach { newAdapter.add(it) }
+                    val title = if (isLive) "🔴 Upcoming & Live" else "Upcoming"
+                    rowsAdapter.add(0, ListRow(HeaderItem(0, title), newAdapter))
+                    upcomingRowAdapter = newAdapter
+                    upcomingRowIndex = 0
+                    upcomingHasLive = isLive
+                }
+            }
+        }
     }
 
     private fun cycleQuality() {
@@ -590,6 +682,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     override fun onDestroy() {
         super.onDestroy()
         backdropRunnable?.let { handler.removeCallbacks(it) }
+        upcomingRefreshRunnable?.let { handler.removeCallbacks(it) }
         cancel()
     }
 }
