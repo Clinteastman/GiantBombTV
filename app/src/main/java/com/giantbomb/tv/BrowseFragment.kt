@@ -152,82 +152,51 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             orb.orbIcon = searchDrawable
         }
 
-        // Custom header presenter so a long-press on a side-menu header opens
-        // a context menu (pin/unpin, reorder, etc.) — Leanback's default
-        // RowHeaderPresenter has no long-click affordance.
-        setHeaderPresenterSelector(SinglePresenterSelector(
-            BrowseHeaderPresenter { _, header -> showHeaderContextMenu(header); true }
-        ))
+        // Custom header presenter so each header view carries its HeaderItem
+        // as a tag — used by MainActivity.dispatchKeyEvent to identify which
+        // row the user was holding when long-press fires. Leanback's
+        // HeadersSupportFragment overwrites view-level click listeners and
+        // BaseGridView short-circuits DPAD_CENTER to performClick(), so the
+        // long-press has to be detected at the activity level.
+        setHeaderPresenterSelector(SinglePresenterSelector(BrowseHeaderPresenter()))
     }
 
     /**
-     * RowHeaderPresenter that lets us hook long-clicks on the side-menu rows.
-     * The bound HeaderItem is stashed on the view's tag so the click callback
-     * can look up which row was activated without us hand-managing positions.
+     * RowHeaderPresenter that tags each header view with its HeaderItem so the
+     * activity-level dispatchKeyEvent long-press handler can find which row
+     * was held without trying to navigate the Leanback adapter internals.
+     *
+     * View-level setOnLongClickListener / setOnKeyListener don't fire here:
+     * Leanback's HeadersSupportFragment installs its own OnClickListener on
+     * each header view via ItemBridgeAdapter.AdapterListener, and BaseGridView
+     * short-circuits DPAD_CENTER to performClick() directly — bypassing the
+     * View framework's long-press detection. The activity-level handler in
+     * MainActivity.dispatchKeyEvent (calling tryShowFocusedHeaderMenu below)
+     * is the reliable place to catch a held centre key.
      */
-    private class BrowseHeaderPresenter(
-        private val onLongClick: (View, HeaderItem) -> Boolean
-    ) : RowHeaderPresenter() {
-        override fun onCreateViewHolder(parent: ViewGroup): RowHeaderPresenter.ViewHolder {
-            // RowHeaderPresenter narrows the return type to its own ViewHolder
-            // subclass, so the cast is required (super returns Presenter.ViewHolder
-            // at compile time but the runtime type matches).
-            val vh = super.onCreateViewHolder(parent) as RowHeaderPresenter.ViewHolder
-            vh.view.isClickable = true
-            vh.view.isLongClickable = true
-            // Touchscreen / mouse path.
-            vh.view.setOnLongClickListener { v ->
-                val tag = v.tag
-                if (tag is HeaderItem) onLongClick(v, tag) else false
-            }
-            // TV remote path. Leanback's HeadersFragment fires the regular
-            // click at ACTION_DOWN and may swallow ACTION_UP entirely, so
-            // duration-on-UP isn't reliable. Schedule a long-press runnable
-            // on ACTION_DOWN; if ACTION_UP arrives within the timeout we
-            // cancel it (regular click goes through). If the runnable runs,
-            // the user held the centre key — fire the menu.
-            val handler = Handler(Looper.getMainLooper())
-            var pendingLongPress: Runnable? = null
-            vh.view.setOnKeyListener { v, keyCode, event ->
-                val isCentre = keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-                    keyCode == KeyEvent.KEYCODE_ENTER
-                if (!isCentre) return@setOnKeyListener false
-                when (event.action) {
-                    KeyEvent.ACTION_DOWN -> {
-                        if (event.repeatCount == 0 && pendingLongPress == null) {
-                            val r = Runnable {
-                                pendingLongPress = null
-                                val tag = v.tag
-                                if (tag is HeaderItem) onLongClick(v, tag)
-                            }
-                            pendingLongPress = r
-                            handler.postDelayed(
-                                r,
-                                android.view.ViewConfiguration.getLongPressTimeout().toLong()
-                            )
-                        }
-                        false
-                    }
-                    KeyEvent.ACTION_UP -> {
-                        pendingLongPress?.let { handler.removeCallbacks(it) }
-                        pendingLongPress = null
-                        false
-                    }
-                    else -> false
-                }
-            }
-            return vh
-        }
-
+    private class BrowseHeaderPresenter : RowHeaderPresenter() {
         override fun onBindViewHolder(viewHolder: Presenter.ViewHolder, item: Any) {
             super.onBindViewHolder(viewHolder, item)
             viewHolder.view.tag = item as? HeaderItem
             // Append a discreet "more menu" glyph so users know each header has
-            // options behind it. Leanback's RowHeaderView is a TextView, so we
-            // can rewrite its text directly after super has set the row name.
+            // options behind it.
             val name = (item as? HeaderItem)?.name ?: return
             (viewHolder.view as? android.widget.TextView)?.text = "$name  ⋮"
         }
+    }
+
+    /**
+     * Called by MainActivity when D-pad centre has been held past the
+     * long-press threshold while the side menu is showing. Walks the focused
+     * view's tag to find the bound HeaderItem and pops the context menu.
+     * Returns true if we found a header to act on.
+     */
+    fun tryShowFocusedHeaderMenu(): Boolean {
+        if (!isShowingHeaders) return false
+        val focused = headersSupportFragment?.view?.findFocus() ?: view?.findFocus() ?: return false
+        val header = focused.tag as? HeaderItem ?: return false
+        showHeaderContextMenu(header)
+        return true
     }
 
     private fun showHeaderContextMenu(header: HeaderItem) {
