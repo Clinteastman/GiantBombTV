@@ -7,12 +7,10 @@ import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
-import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
-import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.widget.Button
 import android.widget.FrameLayout
@@ -21,7 +19,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.ScrollView
 import android.widget.Toast
-import androidx.core.view.WindowCompat
+import androidx.activity.enableEdgeToEdge
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
@@ -43,13 +41,8 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         super.onCreate(savedInstanceState)
 
         val isTv = DeviceUtil.isTv(this)
-        // Edge-to-edge + cutout for phones
         if (!isTv) {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                window.attributes.layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
+            enableEdgeToEdge()
         }
 
         @Suppress("DEPRECATION")

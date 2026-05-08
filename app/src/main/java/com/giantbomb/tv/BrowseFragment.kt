@@ -51,7 +51,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         private const val BACKDROP_ALPHA = 0.5f
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
-        private const val LOAD_MORE_THRESHOLD = 5
+        private const val LOAD_MORE_THRESHOLD = 15
     }
 
     // Per-row pagination state for show-grouped rows
@@ -75,6 +75,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         setupBackdrop()
         setupUIElements()
         setupListeners()
+        setupVerticalGridPrefetch()
         // setupKeyInterceptor() // TODO: re-enable when pin/unpin is fixed
 
         // First launch: redirect to setup if no API key
@@ -83,6 +84,23 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         } else {
             loadContent()
         }
+    }
+
+    private fun setupVerticalGridPrefetch() {
+        // Pre-layout extra rows offscreen so they're rendered before the user scrolls to them
+        view?.viewTreeObserver?.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                view?.viewTreeObserver?.removeOnGlobalLayoutListener(this)
+                try {
+                    val rowsFragment = childFragmentManager.fragments.firstOrNull { it is androidx.leanback.app.RowsSupportFragment }
+                    val gridView = (rowsFragment as? androidx.leanback.app.RowsSupportFragment)?.verticalGridView
+                    val extraPx = (400 * resources.displayMetrics.density).toInt()
+                    gridView?.setExtraLayoutSpace(extraPx)
+                } catch (e: Exception) {
+                    android.util.Log.w("BrowseFragment", "Prefetch setup failed", e)
+                }
+            }
+        })
     }
 
     private fun setupBackdrop() {
@@ -468,8 +486,9 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 utilAdapter
             ))
 
+            // Set adapter last so show rows (appended lazily as they load) are present.
             adapter = rowsAdapter
-            title = null  // clear text title — badge logo is shown instead
+            title = null
             } finally {
                 loadingSpinner?.visibility = View.GONE
                 isLoading = false

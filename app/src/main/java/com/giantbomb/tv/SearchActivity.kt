@@ -1,9 +1,7 @@
 package com.giantbomb.tv
 
-import android.os.Build
 import android.os.Bundle
-import android.view.WindowManager
-import androidx.core.view.WindowCompat
+import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
 import com.giantbomb.tv.mobile.MobileSearchFragment
 import com.giantbomb.tv.util.DeviceUtil
@@ -18,11 +16,7 @@ class SearchActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
 
         if (!isTv) {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                window.attributes.layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
+            enableEdgeToEdge()
         }
 
         setContentView(R.layout.activity_search)

@@ -5,21 +5,19 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.core.view.WindowCompat
+import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
 import com.giantbomb.tv.data.UpdateChecker
 import com.giantbomb.tv.mobile.MobileBrowseFragment
@@ -57,13 +55,8 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
         super.onCreate(savedInstanceState)
 
-        // Edge-to-edge + display cutout support for phones
         if (!isTv) {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                window.attributes.layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
+            enableEdgeToEdge()
         }
 
         setContentView(R.layout.activity_main)

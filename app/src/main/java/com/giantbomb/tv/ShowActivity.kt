@@ -5,6 +5,7 @@ import android.graphics.Shader
 import android.os.Build
 import android.os.Bundle
 import android.widget.ImageView
+import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.model.Show
@@ -17,10 +18,14 @@ class ShowActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (DeviceUtil.isTv(this)) {
+        val isTv = DeviceUtil.isTv(this)
+        if (isTv) {
             setTheme(R.style.Theme_GiantBombTV)
         }
         super.onCreate(savedInstanceState)
+        if (!isTv) {
+            enableEdgeToEdge()
+        }
         setContentView(R.layout.activity_show)
 
         @Suppress("DEPRECATION")

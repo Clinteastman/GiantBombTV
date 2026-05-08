@@ -35,3 +35,11 @@
     java.lang.Object writeReplace();
     java.lang.Object readResolve();
 }
+
+# Strip verbose/debug/info Log calls from release builds.
+# Log.w and Log.e are kept so crashes still surface useful info.
+-assumenosideeffects class android.util.Log {
+    public static *** v(...);
+    public static *** d(...);
+    public static *** i(...);
+}

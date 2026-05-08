@@ -64,6 +64,13 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+
+    lint {
+        // Existing issues are captured in lint-baseline.xml; CI fails only on new ones.
+        baseline = file("lint-baseline.xml")
+        warningsAsErrors = false
+        abortOnError = true
+    }
 }
 
 dependencies {
@@ -88,6 +95,9 @@ dependencies {
 
     // CardView
     implementation("androidx.cardview:cardview:1.0.0")
+
+    // Activity (enableEdgeToEdge)
+    implementation("androidx.activity:activity-ktx:1.9.0")
 
     // Image loading
     implementation("com.github.bumptech.glide:glide:4.16.0")
