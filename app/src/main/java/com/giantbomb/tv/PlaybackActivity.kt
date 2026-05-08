@@ -60,7 +60,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         const val EXTRA_VIDEO = "extra_video"
         const val EXTRA_LIVE_HLS_URL = "extra_live_hls_url"
         const val EXTRA_LIVE_TITLE = "extra_live_title"
-        private const val PROGRESS_SAVE_INTERVAL = 30_000L
     }
 
     private var player: MediaController? = null
@@ -73,8 +72,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private lateinit var api: GiantBombApi
     private var video: Video? = null
     private var videoDuration: Double = 0.0
-    private var progressJob: Job? = null
-    private var saveJob: Job? = null
     private var isTv = false
 
     // Chromecast
@@ -500,9 +497,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // Service is already playing the requested content: re-attach listener only.
         // attachPlayerListener() removes any prior instance, so PiP-return paths
         // don't stack duplicate listeners that would multi-fire on STATE_ENDED.
+        // Progress saving + markWatched live on the service, so we don't restart
+        // any activity-side timer here.
         if (desiredMediaId != null && c.currentMediaItem?.mediaId == desiredMediaId) {
             if (v != null) attachPlayerListener(c)
-            if (progressJob?.isActive != true) startProgressSaving()
             return
         }
         if (liveHlsUrl != null) initializeLivePlayer(liveHlsUrl)
@@ -546,10 +544,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     override fun onStop() {
         super.onStop()
-        // Save progress but do NOT stop the service. The service keeps the player
-        // alive (and a foreground notification) so playback continues when the
-        // activity is backgrounded, in PiP, or after the user closes the app.
-        saveProgressNow()
+        // The service keeps the player alive (and a foreground notification)
+        // so playback continues when the activity is backgrounded, in PiP, or
+        // after the user closes the app. Progress + markWatched are saved
+        // service-side via Player.Listener — nothing for us to flush here.
         disconnectController()
         // Cast session lives on the receiver regardless of this CastPlayer
         // instance, so releasing is safe.
@@ -735,7 +733,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
                 attachPlayerListener(p)
                 p.playWhenReady = true
-                startProgressSaving()
             }
 
             result.onFailure { e ->
@@ -1037,29 +1034,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         finish()
     }
 
-    private fun startProgressSaving() {
-        progressJob = launch {
-            while (isActive) {
-                delay(PROGRESS_SAVE_INTERVAL)
-                saveProgressNow()
-            }
-        }
-    }
-
-    private fun saveProgressNow() {
-        val v = video ?: return
-        val activePlayer: Player = (if (isCasting) castPlayer else player) ?: return
-        val currentSec = activePlayer.currentPosition / 1000.0
-        val durationSec = if (videoDuration > 0) videoDuration else activePlayer.duration / 1000.0
-        if (currentSec > 0 && durationSec > 0) {
-            saveJob?.cancel()
-            saveJob = launch { api.saveProgress(v.id, currentSec, durationSec) }
-        }
-    }
-
     private fun disconnectController() {
-        progressJob?.cancel()
-        progressJob = null
         controllerFuture?.let { if (!it.isDone) it.cancel(true) }
         controllerFuture = null
         // Drop the listener reference too — release() makes the player unusable,
@@ -1082,14 +1057,12 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 if (state == Player.STATE_ENDED) {
                     // Read the current video at callback time rather than capturing,
                     // so a media-item swap on the same controller can't fire
-                    // markWatched/playNextEpisode against a stale Video.
+                    // playNextEpisode against a stale Video. markWatched runs on
+                    // the service side so it fires even when the activity is gone.
                     val current = video ?: return
                     val currentMediaId = p.currentMediaItem?.mediaId
                     if (currentMediaId != "vod:${current.id}") return
-                    launch {
-                        api.markWatched(current.id)
-                        playNextEpisode(current)
-                    }
+                    launch { playNextEpisode(current) }
                 }
             }
         }
@@ -1111,7 +1084,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 if (!isTv && tryEnterPip()) {
                     true
                 } else {
-                    saveProgressNow()
+                    // Service-side periodic saver covers final-position
+                    // persistence; just finish the activity.
                     finish()
                     true
                 }
