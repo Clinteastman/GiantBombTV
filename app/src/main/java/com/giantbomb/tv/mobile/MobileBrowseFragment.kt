@@ -51,14 +51,12 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     private val browseItems = mutableListOf<BrowseItem>()
     private lateinit var browseAdapter: BrowseAdapter
 
-    // Chip bar: quick-jump strip of section names. Populated each time
-    // loadContent() finishes, hidden when there's nothing to chip.
+    // Chip bar: quick-jump strip of section + per-show entries. Populated each
+    // time loadContent() finishes, hidden when there's nothing to chip.
     private lateinit var chipBar: RecyclerView
-    private val chipItems = mutableListOf<Pair<String, String>>()  // (sectionId, label)
+    private data class ChipEntry(val key: String, val label: String, val targetIndex: Int)
+    private val chipItems = mutableListOf<ChipEntry>()
     private lateinit var chipAdapter: ChipAdapter
-    // Section starts sorted by index, so the scroll listener can binary-walk
-    // them to find which section the user is currently looking at.
-    private var sortedSectionStarts: List<Pair<Int, String>> = emptyList()
     private var activeChipIndex: Int = -1
 
     // Set of video IDs currently on the watchlist — drives the per-card
@@ -659,18 +657,46 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         val order = prefs.getSectionOrder()
         val hidden = prefs.getHiddenSections()
         chipItems.clear()
+        // Keep section starts sorted so we can find the boundary of each
+        // section when expanding pinned/active sections into per-show chips.
+        val sortedStarts = sectionStartIndices.entries
+            .filter { it.key !in hidden }
+            .sortedBy { it.value }
         for (id in order) {
             if (id in hidden) continue
-            // Only include sections that actually rendered something this load.
-            if (id !in sectionStartIndices) continue
-            chipItems.add(id to PrefsManager.sectionLabel(id))
+            val start = sectionStartIndices[id] ?: continue
+            when (id) {
+                PrefsManager.SECTION_PINNED, PrefsManager.SECTION_ACTIVE_SHOWS -> {
+                    // Expand into one chip per show. Find the slice of
+                    // browseItems that belongs to this section, pick out
+                    // each ShowSectionHeader, and emit a chip targeting
+                    // that header's row.
+                    val nextStart = sortedStarts.firstOrNull { it.value > start }
+                        ?.value ?: browseItems.size
+                    for (i in start until nextStart) {
+                        val item = browseItems.getOrNull(i) ?: break
+                        if (item is BrowseItem.ShowSectionHeader) {
+                            chipItems.add(
+                                ChipEntry(
+                                    key = "show:${item.show.id}",
+                                    label = item.show.title,
+                                    targetIndex = i
+                                )
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    chipItems.add(
+                        ChipEntry(
+                            key = id,
+                            label = PrefsManager.sectionLabel(id),
+                            targetIndex = start
+                        )
+                    )
+                }
+            }
         }
-        // Sorted (startIndex, sectionId) for the scroll listener to walk
-        // forward through and find the section currently at the top.
-        sortedSectionStarts = sectionStartIndices.entries
-            .filter { it.key !in hidden }
-            .map { it.value to it.key }
-            .sortedBy { it.first }
         activeChipIndex = -1
         if (::chipAdapter.isInitialized) chipAdapter.notifyDataSetChanged()
         chipBar.visibility = if (chipItems.isEmpty()) View.GONE else View.VISIBLE
@@ -684,13 +710,14 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         val lm = recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return
         val first = lm.findFirstVisibleItemPosition()
         if (first < 0) return
-        // Walk forward through sorted section starts; the last one whose start
-        // is ≤ first is the section the user is currently looking at.
-        var newSectionId: String? = sortedSectionStarts.firstOrNull()?.second
-        for ((startIdx, sectionId) in sortedSectionStarts) {
-            if (startIdx <= first) newSectionId = sectionId else break
+        // chipItems are emitted in row-order during updateChipBar, so the
+        // last one whose target is ≤ first-visible-row is the chip the user
+        // is currently sitting on.
+        var newIdx = -1
+        for ((i, chip) in chipItems.withIndex()) {
+            if (chip.targetIndex <= first) newIdx = i else break
         }
-        val newIdx = chipItems.indexOfFirst { it.first == newSectionId }
+        if (newIdx < 0) newIdx = 0
         if (newIdx == activeChipIndex) return
         val old = activeChipIndex
         activeChipIndex = newIdx
@@ -701,19 +728,17 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         }
     }
 
-    private fun jumpToSection(sectionId: String) {
-        val idx = sectionStartIndices[sectionId] ?: return
+    private fun jumpToChipTarget(targetIndex: Int) {
+        if (targetIndex < 0 || targetIndex >= browseItems.size) return
         val lm = recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
         if (lm != null) {
-            // Smooth-scroll with the header snapped to the top of the viewport
-            // — looks cleaner than scrollToPositionWithOffset's instant jump.
             val scroller = object : androidx.recyclerview.widget.LinearSmoothScroller(requireContext()) {
                 override fun getVerticalSnapPreference(): Int = SNAP_TO_START
             }
-            scroller.targetPosition = idx
+            scroller.targetPosition = targetIndex
             lm.startSmoothScroll(scroller)
         } else {
-            recyclerView.smoothScrollToPosition(idx)
+            recyclerView.smoothScrollToPosition(targetIndex)
         }
     }
 
@@ -747,8 +772,8 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         override fun getItemCount(): Int = chipItems.size
 
         override fun onBindViewHolder(holder: VH, position: Int) {
-            val (sectionId, label) = chipItems[position]
-            holder.text.text = label
+            val chip = chipItems[position]
+            holder.text.text = chip.label
             val ctx = holder.text.context
             val density = ctx.resources.displayMetrics.density
             val active = position == activeChipIndex
@@ -768,7 +793,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             } else {
                 android.graphics.Typeface.DEFAULT
             }
-            holder.text.setOnClickListener { jumpToSection(sectionId) }
+            holder.text.setOnClickListener { jumpToChipTarget(chip.targetIndex) }
         }
     }
 
