@@ -51,6 +51,12 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     private val browseItems = mutableListOf<BrowseItem>()
     private lateinit var browseAdapter: BrowseAdapter
 
+    // Chip bar: quick-jump strip of section names. Populated each time
+    // loadContent() finishes, hidden when there's nothing to chip.
+    private lateinit var chipBar: RecyclerView
+    private val chipItems = mutableListOf<Pair<String, String>>()  // (sectionId, label)
+    private lateinit var chipAdapter: ChipAdapter
+
     // Upcoming/Live row tracked separately so we can refresh just that row
     // (and its header) every minute without rebuilding the whole grid.
     private var upcomingRowItemIndex: Int = -1
@@ -126,6 +132,11 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         browseAdapter = BrowseAdapter()
         setupLayoutManager()
         recyclerView.adapter = browseAdapter
+
+        chipBar = view.findViewById(R.id.chip_bar)
+        chipBar.layoutManager = LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+        chipAdapter = ChipAdapter()
+        chipBar.adapter = chipAdapter
 
         swipeRefresh.setColorSchemeColors(
             ContextCompat.getColor(requireContext(), R.color.gb_red)
@@ -349,6 +360,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 browseItems.clear()
                 browseItems.addAll(items)
                 browseAdapter.notifyDataSetChanged()
+                updateChipBar()
 
             } finally {
                 isLoading = false
@@ -581,6 +593,78 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     // -----------------------------------------------------------------------
     // Adapter
     // -----------------------------------------------------------------------
+
+    private fun updateChipBar() {
+        val order = prefs.getSectionOrder()
+        val hidden = prefs.getHiddenSections()
+        chipItems.clear()
+        for (id in order) {
+            if (id in hidden) continue
+            // Only include sections that actually rendered something this load.
+            if (id !in sectionStartIndices) continue
+            chipItems.add(id to PrefsManager.sectionLabel(id))
+        }
+        if (::chipAdapter.isInitialized) chipAdapter.notifyDataSetChanged()
+        chipBar.visibility = if (chipItems.isEmpty()) View.GONE else View.VISIBLE
+    }
+
+    private fun jumpToSection(sectionId: String) {
+        val idx = sectionStartIndices[sectionId] ?: return
+        val lm = recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
+        if (lm != null) {
+            // Smooth-scroll with the header snapped to the top of the viewport
+            // — looks cleaner than scrollToPositionWithOffset's instant jump.
+            val scroller = object : androidx.recyclerview.widget.LinearSmoothScroller(requireContext()) {
+                override fun getVerticalSnapPreference(): Int = SNAP_TO_START
+            }
+            scroller.targetPosition = idx
+            lm.startSmoothScroll(scroller)
+        } else {
+            recyclerView.smoothScrollToPosition(idx)
+        }
+    }
+
+    private inner class ChipAdapter : RecyclerView.Adapter<ChipAdapter.VH>() {
+        inner class VH(val text: TextView) : RecyclerView.ViewHolder(text)
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val ctx = parent.context
+            val density = ctx.resources.displayMetrics.density
+            val tv = TextView(ctx).apply {
+                setPadding(
+                    (16 * density).toInt(),
+                    (8 * density).toInt(),
+                    (16 * density).toInt(),
+                    (8 * density).toInt()
+                )
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 100f * density
+                    setColor(0x33FFFFFF)
+                    setStroke((1 * density).toInt(), 0x55FFFFFF)
+                }
+                setTextColor(ContextCompat.getColor(ctx, R.color.gb_white))
+                textSize = 13f
+                isClickable = true
+                isFocusable = true
+                layoutParams = ViewGroup.MarginLayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    marginEnd = (8 * density).toInt()
+                }
+            }
+            return VH(tv)
+        }
+
+        override fun getItemCount(): Int = chipItems.size
+
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val (sectionId, label) = chipItems[position]
+            holder.text.text = label
+            holder.text.setOnClickListener { jumpToSection(sectionId) }
+        }
+    }
 
     private inner class BrowseAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
