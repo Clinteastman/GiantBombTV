@@ -1559,9 +1559,13 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     // -----------------------------------------------------------------------
 
     private fun formatDate(dateStr: String): String {
-        // publishDate format: "2024-01-15 12:00:00" or similar
+        // Accepts both "YYYY-MM-DD HH:MM:SS" (legacy GB format) and
+        // ISO 8601 "YYYY-MM-DDTHH:MM:SS[.SSS]Z" (newer API responses).
+        // Replacing 'T' with space lets the same split-on-space stripper
+        // handle both — without this the time portion was leaking into the
+        // day and rendering as "May 08T15:00:00.000Z, 2026".
         return try {
-            val parts = dateStr.split(" ")[0].split("-")
+            val parts = dateStr.replace('T', ' ').split(" ")[0].split("-")
             if (parts.size == 3) {
                 val months = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun",
                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
