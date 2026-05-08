@@ -3235,4 +3235,26 @@
             file="src/main/AndroidManifest.xml"/>
     </issue>
 
+    <issue
+        id="RestrictedApi"
+        message="BaseGridView.setExtraLayoutSpace can only be called from within the same library group (referenced groupId=`androidx.leanback` from groupId=`GiantBombTV`)"
+        errorLine1="                    gridView?.setExtraLayoutSpace(extraPx)"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/BrowseFragment.kt"
+            line="98"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="RestrictedApi"
+        message="ComponentActivity.dispatchKeyEvent can only be called from within the same library group prefix (referenced groupId=`androidx.core` with prefix androidx from groupId=`GiantBombTV`)"
+        errorLine1="        return super.dispatchKeyEvent(event)"
+        errorLine2="                     ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/giantbomb/tv/MainActivity.kt"
+            line="48"
+            column="22"/>
+    </issue>
+
 </issues>
