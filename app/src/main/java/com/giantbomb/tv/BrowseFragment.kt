@@ -201,6 +201,11 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         override fun onBindViewHolder(viewHolder: Presenter.ViewHolder, item: Any) {
             super.onBindViewHolder(viewHolder, item)
             viewHolder.view.tag = item as? HeaderItem
+            // Append a discreet "more menu" glyph so users know each header has
+            // options behind it. Leanback's RowHeaderView is a TextView, so we
+            // can rewrite its text directly after super has set the row name.
+            val name = (item as? HeaderItem)?.name ?: return
+            (viewHolder.view as? android.widget.TextView)?.text = "$name  ⋮"
         }
     }
 
