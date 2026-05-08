@@ -62,6 +62,11 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
         private const val LOAD_MORE_THRESHOLD = 15
+        // Number of cards eagerly populated into each show row at startup.
+        // Users only ever see about three cards before scrolling/focusing, so
+        // prefetching this many makes the first peek feel populated. Focus then
+        // triggers loadMoreForRow to fetch the rest of the page.
+        private const val SHOW_ROW_PREFETCH = 3
         // How often to re-poll the upcoming/live feed while the screen is foregrounded.
         // Twitch's preview thumbnail also refreshes ~every minute, so this aligns nicely.
         // Match the mobile interval (was 60s). Together with the failure
@@ -666,6 +671,33 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             // Set adapter last so show rows (appended lazily as they load) are present.
             adapter = rowsAdapter
             title = null
+
+            // Eagerly prefetch the first few cards for every show row. Users
+            // never see more than ~3 cards before they focus a row, so making
+            // those three appear immediately makes the page feel "loaded"
+            // without us having to fetch every show's full page upfront.
+            // We mark each pagination as loading first so the focus listener
+            // doesn't race with the prefetch and end up firing a duplicate
+            // GET before the prefetch completes.
+            for (pagination in rowPaginationMap.values) {
+                pagination.isLoading = true
+            }
+            for (pagination in rowPaginationMap.values) {
+                launch {
+                    val result = api.getShowVideos(
+                        showId = pagination.showId,
+                        limit = SHOW_ROW_PREFETCH,
+                        offset = 0
+                    )
+                    val videos = result.getOrNull()
+                    if (videos != null && isAdded) {
+                        videos.forEach { pagination.adapter.add(it.withProgress()) }
+                        pagination.offset = videos.size
+                        if (videos.size < SHOW_ROW_PREFETCH) pagination.hasMore = false
+                    }
+                    pagination.isLoading = false
+                }
+            }
             } finally {
                 loadingSpinner?.visibility = View.GONE
                 isLoading = false
