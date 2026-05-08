@@ -56,6 +56,10 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     private lateinit var chipBar: RecyclerView
     private val chipItems = mutableListOf<Pair<String, String>>()  // (sectionId, label)
     private lateinit var chipAdapter: ChipAdapter
+    // Section starts sorted by index, so the scroll listener can binary-walk
+    // them to find which section the user is currently looking at.
+    private var sortedSectionStarts: List<Pair<Int, String>> = emptyList()
+    private var activeChipIndex: Int = -1
 
     // Upcoming/Live row tracked separately so we can refresh just that row
     // (and its header) every minute without rebuilding the whole grid.
@@ -142,6 +146,14 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         chipBar.layoutManager = LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
         chipAdapter = ChipAdapter()
         chipBar.adapter = chipAdapter
+
+        // Sync the active chip + add visual breathing room between sections.
+        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                updateActiveChip()
+            }
+        })
+        recyclerView.addItemDecoration(SectionGapDecoration())
 
         swipeRefresh.setColorSchemeColors(
             ContextCompat.getColor(requireContext(), R.color.gb_red)
@@ -619,8 +631,40 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             if (id !in sectionStartIndices) continue
             chipItems.add(id to PrefsManager.sectionLabel(id))
         }
+        // Sorted (startIndex, sectionId) for the scroll listener to walk
+        // forward through and find the section currently at the top.
+        sortedSectionStarts = sectionStartIndices.entries
+            .filter { it.key !in hidden }
+            .map { it.value to it.key }
+            .sortedBy { it.first }
+        activeChipIndex = -1
         if (::chipAdapter.isInitialized) chipAdapter.notifyDataSetChanged()
         chipBar.visibility = if (chipItems.isEmpty()) View.GONE else View.VISIBLE
+        // Snap the active chip to whatever's already in view at this point —
+        // matters on initial load and after pull-to-refresh.
+        updateActiveChip()
+    }
+
+    private fun updateActiveChip() {
+        if (chipItems.isEmpty()) return
+        val lm = recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return
+        val first = lm.findFirstVisibleItemPosition()
+        if (first < 0) return
+        // Walk forward through sorted section starts; the last one whose start
+        // is ≤ first is the section the user is currently looking at.
+        var newSectionId: String? = sortedSectionStarts.firstOrNull()?.second
+        for ((startIdx, sectionId) in sortedSectionStarts) {
+            if (startIdx <= first) newSectionId = sectionId else break
+        }
+        val newIdx = chipItems.indexOfFirst { it.first == newSectionId }
+        if (newIdx == activeChipIndex) return
+        val old = activeChipIndex
+        activeChipIndex = newIdx
+        if (old in chipItems.indices) chipAdapter.notifyItemChanged(old)
+        if (newIdx in chipItems.indices) {
+            chipAdapter.notifyItemChanged(newIdx)
+            chipBar.smoothScrollToPosition(newIdx)
+        }
     }
 
     private fun jumpToSection(sectionId: String) {
@@ -652,12 +696,6 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     (16 * density).toInt(),
                     (8 * density).toInt()
                 )
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = 100f * density
-                    setColor(0x33FFFFFF)
-                    setStroke((1 * density).toInt(), 0x55FFFFFF)
-                }
                 setTextColor(ContextCompat.getColor(ctx, R.color.gb_white))
                 textSize = 13f
                 isClickable = true
@@ -677,7 +715,48 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         override fun onBindViewHolder(holder: VH, position: Int) {
             val (sectionId, label) = chipItems[position]
             holder.text.text = label
+            val ctx = holder.text.context
+            val density = ctx.resources.displayMetrics.density
+            val active = position == activeChipIndex
+            holder.text.background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 100f * density
+                if (active) {
+                    setColor(ContextCompat.getColor(ctx, R.color.gb_red))
+                    setStroke((1 * density).toInt(), ContextCompat.getColor(ctx, R.color.gb_red))
+                } else {
+                    setColor(0x33FFFFFF)
+                    setStroke((1 * density).toInt(), 0x55FFFFFF)
+                }
+            }
+            holder.text.typeface = if (active) {
+                android.graphics.Typeface.DEFAULT_BOLD
+            } else {
+                android.graphics.Typeface.DEFAULT
+            }
             holder.text.setOnClickListener { jumpToSection(sectionId) }
+        }
+    }
+
+    /**
+     * Adds breathing room before each section header so the visual transition
+     * between sections is easier to spot. First item gets no gap.
+     */
+    private inner class SectionGapDecoration : RecyclerView.ItemDecoration() {
+        private val gapPx: Int = (24 * resources.displayMetrics.density).toInt()
+
+        override fun getItemOffsets(
+            outRect: android.graphics.Rect,
+            view: View,
+            parent: RecyclerView,
+            state: RecyclerView.State
+        ) {
+            val pos = parent.getChildAdapterPosition(view)
+            if (pos <= 0 || pos >= browseItems.size) return
+            val item = browseItems[pos]
+            if (item is BrowseItem.SectionHeader || item is BrowseItem.ShowSectionHeader) {
+                outRect.top = gapPx
+            }
         }
     }
 
@@ -709,7 +788,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             val inflater = LayoutInflater.from(parent.context)
             return when (viewType) {
                 TYPE_SECTION_HEADER -> SectionHeaderVH(inflater.inflate(R.layout.item_section_header, parent, false))
-                TYPE_SHOW_SECTION_HEADER -> ShowSectionHeaderVH(inflater.inflate(R.layout.item_section_header, parent, false))
+                TYPE_SHOW_SECTION_HEADER -> ShowSectionHeaderVH(inflater.inflate(R.layout.item_show_section_header, parent, false))
                 TYPE_HORIZONTAL_VIDEO_ROW -> HorizontalVideoRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
                 TYPE_HORIZONTAL_SHOW_ROW -> HorizontalShowRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
                 TYPE_VERTICAL_VIDEO -> VerticalVideoVH(inflater.inflate(R.layout.item_mobile_video, parent, false))
@@ -751,12 +830,19 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
 
     private inner class ShowSectionHeaderVH(view: View) : RecyclerView.ViewHolder(view) {
         private val title: TextView = view.findViewById(R.id.section_title)
-        private val seeAll: TextView = view.findViewById(R.id.section_see_all)
+        private val pinStar: TextView = view.findViewById(R.id.pin_star)
 
         fun bind(item: BrowseItem.ShowSectionHeader) {
-            // Star prefix communicates pin state without an extra icon view.
-            title.text = if (item.pinned) "★ ${item.show.title}" else item.show.title
-            seeAll.visibility = View.GONE
+            title.text = item.show.title
+            // Filled ★ = pinned, outlined ☆ = pinnable. Tap toggles; long-press
+            // on the row anywhere also toggles, kept as a power-user shortcut.
+            pinStar.text = if (item.pinned) "★" else "☆"
+            pinStar.contentDescription = if (item.pinned) {
+                "Unpin ${item.show.title}"
+            } else {
+                "Pin ${item.show.title} to top"
+            }
+            pinStar.setOnClickListener { togglePin(item.show) }
             itemView.setOnLongClickListener {
                 togglePin(item.show)
                 true
