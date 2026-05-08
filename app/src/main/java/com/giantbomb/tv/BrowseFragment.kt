@@ -168,8 +168,11 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     private class BrowseHeaderPresenter(
         private val onLongClick: (View, HeaderItem) -> Boolean
     ) : RowHeaderPresenter() {
-        override fun onCreateViewHolder(parent: ViewGroup): ViewHolder {
-            val vh = super.onCreateViewHolder(parent)
+        override fun onCreateViewHolder(parent: ViewGroup): RowHeaderPresenter.ViewHolder {
+            // RowHeaderPresenter narrows the return type to its own ViewHolder
+            // subclass, so the cast is required (super returns Presenter.ViewHolder
+            // at compile time but the runtime type matches).
+            val vh = super.onCreateViewHolder(parent) as RowHeaderPresenter.ViewHolder
             vh.view.isLongClickable = true
             vh.view.setOnLongClickListener { v ->
                 val tag = v.tag
@@ -178,7 +181,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             return vh
         }
 
-        override fun onBindViewHolder(viewHolder: ViewHolder, item: Any?) {
+        override fun onBindViewHolder(viewHolder: Presenter.ViewHolder, item: Any) {
             super.onBindViewHolder(viewHolder, item)
             viewHolder.view.tag = item as? HeaderItem
         }
