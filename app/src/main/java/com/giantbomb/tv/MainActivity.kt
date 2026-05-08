@@ -62,30 +62,31 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
             if (browse != null && browse.isShowingHeaders) {
                 when (event.action) {
                     KeyEvent.ACTION_DOWN -> {
+                        Log.d("GBHeaderLP", "DOWN repeat=${event.repeatCount} pending=${pendingHeaderLongPress != null}")
                         if (event.repeatCount == 0 && pendingHeaderLongPress == null) {
                             headerLongPressFired = false
                             val r = Runnable {
+                                Log.d("GBHeaderLP", "runnable firing — calling tryShowFocusedHeaderMenu")
                                 pendingHeaderLongPress = null
-                                headerLongPressFired = browse.tryShowFocusedHeaderMenu()
+                                val handled = browse.tryShowFocusedHeaderMenu()
+                                Log.d("GBHeaderLP", "tryShowFocusedHeaderMenu returned $handled")
+                                headerLongPressFired = handled
                             }
                             pendingHeaderLongPress = r
-                            longPressHandler.postDelayed(
-                                r, ViewConfiguration.getLongPressTimeout().toLong()
-                            )
+                            val delay = ViewConfiguration.getLongPressTimeout().toLong()
+                            Log.d("GBHeaderLP", "scheduled at +${delay}ms")
+                            longPressHandler.postDelayed(r, delay)
                         }
-                        // Swallow ACTION_DOWN (and repeats) so Leanback doesn't
-                        // fire its synthetic click before our long-press window
-                        // has elapsed.
                         return true
                     }
                     KeyEvent.ACTION_UP -> {
                         val pending = pendingHeaderLongPress
+                        Log.d("GBHeaderLP", "UP pending=${pending != null} fired=$headerLongPressFired")
                         if (pending != null) {
                             longPressHandler.removeCallbacks(pending)
                             pendingHeaderLongPress = null
-                            // Short press — perform the normal click ourselves
-                            // since we swallowed the original ACTION_DOWN.
                             if (!headerLongPressFired) {
+                                Log.d("GBHeaderLP", "short press — performClick on ${currentFocus}")
                                 currentFocus?.performClick()
                             }
                         }

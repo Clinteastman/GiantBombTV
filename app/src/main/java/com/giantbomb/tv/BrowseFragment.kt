@@ -192,8 +192,13 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
      * Returns true if we found a header to act on.
      */
     fun tryShowFocusedHeaderMenu(): Boolean {
+        android.util.Log.d("GBHeaderLP", "tryShowFocusedHeaderMenu: isShowingHeaders=$isShowingHeaders")
         if (!isShowingHeaders) return false
-        val focused = headersSupportFragment?.view?.findFocus() ?: view?.findFocus() ?: return false
+        val hf = headersSupportFragment
+        val hfFocus = hf?.view?.findFocus()
+        val rootFocus = view?.findFocus()
+        android.util.Log.d("GBHeaderLP", "headersFragment=$hf hfFocus=$hfFocus rootFocus=$rootFocus tag=${hfFocus?.tag ?: rootFocus?.tag}")
+        val focused = hfFocus ?: rootFocus ?: return false
         val header = focused.tag as? HeaderItem ?: return false
         showHeaderContextMenu(header)
         return true
