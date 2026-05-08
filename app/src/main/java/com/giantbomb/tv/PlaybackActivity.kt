@@ -95,6 +95,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var castContext: CastContext? = null
     private var castPlayer: CastPlayer? = null
     private var isCasting = false
+    // High-perf wifi lock held while a Chromecast session is active so the
+    // sender↔receiver link doesn't downshift when the screen turns off.
+    // Released when we leave the cast or finish the activity.
+    private var castWifiLock: android.net.wifi.WifiManager.WifiLock? = null
 
     // Mobile portrait layout views
     private var mobileContentScroll: ScrollView? = null
@@ -613,9 +617,13 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // shows transport controls. Progress + markWatched are saved
         // service-side via Player.Listener — nothing for us to flush here.
         disconnectController()
-        // Cast session lives on the receiver regardless of this CastPlayer
-        // instance, so releasing is safe.
-        releaseCastPlayer()
+        // Only release the cast player when we're actually finishing. Screen
+        // lock / Home press goes through onStop with isFinishing=false; if we
+        // released here too, we'd lose control of the running cast session
+        // and the receiver would drop the link.
+        if (explicitlyFinishing || wasInPip) {
+            releaseCastPlayer()
+        }
         enteredPip = false
         if (explicitlyFinishing || wasInPip) {
             // The user dismissed the player UI on purpose — PiP X, PiP swipe-away,
@@ -653,6 +661,25 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         castPlayer?.setSessionAvailabilityListener(null)
         castPlayer?.release()
         castPlayer = null
+        releaseCastWifiLock()
+    }
+
+    private fun acquireCastWifiLock() {
+        if (castWifiLock?.isHeld == true) return
+        val wm = applicationContext.getSystemService(android.content.Context.WIFI_SERVICE)
+            as? android.net.wifi.WifiManager ?: return
+        castWifiLock = wm.createWifiLock(
+            android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+            "GiantBombTV:Cast"
+        ).apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun releaseCastWifiLock() {
+        castWifiLock?.takeIf { it.isHeld }?.release()
+        castWifiLock = null
     }
 
     private fun switchToCast() {
@@ -669,6 +696,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         exo?.pause()
         playerView.player = cp
         isCasting = true
+        // Hold a high-perf wifi lock so the sender↔receiver link survives a
+        // screen lock — without this, Wi-Fi downshifts and the receiver drops
+        // the cast session within a minute or two of the screen going off.
+        acquireCastWifiLock()
         val mimeType = if (currentOption.isHls) MimeTypes.APPLICATION_M3U8 else MimeTypes.VIDEO_MP4
 
         val castMediaItem = MediaItem.Builder()
@@ -693,6 +724,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val wasPlaying = cp?.isPlaying ?: true
 
         isCasting = false
+        // Cast session ended — drop the high-perf wifi lock.
+        releaseCastWifiLock()
 
         // Re-attach local player
         val exo = player
@@ -1212,6 +1245,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
      * holding rewind/forward on a remote — first taps move a few seconds,
      * sustained holds rapidly skim through minutes.
      */
+    @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val isLeft = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT
         val isRight = event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT

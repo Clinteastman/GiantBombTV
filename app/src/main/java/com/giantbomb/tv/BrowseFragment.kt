@@ -225,7 +225,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         }
         if (items.isEmpty()) return
         val labels = items.map { it.first }.toTypedArray()
-        AlertDialog.Builder(requireContext())
+        AlertDialog.Builder(requireContext(), R.style.GbDialogTheme)
             .setTitle(header.name)
             .setItems(labels) { _, which -> items[which].second() }
             .show()
