@@ -46,9 +46,9 @@ class ShowCardPresenter : Presenter() {
         val show = item as Show
         val cardView = viewHolder.view as ImageCardView
         val prefs = PrefsManager(viewHolder.view.context)
-        val isFav = prefs.isFavouriteShow(show.id)
-        cardView.titleText = if (isFav) "\u2605 ${show.title}" else show.title
-        cardView.contentText = if (isFav) "Pinned" else if (show.active) "Active" else ""
+        val isPinned = prefs.isPinnedShow(show.id)
+        cardView.titleText = if (isPinned) "\u2605 ${show.title}" else show.title
+        cardView.contentText = if (isPinned) "Pinned" else if (show.active) "Active" else ""
 
         val imageUrl = show.posterUrl ?: show.logoUrl
         if (!imageUrl.isNullOrEmpty()) {
