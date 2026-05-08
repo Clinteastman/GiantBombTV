@@ -826,25 +826,29 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                             .build()
                     )
                     .build()
-                p.setMediaItem(mediaItem)
-                p.prepare()
 
                 val startFromBeginning = intent.getBooleanExtra("start_from_beginning", false)
-                if (!startFromBeginning) {
-                    // Prefer the resume position passed in by the caller (e.g.
-                    // DetailActivity already loaded progress to render the
-                    // "Resume (Nm in)" button). Avoids a second network call
-                    // here and the race where the player has started before
-                    // the second getProgress() returns.
-                    val explicitResumeSec = intent.getDoubleExtra(EXTRA_RESUME_SECONDS, 0.0)
-                    if (explicitResumeSec > 0) {
-                        p.seekTo((explicitResumeSec * 1000).toLong())
-                    } else {
-                        val progressResult = api.getProgress()
-                        progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
-                            if (progress.percentComplete < 95 && progress.currentTime > 0) {
-                                p.seekTo((progress.currentTime * 1000).toLong())
-                            }
+                val explicitResumeSec = intent.getDoubleExtra(EXTRA_RESUME_SECONDS, 0.0)
+                val initialPositionMs = if (!startFromBeginning && explicitResumeSec > 0) {
+                    (explicitResumeSec * 1000).toLong()
+                } else {
+                    0L
+                }
+                // setMediaItem(item, position) is used (instead of a separate
+                // seekTo after prepare) so the player's first ready callback
+                // already reports the resume position — no race with prepare()
+                // resetting back to 0 before our seek lands.
+                p.setMediaItem(mediaItem, initialPositionMs)
+                p.prepare()
+
+                // If the caller didn't pass an explicit resume position, fall
+                // back to fetching it from the API. The seek issued here is
+                // applied as soon as the player has buffered enough to seek.
+                if (!startFromBeginning && explicitResumeSec <= 0) {
+                    val progressResult = api.getProgress()
+                    progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
+                        if (progress.percentComplete < 95 && progress.currentTime > 0) {
+                            p.seekTo((progress.currentTime * 1000).toLong())
                         }
                     }
                 }
