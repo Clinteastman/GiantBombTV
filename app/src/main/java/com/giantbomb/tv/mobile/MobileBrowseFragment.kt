@@ -72,6 +72,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     private var upcomingHeaderItemIndex: Int = -1
     private val refreshHandler = Handler(Looper.getMainLooper())
     private var upcomingRefreshRunnable: Runnable? = null
+    private var lastUpcomingFailureMs: Long = 0L
 
     // Section header positions, populated each time loadContent runs. Drives the
     // chip-bar quick-jump and any other "scroll to section X" affordance.
@@ -86,7 +87,14 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
         private const val RECENT_VERTICAL_COUNT = 5
-        private const val UPCOMING_REFRESH_MS = 60_000L
+        // Polling /upcoming_json every 60s pushed us into the endpoint's
+        // hard rate limit (it applies to everyone, not just our UA). 180s is
+        // still snappy enough for "stream went live" to surface within a few
+        // minutes while cutting our request count to a third.
+        private const val UPCOMING_REFRESH_MS = 180_000L
+        // After a failed upcoming poll, suppress the next few ticks so we
+        // don't keep hammering an endpoint that's already throttling us.
+        private const val UPCOMING_FAILURE_BACKOFF_MS = 300_000L
     }
 
     // Sealed class representing different row types in the feed
@@ -239,9 +247,17 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     private fun refreshUpcomingRow() {
         val key = prefs.apiKey ?: return
         if (key.isEmpty()) return
+        // Skip if we recently got rate-limited / failed — polling harder makes
+        // the throttle stickier, not softer.
+        if (System.currentTimeMillis() - lastUpcomingFailureMs < UPCOMING_FAILURE_BACKOFF_MS) return
         val apiInstance = api ?: GiantBombApi(key)
         launch {
-            val result = apiInstance.getUpcoming().getOrNull() ?: return@launch
+            val rawResult = apiInstance.getUpcoming()
+            val result = rawResult.getOrNull()
+            if (result == null) {
+                lastUpcomingFailureMs = System.currentTimeMillis()
+                return@launch
+            }
             if (!isAdded) return@launch
 
             val hasContent = result.liveNow != null || result.upcoming.isNotEmpty()
