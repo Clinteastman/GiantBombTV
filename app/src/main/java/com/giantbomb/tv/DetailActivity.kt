@@ -35,6 +35,12 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         const val EXTRA_VIDEO = "extra_video"
     }
 
+    // Cached resume position in seconds, populated when the playback / progress
+    // load completes. The watch button's click handler reads this so it can
+    // pass an explicit resume position to PlaybackActivity instead of forcing
+    // PlaybackActivity to refetch progress (which can race with playback start).
+    private var resumeSeconds: Double = 0.0
+
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
     private val density by lazy { resources.displayMetrics.density }
 
@@ -245,6 +251,9 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             setOnClickListener {
                 val intent = Intent(this@DetailActivity, PlaybackActivity::class.java).apply {
                     putExtra(PlaybackActivity.EXTRA_VIDEO, video)
+                    if (resumeSeconds > 0) {
+                        putExtra(PlaybackActivity.EXTRA_RESUME_SECONDS, resumeSeconds)
+                    }
                 }
                 startActivity(intent)
             }
@@ -380,8 +389,11 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 metaView.text = parts.joinToString("  \u2022  ")
             }
 
-            // Update watch button to show Resume if there's progress
-            if (progress != null && progress.percentComplete in 1..94) {
+            // Update watch button to show Resume if there's progress, and
+            // cache the resume position so the click handler can pass it to
+            // PlaybackActivity directly.
+            if (progress != null && progress.percentComplete in 1..94 && progress.currentTime > 0) {
+                resumeSeconds = progress.currentTime
                 val resumeMin = (progress.currentTime / 60).toInt()
                 watchButton.text = "${getString(R.string.resume)} (${resumeMin}m in)"
                 restartButton.visibility = View.VISIBLE

@@ -66,6 +66,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         const val EXTRA_VIDEO = "extra_video"
         const val EXTRA_LIVE_HLS_URL = "extra_live_hls_url"
         const val EXTRA_LIVE_TITLE = "extra_live_title"
+        // Optional resume position in seconds, passed by DetailActivity so
+        // PlaybackActivity doesn't have to re-fetch progress (which can race
+        // with playback start or fail through Cloudflare).
+        const val EXTRA_RESUME_SECONDS = "extra_resume_seconds"
     }
 
     private var player: MediaController? = null
@@ -191,6 +195,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.setOnClickListener {
                         showQualityPicker()
                     }
+                    enhanceControlFocus(this)
                 }
             })
         }
@@ -227,6 +232,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.setOnClickListener {
                         showQualityPicker()
                     }
+                    enhanceControlFocus(this)
                 }
             })
         }
@@ -297,6 +303,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.setOnClickListener {
                         showQualityPicker()
                     }
+                    enhanceControlFocus(this)
                 }
             })
         }
@@ -791,10 +798,20 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
                 val startFromBeginning = intent.getBooleanExtra("start_from_beginning", false)
                 if (!startFromBeginning) {
-                    val progressResult = api.getProgress()
-                    progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
-                        if (progress.percentComplete < 95 && progress.currentTime > 0) {
-                            p.seekTo((progress.currentTime * 1000).toLong())
+                    // Prefer the resume position passed in by the caller (e.g.
+                    // DetailActivity already loaded progress to render the
+                    // "Resume (Nm in)" button). Avoids a second network call
+                    // here and the race where the player has started before
+                    // the second getProgress() returns.
+                    val explicitResumeSec = intent.getDoubleExtra(EXTRA_RESUME_SECONDS, 0.0)
+                    if (explicitResumeSec > 0) {
+                        p.seekTo((explicitResumeSec * 1000).toLong())
+                    } else {
+                        val progressResult = api.getProgress()
+                        progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
+                            if (progress.percentComplete < 95 && progress.currentTime > 0) {
+                                p.seekTo((progress.currentTime * 1000).toLong())
+                            }
                         }
                     }
                 }
@@ -834,6 +851,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 playerView.findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.setOnClickListener {
                     showQualityPicker()
                 }
+                enhanceControlFocus(playerView)
             }
         })
 
@@ -1136,6 +1154,88 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
         playbackListener = listener
         p.addListener(listener)
+    }
+
+    /**
+     * Stronger, on-brand focus state for the media3 controls. Focused buttons
+     * get a 2dp white outline ring + slight scale-up; the time bar is always
+     * red (YouTube-style) regardless of focus so the played position is
+     * unmistakable. Called every time the controls become visible — the
+     * operation is idempotent.
+     */
+    private fun enhanceControlFocus(pv: PlayerView) {
+        val red = 0xFFE3192C.toInt()
+        val density = resources.displayMetrics.density
+        val ringStroke = (2 * density).toInt()
+
+        val buttonIds = intArrayOf(
+            androidx.media3.ui.R.id.exo_play_pause,
+            androidx.media3.ui.R.id.exo_rew,
+            androidx.media3.ui.R.id.exo_ffwd,
+            androidx.media3.ui.R.id.exo_settings,
+            androidx.media3.ui.R.id.exo_subtitle,
+        )
+        for (id in buttonIds) {
+            val v = pv.findViewById<View>(id) ?: continue
+            v.setOnFocusChangeListener { view, hasFocus ->
+                if (hasFocus) {
+                    view.background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(0x00000000)
+                        setStroke(ringStroke, 0xFFFFFFFF.toInt())
+                    }
+                    view.animate().scaleX(1.15f).scaleY(1.15f).setDuration(120).start()
+                } else {
+                    view.background = null
+                    view.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                }
+            }
+        }
+
+        // Time bar: always red so the played position reads as the YouTube /
+        // standard media-app cue. Scrubber thumb stays default; the colour
+        // shift alone is plenty obvious.
+        val timeBar = pv.findViewById<androidx.media3.ui.DefaultTimeBar>(
+            androidx.media3.ui.R.id.exo_progress
+        )
+        timeBar?.apply {
+            setPlayedColor(red)
+            setScrubberColor(red)
+        }
+    }
+
+    /**
+     * Intercept DPAD LEFT/RIGHT when the time bar is focused so we can scrub
+     * with progressively larger jumps the longer the key is held. Default
+     * media3 time-bar scrubbing has a fixed step that's too coarse on long
+     * videos and too fine on short ones; this gives a feel similar to
+     * holding rewind/forward on a remote — first taps move a few seconds,
+     * sustained holds rapidly skim through minutes.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val isLeft = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+        val isRight = event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+        if ((isLeft || isRight) && event.action == KeyEvent.ACTION_DOWN) {
+            val p = player
+            val timeBar = if (::playerView.isInitialized) {
+                playerView.findViewById<View>(androidx.media3.ui.R.id.exo_progress)
+            } else null
+            if (p != null && timeBar != null && timeBar.isFocused) {
+                val incrementMs = scrubIncrementMs(event.repeatCount)
+                val sign = if (isRight) 1L else -1L
+                val newPos = (p.currentPosition + sign * incrementMs).coerceAtLeast(0L)
+                p.seekTo(newPos)
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun scrubIncrementMs(repeat: Int): Long = when {
+        repeat < 5 -> 5_000L          // 0–4: 5 s each
+        repeat < 15 -> 15_000L        // 5–14: 15 s each
+        repeat < 30 -> 60_000L        // 15–29: 1 min each
+        else -> 5 * 60_000L           // 30+: 5 min each
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
