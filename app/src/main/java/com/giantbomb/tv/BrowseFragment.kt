@@ -1,5 +1,6 @@
 package com.giantbomb.tv
 
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.drawable.Drawable
 import android.os.Bundle
@@ -7,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.Toast
@@ -81,6 +83,15 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     )
     private val rowPaginationMap = mutableMapOf<String, RowPagination>()
 
+    // Maps each row's HeaderItem.id to the action target it represents, so the
+    // custom side-menu header presenter can show the right context menu on
+    // long-press (pin/unpin a show, reorder a top-level section, etc.).
+    private sealed class HeaderContext {
+        data class Section(val id: String) : HeaderContext()
+        data class Show(val show: com.giantbomb.tv.model.Show, val pinned: Boolean) : HeaderContext()
+    }
+    private val headerContexts = mutableMapOf<Long, HeaderContext>()
+
     @Suppress("DEPRECATION")
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
@@ -135,6 +146,85 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         titleView?.findViewById<SearchOrbView>(androidx.leanback.R.id.title_orb)?.let { orb ->
             orb.orbIcon = searchDrawable
         }
+
+        // Custom header presenter so a long-press on a side-menu header opens
+        // a context menu (pin/unpin, reorder, etc.) — Leanback's default
+        // RowHeaderPresenter has no long-click affordance.
+        setHeaderPresenterSelector(SinglePresenterSelector(
+            BrowseHeaderPresenter { _, header -> showHeaderContextMenu(header); true }
+        ))
+    }
+
+    /**
+     * RowHeaderPresenter that lets us hook long-clicks on the side-menu rows.
+     * The bound HeaderItem is stashed on the view's tag so the click callback
+     * can look up which row was activated without us hand-managing positions.
+     */
+    private class BrowseHeaderPresenter(
+        private val onLongClick: (View, HeaderItem) -> Boolean
+    ) : RowHeaderPresenter() {
+        override fun onCreateViewHolder(parent: ViewGroup): ViewHolder {
+            val vh = super.onCreateViewHolder(parent)
+            vh.view.isLongClickable = true
+            vh.view.setOnLongClickListener { v ->
+                val tag = v.tag
+                if (tag is HeaderItem) onLongClick(v, tag) else false
+            }
+            return vh
+        }
+
+        override fun onBindViewHolder(viewHolder: ViewHolder, item: Any?) {
+            super.onBindViewHolder(viewHolder, item)
+            viewHolder.view.tag = item as? HeaderItem
+        }
+    }
+
+    private fun showHeaderContextMenu(header: HeaderItem) {
+        val ctx = headerContexts[header.id] ?: return
+        val items = mutableListOf<Pair<String, () -> Unit>>()
+        when (ctx) {
+            is HeaderContext.Section -> {
+                items += "Move up" to { moveSection(ctx.id, -1) }
+                items += "Move down" to { moveSection(ctx.id, +1) }
+            }
+            is HeaderContext.Show -> {
+                items += (if (ctx.pinned) "Unpin" else "Pin to top") to { togglePin(ctx.show) }
+                if (ctx.pinned) {
+                    items += "Move up" to { movePinnedShow(ctx.show.id, -1) }
+                    items += "Move down" to { movePinnedShow(ctx.show.id, +1) }
+                }
+            }
+        }
+        if (items.isEmpty()) return
+        val labels = items.map { it.first }.toTypedArray()
+        AlertDialog.Builder(requireContext())
+            .setTitle(header.name)
+            .setItems(labels) { _, which -> items[which].second() }
+            .show()
+    }
+
+    private fun moveSection(sectionId: String, direction: Int) {
+        val current = prefs.getSectionOrder().toMutableList()
+        val idx = current.indexOf(sectionId)
+        if (idx < 0) return
+        val newIdx = idx + direction
+        if (newIdx !in current.indices) return
+        current.removeAt(idx)
+        current.add(newIdx, sectionId)
+        prefs.setSectionOrder(current)
+        loadContent()
+    }
+
+    private fun movePinnedShow(showId: Int, direction: Int) {
+        val current = prefs.getPinnedShowIds().toMutableList()
+        val idx = current.indexOf(showId)
+        if (idx < 0) return
+        val newIdx = idx + direction
+        if (newIdx !in current.indices) return
+        current.removeAt(idx)
+        current.add(newIdx, showId)
+        prefs.setPinnedShowOrder(current)
+        loadContent()
     }
 
     private fun setupListeners() {
@@ -358,6 +448,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             // focus. Reset before each render so the new ListRows own their
             // adapters.
             rowPaginationMap.clear()
+            headerContexts.clear()
 
             // Render sections in user-defined order, mirroring the mobile
             // section model. The TV-specific bits:
@@ -377,10 +468,9 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                                 if (upcomingResult.liveNow != null) adapter.add(upcomingResult.liveNow)
                                 upcomingResult.upcoming.forEach { adapter.add(it) }
                                 upcomingRowIndex = rowsAdapter.size()
-                                rowsAdapter.add(ListRow(
-                                    HeaderItem(headerIdCounter++, headerTitle),
-                                    adapter
-                                ))
+                                val hid = headerIdCounter++
+                                headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_LIVE)
+                                rowsAdapter.add(ListRow(HeaderItem(hid, headerTitle), adapter))
                                 upcomingRowAdapter = adapter
                                 upcomingHasLive = upcomingResult.liveNow != null
                             }
@@ -398,8 +488,10 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                             if (continueVideos.isNotEmpty()) {
                                 val continueAdapter = ArrayObjectAdapter(CardPresenter())
                                 continueVideos.forEach { continueAdapter.add(it) }
+                                val hid = headerIdCounter++
+                                headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_CONTINUE)
                                 rowsAdapter.add(ListRow(
-                                    HeaderItem(headerIdCounter++, getString(R.string.continue_watching)),
+                                    HeaderItem(hid, getString(R.string.continue_watching)),
                                     continueAdapter
                                 ))
                             }
@@ -411,13 +503,12 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                         // null = couldn't fetch — hide; empty = fetched-but-empty
                         // — show a hint card.
                         if (watchlist != null && key.isNotEmpty()) {
+                            val hid = headerIdCounter++
+                            headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_WATCHLIST)
                             if (watchlist.isNotEmpty()) {
                                 val wlAdapter = ArrayObjectAdapter(CardPresenter())
                                 watchlist.forEach { wlAdapter.add(it) }
-                                rowsAdapter.add(ListRow(
-                                    HeaderItem(headerIdCounter++, "My Watchlist"),
-                                    wlAdapter
-                                ))
+                                rowsAdapter.add(ListRow(HeaderItem(hid, "My Watchlist"), wlAdapter))
                             } else {
                                 val hintAdapter = ArrayObjectAdapter(SettingsCardPresenter())
                                 hintAdapter.add(SettingsItem(
@@ -426,10 +517,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                                     "Open a video and tap Add to Watchlist",
                                     R.drawable.ic_watched
                                 ))
-                                rowsAdapter.add(ListRow(
-                                    HeaderItem(headerIdCounter++, "My Watchlist"),
-                                    hintAdapter
-                                ))
+                                rowsAdapter.add(ListRow(HeaderItem(hid, "My Watchlist"), hintAdapter))
                             }
                         }
                     }
@@ -437,8 +525,10 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                         if (!recentVideos.isNullOrEmpty()) {
                             val recentAdapter = ArrayObjectAdapter(CardPresenter())
                             recentVideos.forEach { recentAdapter.add(it) }
+                            val hid = headerIdCounter++
+                            headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_RECENT)
                             rowsAdapter.add(ListRow(
-                                HeaderItem(headerIdCounter++, getString(R.string.recent)),
+                                HeaderItem(hid, getString(R.string.recent)),
                                 recentAdapter
                             ))
                         }
@@ -450,8 +540,10 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                             for (s in pinnedShows) {
                                 val listRowAdapter = ArrayObjectAdapter(CardPresenter())
                                 val rowTitle = "\u2605 ${s.title}"
+                                val hid = headerIdCounter++
+                                headerContexts[hid] = HeaderContext.Show(s, pinned = true)
                                 rowsAdapter.add(ListRow(
-                                    HeaderItem(headerIdCounter++, rowTitle),
+                                    HeaderItem(hid, rowTitle),
                                     listRowAdapter
                                 ))
                                 rowPaginationMap[rowTitle] = RowPagination(
@@ -475,16 +567,20 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                                     ShowCardPresenter(onLongClick = { togglePin(it) })
                                 )
                                 activeNonPinned.forEach { showsAdapter.add(it) }
+                                val browseHid = headerIdCounter++
+                                headerContexts[browseHid] = HeaderContext.Section(PrefsManager.SECTION_ACTIVE_SHOWS)
                                 rowsAdapter.add(ListRow(
-                                    HeaderItem(headerIdCounter++, "Browse Shows"),
+                                    HeaderItem(browseHid, "Browse Shows"),
                                     showsAdapter
                                 ))
                                 // Per-show rows \u2014 videos lazy-load on focus.
                                 for (s in activeNonPinned) {
                                     val listRowAdapter = ArrayObjectAdapter(CardPresenter())
                                     val rowTitle = s.title
+                                    val showHid = headerIdCounter++
+                                    headerContexts[showHid] = HeaderContext.Show(s, pinned = false)
                                     rowsAdapter.add(ListRow(
-                                        HeaderItem(headerIdCounter++, rowTitle),
+                                        HeaderItem(showHid, rowTitle),
                                         listRowAdapter
                                     ))
                                     rowPaginationMap[rowTitle] = RowPagination(
@@ -504,8 +600,10 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                             if (premiumVideos.size >= 2) {
                                 val premiumAdapter = ArrayObjectAdapter(CardPresenter())
                                 premiumVideos.forEach { premiumAdapter.add(it) }
+                                val hid = headerIdCounter++
+                                headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_PREMIUM)
                                 rowsAdapter.add(ListRow(
-                                    HeaderItem(headerIdCounter++, "Premium"),
+                                    HeaderItem(hid, "Premium"),
                                     premiumAdapter
                                 ))
                             }
@@ -520,8 +618,10 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                                     ShowCardPresenter(onLongClick = { togglePin(it) })
                                 )
                                 legacy.forEach { legacyAdapter.add(it) }
+                                val hid = headerIdCounter++
+                                headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_LEGACY)
                                 rowsAdapter.add(ListRow(
-                                    HeaderItem(headerIdCounter++, "Legacy Shows"),
+                                    HeaderItem(hid, "Legacy Shows"),
                                     legacyAdapter
                                 ))
                             }
@@ -553,8 +653,10 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                             "View privacy policy",
                             R.drawable.ic_settings_about
                         ))
+                        val hid = headerIdCounter++
+                        headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_SETTINGS)
                         rowsAdapter.add(ListRow(
-                            HeaderItem(headerIdCounter++, getString(R.string.settings)),
+                            HeaderItem(hid, getString(R.string.settings)),
                             utilAdapter
                         ))
                     }
