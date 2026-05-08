@@ -89,6 +89,24 @@
             android:background="@color/gb_red"
             android:visibility="gone" />
 
+        <!-- Watchlist toggle: tap to add/remove. Bottom-start so it sits
+             clear of the watched/premium/duration corners and above the
+             progress bar. Background + glyph set in code per state. -->
+        <TextView
+            android:id="@+id/video_watchlist_btn"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="8dp"
+            android:gravity="center"
+            android:textColor="@color/gb_white"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Add to watchlist"
+            tools:text="+" />
+
     </FrameLayout>
 
     <!-- Text info below thumbnail -->

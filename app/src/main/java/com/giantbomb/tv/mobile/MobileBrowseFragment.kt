@@ -61,6 +61,11 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     private var sortedSectionStarts: List<Pair<Int, String>> = emptyList()
     private var activeChipIndex: Int = -1
 
+    // Set of video IDs currently on the watchlist — drives the per-card
+    // bookmark overlay's filled/outlined state. Refreshed at every loadContent
+    // and mutated optimistically when the user taps the bookmark button.
+    private var watchlistIds: MutableSet<Int> = mutableSetOf()
+
     // Upcoming/Live row tracked separately so we can refresh just that row
     // (and its header) every minute without rebuilding the whole grid.
     private var upcomingRowItemIndex: Int = -1
@@ -339,6 +344,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 val watchlist = if (key.isNotEmpty()) {
                     watchlistDeferred.await().getOrNull()?.map { it.withProgress() }
                 } else null
+                watchlistIds = watchlist?.map { it.id }?.toMutableSet() ?: mutableSetOf()
 
                 val pinnedIds = prefs.getPinnedShowIds()
                 val hidden = prefs.getHiddenSections()
@@ -850,6 +856,65 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         }
     }
 
+    /**
+     * Style the bookmark overlay button on a video card based on whether the
+     * video is currently on the watchlist. Callers wire setOnClickListener to
+     * toggleWatchlist() so a tap flips the state.
+     */
+    private fun bindWatchlistButton(btn: TextView, video: Video) {
+        val onWatchlist = video.id in watchlistIds
+        val ctx = btn.context
+        val density = ctx.resources.displayMetrics.density
+        btn.text = if (onWatchlist) "✓" else "+"
+        btn.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            if (onWatchlist) {
+                setColor(ContextCompat.getColor(ctx, R.color.gb_red))
+            } else {
+                setColor(0x99000000.toInt())
+                setStroke((1 * density).toInt(), 0x66FFFFFF)
+            }
+        }
+        btn.contentDescription = if (onWatchlist) {
+            "Remove ${video.title} from watchlist"
+        } else {
+            "Add ${video.title} to watchlist"
+        }
+        btn.setOnClickListener { v ->
+            // Optimistic flip — animate immediately, revert on API failure.
+            v.isClickable = false
+            val nowOn = video.id !in watchlistIds
+            if (nowOn) watchlistIds.add(video.id) else watchlistIds.remove(video.id)
+            bindWatchlistButton(btn, video)
+            launch {
+                val api = api ?: GiantBombApi(prefs.apiKey ?: "")
+                val result = if (nowOn) api.addToWatchlist(video.id) else api.removeFromWatchlist(video.id)
+                v.isClickable = true
+                result.onSuccess {
+                    if (isAdded) {
+                        Toast.makeText(
+                            requireContext(),
+                            if (nowOn) "Added to watchlist" else "Removed from watchlist",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+                result.onFailure {
+                    // Revert
+                    if (nowOn) watchlistIds.remove(video.id) else watchlistIds.add(video.id)
+                    bindWatchlistButton(btn, video)
+                    if (isAdded) {
+                        Toast.makeText(
+                            requireContext(),
+                            "Watchlist update failed",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
+        }
+    }
+
     private fun togglePin(show: Show) {
         val nowPinned = prefs.togglePinnedShow(show.id)
         val msg = if (nowPinned) "Pinned: ${show.title}" else "Unpinned: ${show.title}"
@@ -869,6 +934,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         private val progressTrack: View = view.findViewById(R.id.video_progress_track)
         private val progressBar: View = view.findViewById(R.id.video_progress_bar)
         private val durationView: TextView = view.findViewById(R.id.video_duration)
+        private val watchlistBtn: TextView = view.findViewById(R.id.video_watchlist_btn)
 
         init {
             val density = view.resources.displayMetrics.density
@@ -957,6 +1023,8 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             } else {
                 thumbnail.setImageResource(R.drawable.default_card)
             }
+
+            bindWatchlistButton(watchlistBtn, video)
 
             itemView.setOnClickListener {
                 val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
@@ -1080,6 +1148,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             val progressTrack: View = view.findViewById(R.id.small_progress_track)
             val progressBar: View = view.findViewById(R.id.small_progress_bar)
             val watched: TextView = view.findViewById(R.id.small_watched)
+            val watchlistBtn: TextView = view.findViewById(R.id.small_watchlist_btn)
 
             init {
                 watched.background = GradientDrawable().apply {
@@ -1129,6 +1198,8 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             } else {
                 holder.thumbnail.setImageResource(R.drawable.default_card)
             }
+
+            bindWatchlistButton(holder.watchlistBtn, video)
 
             holder.itemView.setOnClickListener {
                 val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
