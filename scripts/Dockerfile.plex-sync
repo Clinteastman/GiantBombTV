@@ -1,0 +1,13 @@
+FROM python:3.12-alpine
+
+LABEL org.opencontainers.image.source="https://github.com/Clinteastman/GiantBombTV"
+LABEL org.opencontainers.image.description="Sync Giant Bomb videos into a Plex-friendly local library."
+
+COPY plex-sync.py /usr/local/bin/plex-sync
+RUN chmod +x /usr/local/bin/plex-sync
+
+# Default location inside the container; users mount their host library here.
+ENV PLEX_LIBRARY_DIR=/library
+
+ENTRYPOINT ["python3", "/usr/local/bin/plex-sync"]
+CMD ["--output", "/library"]
