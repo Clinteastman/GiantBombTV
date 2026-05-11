@@ -225,9 +225,11 @@ curl -fsS "http://localhost:32400/library/sections/<ID>/refresh?X-Plex-Token=<TO
   reading `.nfo`. Switch the library to *Personal Media* / local-assets
   mode (see "Pointing Plex at the output" above).
 - **A `.strm` plays nothing / 403s** — Giant Bomb occasionally rotates URLs
-  for premium content. Re-running the sync regenerates fresh `.strm` files.
-  If you want stricter freshness, delete `*.strm` before each run; the rest
-  (`.nfo`, thumbnails) stays cached.
+  for premium content. The script is idempotent and skips any episode whose
+  `.strm` / `.nfo` / `-thumb.jpg` triple already exists, so a plain re-run
+  won't refresh stale URLs. To regenerate: delete the affected `.strm`
+  files (or all of them) and re-run — missing triples are rewritten while
+  cached `.nfo` / thumbnails for untouched episodes stay put.
 - **Wrong show folders / weird names** — filenames are slugified to be
   Windows / macOS / Linux safe. Edit `slug()` in `plex-sync.py` if you want
   a different scheme; the script is small and self-contained.

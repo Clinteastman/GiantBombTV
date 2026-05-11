@@ -297,17 +297,31 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     browseAdapter.notifyItemRangeRemoved(removeFrom, removeCount)
                     upcomingRowItemIndex = -1
                     upcomingHeaderItemIndex = -1
-                    // Other tracked indices would shift, but we don't track any others.
+                    // Any tracked index that sat AFTER the removal point shifts
+                    // down by `removeCount`. Without this the watchlist refresh
+                    // and the chip-bar quick-jump aim at stale positions.
+                    if (watchlistHeaderItemIndex >= removeFrom) {
+                        watchlistHeaderItemIndex -= removeCount
+                    }
+                    if (watchlistContentItemIndex >= removeFrom) {
+                        watchlistContentItemIndex -= removeCount
+                    }
+                    sectionStartIndices = sectionStartIndices
+                        .filterKeys { it != PrefsManager.SECTION_LIVE }
+                        .mapValues { (_, idx) ->
+                            if (idx >= removeFrom) idx - removeCount else idx
+                        }
+                    updateChipBar()
                 }
                 !rowPresent && hasContent -> {
-                    // Insert header + row at the top of the list.
-                    val title = if (result.liveNow != null) "🔴 Upcoming & Live" else "Upcoming"
-                    browseItems.add(0, BrowseItem.SectionHeader(title))
-                    browseItems.add(1, BrowseItem.UpcomingRow(result.upcoming, result.liveNow))
-                    browseAdapter.notifyItemRangeInserted(0, 2)
-                    upcomingHeaderItemIndex = 0
-                    upcomingRowItemIndex = 1
-                    // Other tracked indices would shift; none tracked.
+                    // Section wasn't rendered at last loadContent (either there
+                    // was no content then, or the user hid SECTION_LIVE).
+                    // Inserting blindly at index 0 would bypass the user-
+                    // defined section order and re-introduce a hidden section,
+                    // and would also break every tracked index without a
+                    // matching shift. Leave it — the next loadContent
+                    // (onResume / pull-to-refresh) will render it in its
+                    // configured position.
                 }
                 // !rowPresent && !hasContent → nothing to do
             }

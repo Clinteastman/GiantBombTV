@@ -637,16 +637,23 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 }
                 current != null && hasContent -> {
                     // Live state flipped — replace the row so the header updates too.
+                    // Preserve the existing HeaderItem.id so the row stays mapped
+                    // in headerContexts; using a fresh id (or 0) would silently
+                    // collide with another section and break the long-press menu.
                     val newAdapter = ArrayObjectAdapter(UpcomingCardPresenter())
                     result.liveNow?.let { newAdapter.add(it) }
                     result.upcoming.forEach { newAdapter.add(it) }
                     val title = if (isLive) "🔴 Upcoming & Live" else "Upcoming"
-                    rowsAdapter.replace(
-                        upcomingRowIndex,
-                        ListRow(HeaderItem(0, title), newAdapter)
-                    )
-                    upcomingRowAdapter = newAdapter
-                    upcomingHasLive = isLive
+                    val existingHid = (rowsAdapter.get(upcomingRowIndex) as? ListRow)
+                        ?.headerItem?.id
+                    if (existingHid != null) {
+                        rowsAdapter.replace(
+                            upcomingRowIndex,
+                            ListRow(HeaderItem(existingHid, title), newAdapter)
+                        )
+                        upcomingRowAdapter = newAdapter
+                        upcomingHasLive = isLive
+                    }
                 }
                 current != null && !hasContent -> {
                     rowsAdapter.removeItems(upcomingRowIndex, 1)
@@ -655,14 +662,13 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                     upcomingHasLive = false
                 }
                 current == null && hasContent -> {
-                    val newAdapter = ArrayObjectAdapter(UpcomingCardPresenter())
-                    result.liveNow?.let { newAdapter.add(it) }
-                    result.upcoming.forEach { newAdapter.add(it) }
-                    val title = if (isLive) "🔴 Upcoming & Live" else "Upcoming"
-                    rowsAdapter.add(0, ListRow(HeaderItem(0, title), newAdapter))
-                    upcomingRowAdapter = newAdapter
-                    upcomingRowIndex = 0
-                    upcomingHasLive = isLive
+                    // Section wasn't rendered at last loadContent (either there
+                    // was no content then, or the user hid SECTION_LIVE entirely).
+                    // Don't blindly insert at index 0 — that bypasses the user-
+                    // defined section order and re-introduces a hidden section.
+                    // The next loadContent (onResume / pull-to-refresh) will
+                    // render it in its configured position with a fresh
+                    // headerContexts entry.
                 }
             }
         }
