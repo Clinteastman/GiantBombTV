@@ -7,7 +7,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -21,11 +20,23 @@ class TwitchExtractor {
         private const val GQL_URL = "https://gql.twitch.tv/gql"
         private const val CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 
+        // Twitch login rules: 4–25 chars, alnum + underscore. We use plain string
+        // interpolation into an inline GQL query, so anything outside this set
+        // could break out and inject a different operation. Match the Twitch
+        // login constraint exactly — see https://help.twitch.tv/s/article/twitch-username-policy
+        private val LOGIN_REGEX = Regex("^[a-zA-Z0-9_]{4,25}$")
+
         private val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .followRedirects(true)
             .build()
+
+        private fun requireValidLogin(channel: String) {
+            require(LOGIN_REGEX.matches(channel)) {
+                "Invalid Twitch login: $channel (expected 4–25 alphanumeric/underscore chars)"
+            }
+        }
     }
 
     data class TwitchStream(
@@ -47,18 +58,14 @@ class TwitchExtractor {
      * live preview frame, cache-busted per minute so Glide refetches the JPG.
      */
     suspend fun getLiveStatus(channel: String): LiveStatus? = withContext(Dispatchers.IO) {
+        requireValidLogin(channel)
         try {
-            val body = JSONArray().apply {
-                put(JSONObject().apply {
-                    put("operationName", "StreamMetadata")
-                    put("extensions", JSONObject().apply {
-                        put("persistedQuery", JSONObject().apply {
-                            put("version", 1)
-                            put("sha256Hash", "252a46e3f5b1ddc431b396e688331d8d020daec27079893ac7d4e6db759a7402")
-                        })
-                    })
-                    put("variables", JSONObject().apply { put("channelLogin", channel) })
-                })
+            // Inline query rather than a persisted-query hash: Twitch periodically
+            // rotates persisted hashes and returns PersistedQueryNotFound, which used
+            // to silently flip the channel to "not live." Inline queries don't rotate.
+            // Channel is regex-validated above; the interpolation here is safe.
+            val body = JSONObject().apply {
+                put("query", "query { user(login: \"$channel\") { stream { id title type } } }")
             }
             val request = Request.Builder()
                 .url(GQL_URL)
@@ -67,24 +74,48 @@ class TwitchExtractor {
                 .post(body.toString().toRequestBody("application/json".toMediaType()))
                 .build()
             val response = client.newCall(request).execute()
+            val httpCode = response.code
             val text = response.use { it.body?.string() ?: "" }
-            if (response.code != 200) return@withContext null
-            val arr = JSONArray(text)
-            val stream = arr.optJSONObject(0)
-                ?.optJSONObject("data")
-                ?.optJSONObject("user")
-                ?.optJSONObject("stream")
-            if (stream == null || stream.toString() == "null") {
-                LiveStatus(isLive = false, title = null, previewImageUrl = null)
-            } else {
-                val title = stream.optString("title", "").ifBlank { null }
-                val minuteBucket = System.currentTimeMillis() / 60_000
-                val preview = "https://static-cdn.jtvnw.net/previews-ttv/live_user_$channel-1280x720.jpg?t=$minuteBucket"
-                LiveStatus(isLive = true, title = title, previewImageUrl = preview)
-            }
+            parseLiveStatusResponse(
+                channel = channel,
+                httpCode = httpCode,
+                body = text,
+                nowMs = System.currentTimeMillis()
+            )
         } catch (e: Exception) {
             Log.w(TAG, "Live status check failed for $channel: ${e.message}")
             null
+        }
+    }
+
+    /**
+     * Pure GQL-response → LiveStatus translation, factored out for unit testing
+     * (no OkHttp, no system clock). Mirrors the contract documented on
+     * [getLiveStatus]: null = unknown (network/GQL errors), false = offline,
+     * true = live with title + preview URL.
+     */
+    internal fun parseLiveStatusResponse(
+        channel: String,
+        httpCode: Int,
+        body: String,
+        nowMs: Long
+    ): LiveStatus? {
+        if (httpCode != 200) return null
+        val root = try { JSONObject(body) } catch (_: Exception) { return null }
+        if (root.has("errors")) {
+            Log.w(TAG, "Live status GQL errors for $channel: ${root.optJSONArray("errors")}")
+            return null
+        }
+        val stream = root.optJSONObject("data")
+            ?.optJSONObject("user")
+            ?.optJSONObject("stream")
+        return if (stream == null || stream.toString() == "null") {
+            LiveStatus(isLive = false, title = null, previewImageUrl = null)
+        } else {
+            val title = stream.optString("title", "").ifBlank { null }
+            val minuteBucket = nowMs / 60_000
+            val preview = "https://static-cdn.jtvnw.net/previews-ttv/live_user_$channel-1280x720.jpg?t=$minuteBucket"
+            LiveStatus(isLive = true, title = title, previewImageUrl = preview)
         }
     }
 
@@ -94,6 +125,7 @@ class TwitchExtractor {
      */
     suspend fun extract(channel: String): Result<TwitchStream> = withContext(Dispatchers.IO) {
         try {
+            requireValidLogin(channel)
             // Step 1: Get a playback access token via GQL
             val tokenBody = JSONObject().apply {
                 put("operationName", "PlaybackAccessToken")
@@ -169,19 +201,9 @@ class TwitchExtractor {
 
     private fun getStreamTitle(channel: String): String {
         try {
-            val body = JSONArray().apply {
-                put(JSONObject().apply {
-                    put("operationName", "StreamMetadata")
-                    put("extensions", JSONObject().apply {
-                        put("persistedQuery", JSONObject().apply {
-                            put("version", 1)
-                            put("sha256Hash", "252a46e3f5b1ddc431b396e688331d8d020daec27079893ac7d4e6db759a7402")
-                        })
-                    })
-                    put("variables", JSONObject().apply {
-                        put("channelLogin", channel)
-                    })
-                })
+            requireValidLogin(channel)
+            val body = JSONObject().apply {
+                put("query", "query { user(login: \"$channel\") { stream { title } } }")
             }
 
             val request = Request.Builder()
@@ -195,9 +217,7 @@ class TwitchExtractor {
             val text = response.use { it.body?.string() ?: "" }
 
             if (response.code == 200) {
-                val arr = JSONArray(text)
-                val stream = arr.optJSONObject(0)
-                    ?.optJSONObject("data")
+                val stream = JSONObject(text).optJSONObject("data")
                     ?.optJSONObject("user")
                     ?.optJSONObject("stream")
                 if (stream != null) {
