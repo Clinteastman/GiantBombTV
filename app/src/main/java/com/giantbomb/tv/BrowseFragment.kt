@@ -97,6 +97,11 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     }
     private val headerContexts = mutableMapOf<Long, HeaderContext>()
 
+    // Monotonically-increasing HeaderItem id, bumped each time a section
+    // renderer adds a row. Reset to 0 at the top of loadContent() so every
+    // render pass produces a stable id sequence.
+    private var headerIdCounter: Long = 0L
+
     @Suppress("DEPRECATION")
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
@@ -178,10 +183,44 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         override fun onBindViewHolder(viewHolder: Presenter.ViewHolder, item: Any) {
             super.onBindViewHolder(viewHolder, item)
             viewHolder.view.tag = item as? HeaderItem
-            // Append a discreet "more menu" glyph so users know each header has
-            // options behind it.
-            val name = (item as? HeaderItem)?.name ?: return
-            (viewHolder.view as? android.widget.TextView)?.text = "$name  ⋮"
+            applyHint(viewHolder as ViewHolder)
+        }
+
+        // Leanback drives header selection via setSelectLevel (0 = unselected,
+        // 1 = the focused header in the side menu). On the selected header we
+        // upgrade the discreet "⋮" glyph to a red-accented "⋮ Hold OK" hint so
+        // the long-press affordance is unmistakable; everything else keeps the
+        // subtle "⋮".
+        override fun onSelectLevelChanged(holder: ViewHolder) {
+            super.onSelectLevelChanged(holder)
+            applyHint(holder)
+        }
+
+        private fun applyHint(holder: ViewHolder) {
+            val header = holder.view.tag as? HeaderItem ?: return
+            val tv = holder.view as? android.widget.TextView ?: return
+            val name = header.name
+            if (holder.selectLevel > 0.5f) {
+                val hint = "  ⋮ Hold OK"
+                val span = android.text.SpannableString("$name$hint")
+                val start = name.length
+                val end = span.length
+                span.setSpan(
+                    android.text.style.ForegroundColorSpan(0xFFE3192C.toInt()),
+                    start, end, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                span.setSpan(
+                    android.text.style.RelativeSizeSpan(0.72f),
+                    start, end, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                span.setSpan(
+                    android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
+                    start, end, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                tv.text = span
+            } else {
+                tv.text = "$name  ⋮"
+            }
         }
     }
 
@@ -412,7 +451,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 selectEffectEnabled = false  // disable the dim overlay on unfocused rows
             }
             val rowsAdapter = ArrayObjectAdapter(rowPresenter)
-            var headerIdCounter = 0L
+            headerIdCounter = 0L
             // Reset row tracking — rowsAdapter is brand new and the upcoming row, if any,
             // will be added below. We'll capture references then for partial refresh.
             rowsAdapterRef = rowsAdapter
@@ -487,231 +526,19 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             for (sectionId in prefs.getSectionOrder()) {
                 if (sectionId in hidden) continue
                 when (sectionId) {
-                    PrefsManager.SECTION_LIVE -> {
-                        if (upcomingResult != null) {
-                            val hasContent = upcomingResult.liveNow != null || upcomingResult.upcoming.isNotEmpty()
-                            if (hasContent) {
-                                val headerTitle = if (upcomingResult.liveNow != null) "\uD83D\uDD34 Upcoming & Live" else "Upcoming"
-                                val adapter = ArrayObjectAdapter(UpcomingCardPresenter())
-                                if (upcomingResult.liveNow != null) adapter.add(upcomingResult.liveNow)
-                                upcomingResult.upcoming.forEach { adapter.add(it) }
-                                upcomingRowIndex = rowsAdapter.size()
-                                val hid = headerIdCounter++
-                                headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_LIVE)
-                                rowsAdapter.add(ListRow(HeaderItem(hid, headerTitle), adapter))
-                                upcomingRowAdapter = adapter
-                                upcomingHasLive = upcomingResult.liveNow != null
-                            }
-                        }
-                    }
-                    PrefsManager.SECTION_CONTINUE -> {
-                        if (key.isNotEmpty() && progressMap.isNotEmpty() && recentVideos != null) {
-                            val inProgressIds = progressMap.values
-                                .filter { it.percentComplete in 1..94 }
-                                .sortedByDescending { it.currentTime }
-                                .take(20)
-                                .map { it.videoId }
-                                .toSet()
-                            val continueVideos = recentVideos.filter { it.id in inProgressIds }
-                            if (continueVideos.isNotEmpty()) {
-                                val continueAdapter = ArrayObjectAdapter(CardPresenter())
-                                continueVideos.forEach { continueAdapter.add(it) }
-                                val hid = headerIdCounter++
-                                headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_CONTINUE)
-                                rowsAdapter.add(ListRow(
-                                    HeaderItem(hid, getString(R.string.continue_watching)),
-                                    continueAdapter
-                                ))
-                            }
-                        }
-                    }
-                    PrefsManager.SECTION_WATCHLIST -> {
-                        // Always render the row when we could reach the API
-                        // (i.e. there's a key) so users know the section exists.
-                        // null = couldn't fetch — hide; empty = fetched-but-empty
-                        // — show a hint card.
-                        if (watchlist != null && key.isNotEmpty()) {
-                            val hid = headerIdCounter++
-                            headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_WATCHLIST)
-                            if (watchlist.isNotEmpty()) {
-                                val wlAdapter = ArrayObjectAdapter(CardPresenter())
-                                watchlist.forEach { wlAdapter.add(it) }
-                                rowsAdapter.add(ListRow(HeaderItem(hid, "My Watchlist"), wlAdapter))
-                            } else {
-                                val hintAdapter = ArrayObjectAdapter(SettingsCardPresenter())
-                                hintAdapter.add(SettingsItem(
-                                    -1,
-                                    "Your watchlist is empty",
-                                    "Open a video and tap Add to Watchlist",
-                                    R.drawable.ic_watched
-                                ))
-                                rowsAdapter.add(ListRow(HeaderItem(hid, "My Watchlist"), hintAdapter))
-                            }
-                        }
-                    }
-                    PrefsManager.SECTION_RECENT -> {
-                        if (!recentVideos.isNullOrEmpty()) {
-                            val recentAdapter = ArrayObjectAdapter(CardPresenter())
-                            recentVideos.forEach { recentAdapter.add(it) }
-                            val hid = headerIdCounter++
-                            headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_RECENT)
-                            rowsAdapter.add(ListRow(
-                                HeaderItem(hid, getString(R.string.recent)),
-                                recentAdapter
-                            ))
-                        }
-                    }
-                    PrefsManager.SECTION_PINNED -> {
-                        if (shows != null && pinnedIds.isNotEmpty()) {
-                            val byId = shows.associateBy { it.id }
-                            val pinnedShows = pinnedIds.mapNotNull { byId[it] }
-                            for (s in pinnedShows) {
-                                val listRowAdapter = ArrayObjectAdapter(CardPresenter())
-                                val rowTitle = "\u2605 ${s.title}"
-                                val hid = headerIdCounter++
-                                headerContexts[hid] = HeaderContext.Show(s, pinned = true)
-                                rowsAdapter.add(ListRow(
-                                    HeaderItem(hid, rowTitle),
-                                    listRowAdapter
-                                ))
-                                rowPaginationMap[rowTitle] = RowPagination(
-                                    showTitle = s.title,
-                                    showId = s.id,
-                                    adapter = listRowAdapter,
-                                    offset = 0,
-                                    hasMore = true
-                                )
-                            }
-                        }
-                    }
-                    PrefsManager.SECTION_ACTIVE_SHOWS -> {
-                        if (shows != null) {
-                            val pinnedSet = pinnedIds.toSet()
-                            val activeShows = shows.filter { it.active }
-                            // Pinned shows appear FIRST in the grid (in pin
-                            // order) with their \u2605 prefix from ShowCardPresenter,
-                            // so users can long-press the same card to unpin
-                            // even after pinning. Non-pinned active shows
-                            // follow.
-                            val byId = activeShows.associateBy { it.id }
-                            val pinnedActive = pinnedIds.mapNotNull { byId[it] }
-                            val activeNonPinned = activeShows.filter { it.id !in pinnedSet }
-                            val gridShows = pinnedActive + activeNonPinned
-                            if (gridShows.isNotEmpty()) {
-                                // Browse Shows grid \u2014 the discovery surface for
-                                // pin/unpin via D-pad-centre long-press.
-                                val showsAdapter = ArrayObjectAdapter(
-                                    ShowCardPresenter(onLongClick = { togglePin(it) })
-                                )
-                                gridShows.forEach { showsAdapter.add(it) }
-                                val browseHid = headerIdCounter++
-                                headerContexts[browseHid] = HeaderContext.Section(PrefsManager.SECTION_ACTIVE_SHOWS)
-                                rowsAdapter.add(ListRow(
-                                    HeaderItem(browseHid, "Browse Shows"),
-                                    showsAdapter
-                                ))
-                                // Per-show rows \u2014 videos lazy-load on focus.
-                                // Outlined \u2606 prefix mirrors mobile's pinnable
-                                // affordance: a quick visual signal that this
-                                // show can be pinned to the top via the
-                                // header's long-press menu.
-                                for (s in activeNonPinned) {
-                                    val listRowAdapter = ArrayObjectAdapter(CardPresenter())
-                                    val rowTitle = "\u2606 ${s.title}"
-                                    val showHid = headerIdCounter++
-                                    headerContexts[showHid] = HeaderContext.Show(s, pinned = false)
-                                    rowsAdapter.add(ListRow(
-                                        HeaderItem(showHid, rowTitle),
-                                        listRowAdapter
-                                    ))
-                                    rowPaginationMap[rowTitle] = RowPagination(
-                                        showTitle = s.title,
-                                        showId = s.id,
-                                        adapter = listRowAdapter,
-                                        offset = 0,
-                                        hasMore = true
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    PrefsManager.SECTION_PREMIUM -> {
-                        if (recentVideos != null) {
-                            val premiumVideos = recentVideos.filter { it.premium }
-                            if (premiumVideos.size >= 2) {
-                                val premiumAdapter = ArrayObjectAdapter(CardPresenter())
-                                premiumVideos.forEach { premiumAdapter.add(it) }
-                                val hid = headerIdCounter++
-                                headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_PREMIUM)
-                                rowsAdapter.add(ListRow(
-                                    HeaderItem(hid, "Premium"),
-                                    premiumAdapter
-                                ))
-                            }
-                        }
-                    }
-                    PrefsManager.SECTION_LEGACY -> {
-                        if (shows != null) {
-                            val pinnedSet = pinnedIds.toSet()
-                            val legacyShows = shows.filter { !it.active }
-                            // Same treatment as Browse Shows: pinned legacy
-                            // shows stay visible (with ★ prefix) so long-press
-                            // can unpin them from the same card.
-                            val byId = legacyShows.associateBy { it.id }
-                            val pinnedLegacy = pinnedIds.mapNotNull { byId[it] }
-                            val legacyNonPinned = legacyShows.filter { it.id !in pinnedSet }
-                            val gridShows = pinnedLegacy + legacyNonPinned
-                            if (gridShows.isNotEmpty()) {
-                                val legacyAdapter = ArrayObjectAdapter(
-                                    ShowCardPresenter(onLongClick = { togglePin(it) })
-                                )
-                                gridShows.forEach { legacyAdapter.add(it) }
-                                val hid = headerIdCounter++
-                                headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_LEGACY)
-                                rowsAdapter.add(ListRow(
-                                    HeaderItem(hid, "Legacy Shows"),
-                                    legacyAdapter
-                                ))
-                            }
-                        }
-                    }
-                    PrefsManager.SECTION_SETTINGS -> {
-                        val utilAdapter = ArrayObjectAdapter(SettingsCardPresenter())
-                        utilAdapter.add(SettingsItem(
-                            SETTINGS_REFRESH,
-                            getString(R.string.settings_refresh),
-                            getString(R.string.settings_refresh_desc),
-                            R.drawable.ic_settings_refresh
-                        ))
-                        utilAdapter.add(SettingsItem(
-                            SETTINGS_QUALITY,
-                            "Stream Quality",
-                            "Default: ${PrefsManager.qualityLabel(prefs.preferredQuality)}",
-                            R.drawable.ic_settings_quality
-                        ))
-                        utilAdapter.add(SettingsItem(
-                            SETTINGS_SETUP,
-                            getString(R.string.settings_setup),
-                            getString(R.string.settings_setup_desc),
-                            R.drawable.ic_settings_cog
-                        ))
-                        utilAdapter.add(SettingsItem(
-                            SETTINGS_PRIVACY,
-                            "Privacy Policy",
-                            "View privacy policy",
-                            R.drawable.ic_settings_about
-                        ))
-                        val hid = headerIdCounter++
-                        headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_SETTINGS)
-                        rowsAdapter.add(ListRow(
-                            HeaderItem(hid, getString(R.string.settings)),
-                            utilAdapter
-                        ))
-                    }
+                    PrefsManager.SECTION_LIVE         -> renderLive(rowsAdapter, upcomingResult)
+                    PrefsManager.SECTION_CONTINUE     -> renderContinue(rowsAdapter, recentVideos, progressMap, key)
+                    PrefsManager.SECTION_WATCHLIST    -> renderWatchlist(rowsAdapter, watchlist, key)
+                    PrefsManager.SECTION_RECENT       -> renderRecent(rowsAdapter, recentVideos)
+                    PrefsManager.SECTION_PINNED       -> renderPinnedShows(rowsAdapter, shows, pinnedIds)
+                    PrefsManager.SECTION_ACTIVE_SHOWS -> renderActiveShows(rowsAdapter, shows, pinnedIds)
+                    PrefsManager.SECTION_PREMIUM      -> renderPremium(rowsAdapter, recentVideos)
+                    PrefsManager.SECTION_LEGACY       -> renderLegacyShows(rowsAdapter, shows, pinnedIds)
+                    PrefsManager.SECTION_SETTINGS    -> renderSettings(rowsAdapter)
                 }
             }
 
-            // Set adapter last so show rows (appended lazily as they load) are present.
+                        // Set adapter last so show rows (appended lazily as they load) are present.
             adapter = rowsAdapter
             title = null
 
@@ -884,6 +711,232 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 pagination.isLoading = false
             }
         }
+    }
+
+    // ----------------------------------------------------------------------
+    // Section renderers — appended to `rowsAdapter` in user-defined order by
+    // the dispatcher in loadContent(). Each mutates `headerIdCounter`,
+    // `headerContexts`, and (for show rows) `rowPaginationMap` directly,
+    // mirroring the structure of MobileBrowseFragment's renderXxxSection
+    // helpers so both fragments stay easy to follow side-by-side.
+    // ----------------------------------------------------------------------
+
+    private fun renderLive(
+        rowsAdapter: ArrayObjectAdapter,
+        upcoming: com.giantbomb.tv.model.UpcomingResponse?
+    ) {
+        if (upcoming == null) return
+        val hasContent = upcoming.liveNow != null || upcoming.upcoming.isNotEmpty()
+        if (!hasContent) return
+        val headerTitle = if (upcoming.liveNow != null) "🔴 Upcoming & Live" else "Upcoming"
+        val adapter = ArrayObjectAdapter(UpcomingCardPresenter())
+        if (upcoming.liveNow != null) adapter.add(upcoming.liveNow)
+        upcoming.upcoming.forEach { adapter.add(it) }
+        upcomingRowIndex = rowsAdapter.size()
+        val hid = headerIdCounter++
+        headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_LIVE)
+        rowsAdapter.add(ListRow(HeaderItem(hid, headerTitle), adapter))
+        upcomingRowAdapter = adapter
+        upcomingHasLive = upcoming.liveNow != null
+    }
+
+    private fun renderContinue(
+        rowsAdapter: ArrayObjectAdapter,
+        recentVideos: List<Video>?,
+        progressMap: Map<Int, ProgressEntry>,
+        key: String
+    ) {
+        if (key.isEmpty() || progressMap.isEmpty() || recentVideos.isNullOrEmpty()) return
+        val inProgressIds = progressMap.values
+            .filter { it.percentComplete in 1..94 }
+            .sortedByDescending { it.currentTime }
+            .take(20)
+            .map { it.videoId }
+            .toSet()
+        val continueVideos = recentVideos.filter { it.id in inProgressIds }
+        if (continueVideos.isEmpty()) return
+        val adapter = ArrayObjectAdapter(CardPresenter())
+        continueVideos.forEach { adapter.add(it) }
+        val hid = headerIdCounter++
+        headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_CONTINUE)
+        rowsAdapter.add(ListRow(HeaderItem(hid, getString(R.string.continue_watching)), adapter))
+    }
+
+    private fun renderWatchlist(
+        rowsAdapter: ArrayObjectAdapter,
+        watchlist: List<Video>?,
+        key: String
+    ) {
+        // Always render the row when we could reach the API (i.e. there's a key)
+        // so users know the section exists. null = couldn't fetch — hide;
+        // empty = fetched-but-empty — show a hint card.
+        if (watchlist == null || key.isEmpty()) return
+        val hid = headerIdCounter++
+        headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_WATCHLIST)
+        if (watchlist.isNotEmpty()) {
+            val adapter = ArrayObjectAdapter(CardPresenter())
+            watchlist.forEach { adapter.add(it) }
+            rowsAdapter.add(ListRow(HeaderItem(hid, "My Watchlist"), adapter))
+        } else {
+            val hintAdapter = ArrayObjectAdapter(SettingsCardPresenter())
+            hintAdapter.add(SettingsItem(
+                -1,
+                "Your watchlist is empty",
+                "Open a video and tap Add to Watchlist",
+                R.drawable.ic_watched
+            ))
+            rowsAdapter.add(ListRow(HeaderItem(hid, "My Watchlist"), hintAdapter))
+        }
+    }
+
+    private fun renderRecent(
+        rowsAdapter: ArrayObjectAdapter,
+        recentVideos: List<Video>?
+    ) {
+        if (recentVideos.isNullOrEmpty()) return
+        val adapter = ArrayObjectAdapter(CardPresenter())
+        recentVideos.forEach { adapter.add(it) }
+        val hid = headerIdCounter++
+        headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_RECENT)
+        rowsAdapter.add(ListRow(HeaderItem(hid, getString(R.string.recent)), adapter))
+    }
+
+    private fun renderPinnedShows(
+        rowsAdapter: ArrayObjectAdapter,
+        shows: List<Show>?,
+        pinnedIds: List<Int>
+    ) {
+        if (shows == null || pinnedIds.isEmpty()) return
+        val byId = shows.associateBy { it.id }
+        val pinnedShows = pinnedIds.mapNotNull { byId[it] }
+        for (s in pinnedShows) {
+            val listRowAdapter = ArrayObjectAdapter(CardPresenter())
+            val rowTitle = "★ ${s.title}"
+            val hid = headerIdCounter++
+            headerContexts[hid] = HeaderContext.Show(s, pinned = true)
+            rowsAdapter.add(ListRow(HeaderItem(hid, rowTitle), listRowAdapter))
+            rowPaginationMap[rowTitle] = RowPagination(
+                showTitle = s.title,
+                showId = s.id,
+                adapter = listRowAdapter,
+                offset = 0,
+                hasMore = true
+            )
+        }
+    }
+
+    private fun renderActiveShows(
+        rowsAdapter: ArrayObjectAdapter,
+        shows: List<Show>?,
+        pinnedIds: List<Int>
+    ) {
+        if (shows == null) return
+        val pinnedSet = pinnedIds.toSet()
+        val activeShows = shows.filter { it.active }
+        // Pinned shows appear FIRST in the grid (in pin order) with their
+        // ★ prefix from ShowCardPresenter, so users can long-press the
+        // same card to unpin even after pinning. Non-pinned active shows follow.
+        val byId = activeShows.associateBy { it.id }
+        val pinnedActive = pinnedIds.mapNotNull { byId[it] }
+        val activeNonPinned = activeShows.filter { it.id !in pinnedSet }
+        val gridShows = pinnedActive + activeNonPinned
+        if (gridShows.isEmpty()) return
+        // Browse Shows grid — the discovery surface for pin/unpin via
+        // D-pad-centre long-press.
+        val showsAdapter = ArrayObjectAdapter(
+            ShowCardPresenter(onLongClick = { togglePin(it) })
+        )
+        gridShows.forEach { showsAdapter.add(it) }
+        val browseHid = headerIdCounter++
+        headerContexts[browseHid] = HeaderContext.Section(PrefsManager.SECTION_ACTIVE_SHOWS)
+        rowsAdapter.add(ListRow(HeaderItem(browseHid, "Browse Shows"), showsAdapter))
+        // Per-show rows — videos lazy-load on focus. Outlined ☆ prefix
+        // mirrors mobile's pinnable affordance: a quick visual signal that
+        // this show can be pinned to the top via the header's long-press menu.
+        for (s in activeNonPinned) {
+            val listRowAdapter = ArrayObjectAdapter(CardPresenter())
+            val rowTitle = "☆ ${s.title}"
+            val showHid = headerIdCounter++
+            headerContexts[showHid] = HeaderContext.Show(s, pinned = false)
+            rowsAdapter.add(ListRow(HeaderItem(showHid, rowTitle), listRowAdapter))
+            rowPaginationMap[rowTitle] = RowPagination(
+                showTitle = s.title,
+                showId = s.id,
+                adapter = listRowAdapter,
+                offset = 0,
+                hasMore = true
+            )
+        }
+    }
+
+    private fun renderPremium(
+        rowsAdapter: ArrayObjectAdapter,
+        recentVideos: List<Video>?
+    ) {
+        if (recentVideos == null) return
+        val premiumVideos = recentVideos.filter { it.premium }
+        if (premiumVideos.size < 2) return
+        val adapter = ArrayObjectAdapter(CardPresenter())
+        premiumVideos.forEach { adapter.add(it) }
+        val hid = headerIdCounter++
+        headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_PREMIUM)
+        rowsAdapter.add(ListRow(HeaderItem(hid, "Premium"), adapter))
+    }
+
+    private fun renderLegacyShows(
+        rowsAdapter: ArrayObjectAdapter,
+        shows: List<Show>?,
+        pinnedIds: List<Int>
+    ) {
+        if (shows == null) return
+        val pinnedSet = pinnedIds.toSet()
+        val legacyShows = shows.filter { !it.active }
+        // Same treatment as Browse Shows: pinned legacy shows stay visible
+        // (with ★ prefix) so long-press can unpin them from the same card.
+        val byId = legacyShows.associateBy { it.id }
+        val pinnedLegacy = pinnedIds.mapNotNull { byId[it] }
+        val legacyNonPinned = legacyShows.filter { it.id !in pinnedSet }
+        val gridShows = pinnedLegacy + legacyNonPinned
+        if (gridShows.isEmpty()) return
+        val adapter = ArrayObjectAdapter(ShowCardPresenter(onLongClick = { togglePin(it) }))
+        gridShows.forEach { adapter.add(it) }
+        val hid = headerIdCounter++
+        headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_LEGACY)
+        rowsAdapter.add(ListRow(HeaderItem(hid, "Legacy Shows"), adapter))
+    }
+
+    private fun renderSettings(rowsAdapter: ArrayObjectAdapter) {
+        val utilAdapter = ArrayObjectAdapter(SettingsCardPresenter())
+        utilAdapter.add(SettingsItem(
+            SETTINGS_REFRESH,
+            getString(R.string.settings_refresh),
+            getString(R.string.settings_refresh_desc),
+            R.drawable.ic_settings_refresh
+        ))
+        utilAdapter.add(SettingsItem(
+            SETTINGS_QUALITY,
+            "Stream Quality",
+            "Default: ${PrefsManager.qualityLabel(prefs.preferredQuality)}",
+            R.drawable.ic_settings_quality
+        ))
+        utilAdapter.add(SettingsItem(
+            SETTINGS_SETUP,
+            getString(R.string.settings_setup),
+            getString(R.string.settings_setup_desc),
+            R.drawable.ic_settings_cog
+        ))
+        utilAdapter.add(SettingsItem(
+            SETTINGS_PRIVACY,
+            "Privacy Policy",
+            "View privacy policy",
+            R.drawable.ic_settings_about
+        ))
+        val hid = headerIdCounter++
+        headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_SETTINGS)
+        rowsAdapter.add(ListRow(
+            HeaderItem(hid, getString(R.string.settings)),
+            utilAdapter
+        ))
     }
 
     /**
