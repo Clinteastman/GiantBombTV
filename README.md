@@ -9,22 +9,26 @@ An unofficial Android TV and mobile app for watching [Giant Bomb](https://www.gi
 ## Features
 
 - **Browse** recent videos, shows, and categories (Premium / Free)
+- **Customize Browse** - reorder or hide sections to taste; pin shows to the top
 - **Continue Watching** with server-synced progress tracking and resume
-- **Watchlist** management (add/remove from detail screen)
+- **Watchlist** management (add/remove from detail screen, tap-to-toggle bookmark on any mobile card)
+- **Background playback** - foreground media service keeps audio playing when you leave the app or lock the phone, with transport-control notification
 - **Search** across all Giant Bomb videos
 - **Show browsing** with infinite scroll through episodes
 - **Stream quality selection** - Auto (HLS), 1080p, 720p, 480p, 360p (per-session and default preference)
 - **Watched indicators** (green checkmark) and red progress bars on all video cards
 - **Chromecast** - cast videos to any Cast-compatible device from the mobile app
 - **Picture-in-Picture** - keep watching in a floating window while using other apps (Android 8.0+)
-- **Upcoming shows and live streams** - see what's coming up and jump into live Twitch streams
+- **Upcoming shows and live streams** - see what's coming up and jump into live Twitch streams; live cards refresh their preview every minute
 - **Self-update** - checks GitHub releases for new versions and prompts to install
 - **Direct playback** - tap a video on mobile to start playing immediately
 - **Blurred backdrop** with smooth crossfade transitions as you navigate (TV)
-- **D-pad optimized** navigation for TV remotes
+- **D-pad optimized** navigation for TV remotes, with white focus halos on every playback control and a per-row context menu reachable by holding Select on a header
 - **Mobile phone layout** - YouTube-style vertical feed with horizontal category rows
+- **Chip-bar quick-jump** - tap a section name (mobile) to jump straight to that section
 - **Portrait playback** - video at top with "Up Next" episodes below (mobile)
 - **Responsive** - adapts between 1-column (portrait) and 2-column (landscape) grid on phones
+- **Plex Sync** - optional standalone script (`scripts/plex-sync.py`) generates `.strm` / `.nfo` / thumb triples so a Plex server can index your Giant Bomb subscription as a TV library
 
 ## Screenshots
 
@@ -148,8 +152,9 @@ app/src/main/java/com/giantbomb/tv/
 ├── MainActivity.kt              # Host activity (loads TV or mobile fragment)
 ├── BrowseFragment.kt            # TV browse screen (Leanback BrowseSupportFragment)
 ├── CastOptionsProvider.kt       # Google Cast SDK configuration
+├── CustomizeBrowseActivity.kt   # Drag-to-reorder + hide-section settings screen
 ├── DetailActivity.kt            # Video detail screen (responsive TV/mobile)
-├── PlaybackActivity.kt          # ExoPlayer playback with Cast and PiP support
+├── PlaybackActivity.kt          # Playback UI (controls, Cast, PiP); player itself lives in the service
 ├── SearchActivity.kt            # Search screen host (loads TV or mobile search)
 ├── GiantBombSearchFragment.kt   # Leanback search with debounced API queries (TV)
 ├── ShowActivity.kt              # Show episode browser
@@ -157,13 +162,16 @@ app/src/main/java/com/giantbomb/tv/
 ├── SetupActivity.kt             # API key entry screen (responsive)
 ├── data/
 │   ├── GiantBombApi.kt          # Giant Bomb public API client (OkHttp)
-│   ├── TwitchExtractor.kt       # Twitch GQL stream extraction (live streams)
+│   ├── TwitchExtractor.kt       # Twitch GQL live-status + HLS extraction
+│   ├── UpcomingResolver.kt      # Pure helpers reconciling GB feed + Twitch live signal
 │   ├── UpdateChecker.kt         # GitHub release checker and APK installer
 │   ├── YouTubeExtractor.kt      # YouTube stream extraction (optional, see build config)
-│   └── PrefsManager.kt          # SharedPreferences wrapper
+│   └── PrefsManager.kt          # SharedPreferences wrapper (section order, pins, etc.)
 ├── model/
 │   ├── Video.kt                 # Video, Show, PlaybackInfo, ProgressEntry, Upcoming models
 │   └── SettingsItem.kt          # Settings row item model
+├── playback/
+│   └── PlaybackService.kt       # Foreground MediaSessionService — owns the ExoPlayer instance
 ├── mobile/
 │   ├── MobileBrowseFragment.kt  # YouTube-style vertical feed with horizontal rows
 │   └── MobileSearchFragment.kt  # Mobile search with text input and list results
@@ -176,7 +184,13 @@ app/src/main/java/com/giantbomb/tv/
 │   ├── UpcomingCardView.kt      # Card view for upcoming shows and live streams
 │   └── BlurTransformation.kt    # Glide transform for blurred backdrops
 └── util/
+    ├── DateFormat.kt            # Shared publish-date formatting (mobile + TV)
     └── DeviceUtil.kt            # Runtime TV/phone detection
+
+scripts/
+├── install-latest.sh            # Sideload the latest CI APK to phone + TV in one go
+├── plex-sync.py                 # Generate a Plex-indexable local library from your subscription
+└── Dockerfile.plex-sync         # Containerised plex-sync runner
 ```
 
 ## Tech Stack
@@ -196,9 +210,10 @@ app/src/main/java/com/giantbomb/tv/
 
 | Button | Action (Browse) | Action (Playback) |
 |--------|-----------------|-------------------|
-| D-pad | Navigate cards | Seek / show controls |
+| D-pad | Navigate cards | Seek / show controls (progressive scrub speed when held) |
 | Select/Enter | Open video detail | Play/pause |
-| Back | Navigate back | Enter PiP (mobile) / save progress & exit (TV) |
+| Select/Enter (hold) | Open context menu on the focused side-menu header (pin show, reorder section) — or pin/unpin a show card | - |
+| Back | Slide the side menu back in / exit confirmation (TV); swipe-back → PiP (mobile) | Enter PiP (mobile) / save progress & exit (TV) |
 | Menu | - | Open quality picker |
 | Search orb | Open search | - |
 | Play/Pause | - | Toggle playback |
