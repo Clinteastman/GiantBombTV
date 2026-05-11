@@ -1212,32 +1212,49 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
      */
     private fun enhanceControlFocus(pv: PlayerView) {
         val red = 0xFFE3192C.toInt()
+        val white = 0xFFFFFFFF.toInt()
         val density = resources.displayMetrics.density
         val ringStroke = (2 * density).toInt()
 
-        val buttonIds = intArrayOf(
-            androidx.media3.ui.R.id.exo_play_pause,
-            androidx.media3.ui.R.id.exo_rew,
-            androidx.media3.ui.R.id.exo_ffwd,
-            androidx.media3.ui.R.id.exo_settings,
-            androidx.media3.ui.R.id.exo_subtitle,
-        )
-        for (id in buttonIds) {
-            val v = pv.findViewById<View>(id) ?: continue
+        // Walk the controller subtree and apply the halo treatment to every
+        // focusable view — covers play/pause, the rewind/ffwd "with amount"
+        // FrameLayouts (which aren't ImageButtons), settings, subtitle, prev/
+        // next (when the player advertises those commands), the overflow
+        // ▶︎/◀︎ buttons, and anything media3 adds later, without a hardcoded ID
+        // list. DefaultTimeBar is excluded — it gets the red-played-colour
+        // treatment below instead.
+        fun applyHalo(v: View) {
             v.setOnFocusChangeListener { view, hasFocus ->
                 if (hasFocus) {
                     view.background = GradientDrawable().apply {
                         shape = GradientDrawable.OVAL
                         setColor(0x00000000)
-                        setStroke(ringStroke, 0xFFFFFFFF.toInt())
+                        setStroke(ringStroke, white)
                     }
-                    view.animate().scaleX(1.15f).scaleY(1.15f).setDuration(120).start()
+                    view.animate().scaleX(1.08f).scaleY(1.08f).setDuration(120).start()
                 } else {
                     view.background = null
                     view.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
                 }
             }
+            // Halo + scale slightly overdraws the view's own bounds; without
+            // unclipping ancestors the ring is sliced off by exo_basic_controls
+            // and friends. Walk up to the PlayerView root flipping clipping off.
+            var p = v.parent
+            while (p is android.view.ViewGroup && p !== pv) {
+                p.clipChildren = false
+                p.clipToPadding = false
+                p = p.parent
+            }
         }
+        fun walk(v: View) {
+            if (v is androidx.media3.ui.DefaultTimeBar) return
+            if (v !== pv && v.isFocusable) applyHalo(v)
+            if (v is android.view.ViewGroup) {
+                for (i in 0 until v.childCount) walk(v.getChildAt(i))
+            }
+        }
+        walk(pv)
 
         // Time bar: always red so the played position reads as the YouTube /
         // standard media-app cue. Scrubber thumb stays default; the colour
