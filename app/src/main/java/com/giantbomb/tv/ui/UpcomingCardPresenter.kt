@@ -24,13 +24,11 @@ class UpcomingCardPresenter : Presenter() {
             liveNow = stream.isLive
         )
 
-        if (stream.isLive) {
-            // Load Twitch preview thumbnail for live streams
-            Glide.with(viewHolder.view.context)
-                .load("https://static-cdn.jtvnw.net/previews-ttv/live_user_giantbomb-640x360.jpg")
-                .centerCrop()
-                .into(cardView.imageView)
-        } else if (!stream.image.isNullOrEmpty()) {
+        // For live streams the API layer has already populated stream.image with
+        // Twitch's 1280x720 live preview frame, cache-busted per minute so Glide
+        // refetches as the show progresses. Same Glide path handles upcoming
+        // entries' static promo art.
+        if (!stream.image.isNullOrEmpty()) {
             Glide.with(viewHolder.view.context)
                 .load(stream.image)
                 .centerCrop()

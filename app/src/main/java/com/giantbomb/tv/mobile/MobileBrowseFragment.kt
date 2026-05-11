@@ -1491,11 +1491,9 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 holder.liveBadge.visibility = View.VISIBLE
                 holder.countdownGroup.visibility = View.GONE
                 holder.time.text = "Streaming now"
-                // Load Twitch preview thumbnail for live streams
-                Glide.with(holder.image.context)
-                    .load("https://static-cdn.jtvnw.net/previews-ttv/live_user_giantbomb-640x360.jpg")
-                    .centerCrop()
-                    .into(holder.image)
+                // stream.image is already the 1280x720 cache-busted Twitch preview
+                // (populated by the API layer when live) — loaded by the shared
+                // Glide call above.
             } else {
                 holder.liveBadge.visibility = View.GONE
                 val targetMs = UpcomingCardView.parseDate(stream.date)
