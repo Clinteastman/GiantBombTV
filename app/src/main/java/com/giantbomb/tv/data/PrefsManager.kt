@@ -32,11 +32,14 @@ class PrefsManager(context: Context) {
         if (csv != null) {
             return csv.split(",").mapNotNull { it.toIntOrNull() }
         }
-        // One-time migration from the older Set-based prefs key.
+        // One-time migration from the older Set-based prefs key. Always clear
+        // the legacy entry once we've seen it (even if it was empty) so a stale
+        // key doesn't keep occupying the prefs file forever.
+        val hadLegacy = prefs.contains("favourite_shows")
         val legacy = prefs.getStringSet("favourite_shows", emptySet())
             ?.mapNotNull { it.toIntOrNull() }
             ?: emptyList()
-        if (legacy.isNotEmpty()) {
+        if (hadLegacy) {
             prefs.edit()
                 .putString("pinned_show_ids", legacy.joinToString(","))
                 .remove("favourite_shows")
@@ -73,13 +76,8 @@ class PrefsManager(context: Context) {
      * can reorder this in Settings; new defaults are appended on upgrade so newly-
      * introduced sections don't get silently dropped.
      */
-    fun getSectionOrder(): List<String> {
-        val stored = prefs.getString("section_order", null)
-            ?: return DEFAULT_SECTION_ORDER
-        val parts = stored.split(",").filter { it.isNotEmpty() && it in ALL_SECTIONS }
-        val missing = DEFAULT_SECTION_ORDER - parts.toSet()
-        return parts + missing
-    }
+    fun getSectionOrder(): List<String> =
+        sanitiseSectionOrder(prefs.getString("section_order", null))
 
     fun setSectionOrder(order: List<String>) {
         val sanitised = order.filter { it in ALL_SECTIONS }.distinct()
@@ -130,6 +128,21 @@ class PrefsManager(context: Context) {
         )
 
         val ALL_SECTIONS: Set<String> = DEFAULT_SECTION_ORDER.toSet()
+
+        /**
+         * Pure-function version of getSectionOrder(): drops unknown IDs, dedups,
+         * and appends any DEFAULT_SECTION_ORDER entries the stored value omits
+         * (so upgrade-introduced sections don't get silently lost).
+         * Exposed for unit testing.
+         */
+        internal fun sanitiseSectionOrder(stored: String?): List<String> {
+            if (stored == null) return DEFAULT_SECTION_ORDER
+            val parts = stored.split(",")
+                .filter { it.isNotEmpty() && it in ALL_SECTIONS }
+                .distinct()
+            val missing = DEFAULT_SECTION_ORDER - parts.toSet()
+            return parts + missing
+        }
 
         fun sectionLabel(id: String): String = when (id) {
             SECTION_LIVE -> "Upcoming & Live"
