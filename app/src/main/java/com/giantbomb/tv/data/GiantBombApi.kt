@@ -287,53 +287,13 @@ class GiantBombApi(
                 }
             }
 
-            // Twitch is the source of truth for live state on the giantbomb channel:
-            //   - live  → keep liveNow, swap thumbnail to the live preview frame, prefer
-            //             Twitch's title (it's always current; the GB feed is sometimes
-            //             still showing the previous show's title).
-            //   - offline → drop liveNow regardless of what the GB feed claims so
-            //               finished streams stop sticking around.
-            //   - check failed (null) → fall back to the GB feed's liveNow as before.
-            val resolvedLiveNow: UpcomingStream? = when {
-                twitchStatus == null -> apiLiveNow
-                twitchStatus.isLive -> {
-                    val base = apiLiveNow ?: UpcomingStream(
-                        type = "live", title = "", image = null, date = "",
-                        premium = false, isLive = true
-                    )
-                    base.copy(
-                        title = twitchStatus.title?.takeIf { it.isNotBlank() }
-                            ?: base.title.ifBlank { "Giant Bomb Live" },
-                        image = twitchStatus.previewImageUrl ?: base.image,
-                        isLive = true
-                    )
-                }
-                else -> null
-            }
-
-            // Drop upcoming entries the API forgot to retire — and dedup the
-            // current live show, which the GB feed often keeps listing under its
-            // scheduled start time even after Twitch is broadcasting it. Without
-            // this you get the live card AND the "starting soon" card side-by-
-            // side for the same show.
-            //   - When liveNow is set: drop anything scheduled before *now* —
-            //     the duplicate (and any other slightly-past entries the API
-            //     hasn't cleaned up) all go.
-            //   - When liveNow is null: keep a 30-minute grace so a stream
-            //     scheduled to start at the top of the hour doesn't disappear
-            //     during the few minutes before Twitch flips on.
-            //   - Also dedup by title against the live show, in case the
-            //     scheduled time is somehow in the future (timezone weirdness)
-            //     but the GB feed and Twitch are talking about the same item.
-            val now = System.currentTimeMillis()
-            val cutoff = if (resolvedLiveNow != null) now else (now - 30 * 60 * 1000)
-            val liveTitle = resolvedLiveNow?.title?.trim()?.lowercase().orEmpty()
-            val filteredUpcoming = upcoming.filter {
-                val dateMs = com.giantbomb.tv.ui.UpcomingCardView.parseDate(it.date)
-                if (dateMs != 0L && dateMs < cutoff) return@filter false
-                if (liveTitle.isNotEmpty() && it.title.trim().lowercase() == liveTitle) return@filter false
-                true
-            }
+            val resolvedLiveNow = UpcomingResolver.resolveLiveNow(apiLiveNow, twitchStatus)
+            val filteredUpcoming = UpcomingResolver.filterUpcoming(
+                upcoming = upcoming,
+                resolvedLiveNow = resolvedLiveNow,
+                nowMs = System.currentTimeMillis(),
+                parseDate = { com.giantbomb.tv.ui.UpcomingCardView.parseDate(it) }
+            )
 
                 Result.success(UpcomingResponse(liveNow = resolvedLiveNow, upcoming = filteredUpcoming))
             }
