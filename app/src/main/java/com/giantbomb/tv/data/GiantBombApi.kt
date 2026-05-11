@@ -3,6 +3,8 @@ package com.giantbomb.tv.data
 import android.util.Log
 import com.giantbomb.tv.model.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -34,6 +36,9 @@ class GiantBombApi(
         private const val TAG = "GiantBombApi"
         private const val DEFAULT_BASE = "https://giantbomb.com"
         private const val USER_AGENT = "GBTV"
+        // Channel that hosts Giant Bomb's live streams. Used as the authoritative
+        // signal for whether liveNow in /upcoming_json is actually live right now.
+        private const val LIVE_TWITCH_CHANNEL = "giantbomb"
 
         private val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -239,8 +244,25 @@ class GiantBombApi(
 
     suspend fun getUpcoming(): Result<UpcomingResponse> = withContext(Dispatchers.IO) {
         try {
-            val json = get("/upcoming_json")
-            val liveNow = json.optJSONObject("liveNow")?.let { l ->
+            // supervisorScope so a failure in either child (e.g. a Cloudflare 403
+            // on /upcoming_json or a network error reaching Twitch) doesn't
+            // propagate up as scope cancellation and crash the activity. Each
+            // child's exception is stored in its Deferred and rethrown by
+            // await(), where the outer try/catch returns Result.failure cleanly.
+            supervisorScope {
+                // Fetch the GB feed and the authoritative Twitch live signal in
+                // parallel. /upcoming_json sits behind giantbomb.com's Cloudflare
+                // challenge and can fail with a 403 challenge HTML at any time —
+                // when that happens we still want a usable response, derived
+                // from Twitch alone.
+                val feedDeferred = async { runCatching { get("/upcoming_json") } }
+                val twitchDeferred = async { TwitchExtractor().getLiveStatus(LIVE_TWITCH_CHANNEL) }
+                val feedAttempt = feedDeferred.await()
+                val twitchStatus = twitchDeferred.await()
+
+                val json: JSONObject? = feedAttempt.getOrNull()
+
+            val apiLiveNow = json?.optJSONObject("liveNow")?.let { l ->
                 UpcomingStream(
                     type = l.optString("type", ""),
                     title = l.optString("title", ""),
@@ -250,7 +272,7 @@ class GiantBombApi(
                     isLive = true
                 )
             }
-            val upcomingArr = json.optJSONArray("upcoming")
+            val upcomingArr = json?.optJSONArray("upcoming")
             val upcoming = mutableListOf<UpcomingStream>()
             if (upcomingArr != null) {
                 for (i in 0 until upcomingArr.length()) {
@@ -264,19 +286,17 @@ class GiantBombApi(
                     ))
                 }
             }
-            // Filter stale items — if the scheduled date is more than 6 hours
-            // in the past the stream has almost certainly ended and the API is stale
-            val sixHoursAgo = System.currentTimeMillis() - 6 * 60 * 60 * 1000
-            val filteredLiveNow = liveNow?.let {
-                val dateMs = com.giantbomb.tv.ui.UpcomingCardView.parseDate(it.date)
-                if (dateMs > 0L && dateMs < sixHoursAgo) null else it
-            }
-            val filteredUpcoming = upcoming.filter {
-                val dateMs = com.giantbomb.tv.ui.UpcomingCardView.parseDate(it.date)
-                dateMs == 0L || dateMs >= sixHoursAgo
-            }
 
-            Result.success(UpcomingResponse(liveNow = filteredLiveNow, upcoming = filteredUpcoming))
+            val resolvedLiveNow = UpcomingResolver.resolveLiveNow(apiLiveNow, twitchStatus)
+            val filteredUpcoming = UpcomingResolver.filterUpcoming(
+                upcoming = upcoming,
+                resolvedLiveNow = resolvedLiveNow,
+                nowMs = System.currentTimeMillis(),
+                parseDate = { com.giantbomb.tv.ui.UpcomingCardView.parseDate(it) }
+            )
+
+                Result.success(UpcomingResponse(liveNow = resolvedLiveNow, upcoming = filteredUpcoming))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }

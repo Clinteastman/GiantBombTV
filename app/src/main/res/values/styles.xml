@@ -9,4 +9,15 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
+
+    <!-- Dialog theme used for the side-menu header context menu (and any
+         future AlertDialogs). Rounded corners + dark glass surface to match
+         the rest of the app instead of the default square white box. -->
+    <style name="GbDialogTheme" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="android:colorAccent">@color/gb_red</item>
+        <item name="android:windowBackground">@drawable/gb_dialog_background</item>
+        <item name="android:textColor">@color/gb_white</item>
+        <item name="android:textColorPrimary">@color/gb_white</item>
+        <item name="android:textColorSecondary">#CCFFFFFF</item>
+    </style>
 </resources>

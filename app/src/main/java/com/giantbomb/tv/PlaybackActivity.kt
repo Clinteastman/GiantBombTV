@@ -25,6 +25,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
@@ -53,6 +54,7 @@ import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Video
+import com.giantbomb.tv.util.DateFormat
 import com.giantbomb.tv.util.DeviceUtil
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
@@ -64,6 +66,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         const val EXTRA_VIDEO = "extra_video"
         const val EXTRA_LIVE_HLS_URL = "extra_live_hls_url"
         const val EXTRA_LIVE_TITLE = "extra_live_title"
+        // Optional resume position in seconds, passed by DetailActivity so
+        // PlaybackActivity doesn't have to re-fetch progress (which can race
+        // with playback start or fail through Cloudflare).
+        const val EXTRA_RESUME_SECONDS = "extra_resume_seconds"
     }
 
     private var player: MediaController? = null
@@ -89,6 +95,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var castContext: CastContext? = null
     private var castPlayer: CastPlayer? = null
     private var isCasting = false
+    // High-perf wifi lock held while a Chromecast session is active so the
+    // sender↔receiver link doesn't downshift when the screen turns off.
+    // Released when we leave the cast or finish the activity.
+    private var castWifiLock: android.net.wifi.WifiManager.WifiLock? = null
 
     // Mobile portrait layout views
     private var mobileContentScroll: ScrollView? = null
@@ -118,6 +128,22 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         api = GiantBombApi(prefs.apiKey ?: "")
 
         requestNotificationPermissionIfNeeded()
+
+        // Modern Android (gesture nav) routes back through OnBackPressedDispatcher,
+        // not onKeyDown(KEYCODE_BACK). Wire PiP entry + quality-picker dismissal here
+        // so swipe-back on phones reliably triggers PiP. Falls through to default
+        // (finish the activity) when neither applies.
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (isQualityPickerShowing()) {
+                    dismissQualityPicker()
+                    return
+                }
+                if (!isTv && tryEnterPip()) return
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+            }
+        })
 
         if (!isTv) {
             try {
@@ -173,6 +199,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.setOnClickListener {
                         showQualityPicker()
                     }
+                    enhanceControlFocus(this)
                 }
             })
         }
@@ -209,6 +236,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.setOnClickListener {
                         showQualityPicker()
                     }
+                    enhanceControlFocus(this)
                 }
             })
         }
@@ -279,6 +307,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.setOnClickListener {
                         showQualityPicker()
                     }
+                    enhanceControlFocus(this)
                 }
             })
         }
@@ -329,7 +358,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val metaView = TextView(this).apply {
             val parts = mutableListOf<String>()
             if (!v.showTitle.isNullOrEmpty()) parts.add(v.showTitle)
-            if (v.publishDate.isNotEmpty()) parts.add(v.publishDate.take(10))
+            if (v.publishDate.isNotEmpty()) parts.add(DateFormat.formatPublishDate(v.publishDate))
             if (!v.author.isNullOrEmpty()) parts.add(v.author)
             text = parts.joinToString("  \u2022  ")
             textSize = 13f
@@ -560,22 +589,51 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             playerView.useController = false
         } else {
             playerView.useController = true
-            // Only finish if the activity is being removed (user dismissed PiP),
-            // not when returning to fullscreen (user tapped PiP window)
+            // PiP→fullscreen on phones often leaves playerContainer at stale
+            // dimensions until something else triggers a re-layout (rotation
+            // works, but onConfigurationChanged isn't reliable across OEMs for
+            // a PiP exit). Re-apply the orientation-driven sizing here.
+            updateMobileOrientation(newConfig.orientation)
+            if (isFinishing) {
+                // Tap-X / swipe-away / drag-to-remove: dismisses PiP and finishes
+                // the activity. Stop the service here too — Samsung doesn't
+                // always fire onStop with isFinishing=true for the PiP-X path,
+                // so onStop alone is unreliable as a stop signal.
+                stopPlaybackService()
+            } else {
+                // Tapped the PiP tile to return to fullscreen — no stop wanted,
+                // and clear the flag so a later non-PiP onStop doesn't fire it.
+                enteredPip = false
+            }
         }
     }
 
     override fun onStop() {
         super.onStop()
-        // The service keeps the player alive (and a foreground notification)
-        // so playback continues when the activity is backgrounded, in PiP, or
-        // after the user closes the app. Progress + markWatched are saved
+        val explicitlyFinishing = isFinishing
+        val wasInPip = enteredPip
+        // While the activity is just backgrounded (Home press, PiP visible),
+        // the service keeps the player alive and the foreground notification
+        // shows transport controls. Progress + markWatched are saved
         // service-side via Player.Listener — nothing for us to flush here.
         disconnectController()
-        // Cast session lives on the receiver regardless of this CastPlayer
-        // instance, so releasing is safe.
+        // Cast: always release the CastPlayer here so the next onStart can
+        // cleanly re-bind. The WifiLock acquired during switchToCast keeps
+        // the underlying cast session alive across the transient stop —
+        // releasing the sender-side player wrapper itself is fine.
         releaseCastPlayer()
         enteredPip = false
+        if (explicitlyFinishing || wasInPip) {
+            // The user dismissed the player UI on purpose — PiP X, PiP swipe-away,
+            // drag-to-remove, or Back when PiP couldn't engage. Stop the service
+            // so audio doesn't keep playing with no obvious way to silence it.
+            // Idempotent: onPictureInPictureModeChanged may have already stopped it.
+            stopPlaybackService()
+        }
+    }
+
+    private fun stopPlaybackService() {
+        stopService(Intent(this, PlaybackService::class.java))
     }
 
     private fun initializeCastPlayer() {
@@ -601,6 +659,37 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         castPlayer?.setSessionAvailabilityListener(null)
         castPlayer?.release()
         castPlayer = null
+        releaseCastWifiLock()
+    }
+
+    private fun acquireCastWifiLock() {
+        // Defensive try/catch: acquireWifiLock requires WAKE_LOCK which is now
+        // declared in the manifest, but a SecurityException here would crash
+        // the cast-session-started callback and take the activity down. The
+        // wifi lock is a nice-to-have — better to skip it than crash.
+        try {
+            if (castWifiLock?.isHeld == true) return
+            val wm = applicationContext.getSystemService(android.content.Context.WIFI_SERVICE)
+                as? android.net.wifi.WifiManager ?: return
+            castWifiLock = wm.createWifiLock(
+                android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+                "GiantBombTV:Cast"
+            ).apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("PlaybackActivity", "WifiLock acquire failed: ${e.message}")
+        }
+    }
+
+    private fun releaseCastWifiLock() {
+        try {
+            castWifiLock?.takeIf { it.isHeld }?.release()
+        } catch (e: Exception) {
+            android.util.Log.w("PlaybackActivity", "WifiLock release failed: ${e.message}")
+        }
+        castWifiLock = null
     }
 
     private fun switchToCast() {
@@ -617,6 +706,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         exo?.pause()
         playerView.player = cp
         isCasting = true
+        // Hold a high-perf wifi lock so the sender↔receiver link survives a
+        // screen lock — without this, Wi-Fi downshifts and the receiver drops
+        // the cast session within a minute or two of the screen going off.
+        acquireCastWifiLock()
         val mimeType = if (currentOption.isHls) MimeTypes.APPLICATION_M3U8 else MimeTypes.VIDEO_MP4
 
         val castMediaItem = MediaItem.Builder()
@@ -641,6 +734,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val wasPlaying = cp?.isPlaying ?: true
 
         isCasting = false
+        // Cast session ended — drop the high-perf wifi lock.
+        releaseCastWifiLock()
 
         // Re-attach local player
         val exo = player
@@ -741,11 +836,25 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                             .build()
                     )
                     .build()
-                p.setMediaItem(mediaItem)
-                p.prepare()
 
                 val startFromBeginning = intent.getBooleanExtra("start_from_beginning", false)
-                if (!startFromBeginning) {
+                val explicitResumeSec = intent.getDoubleExtra(EXTRA_RESUME_SECONDS, 0.0)
+                val initialPositionMs = if (!startFromBeginning && explicitResumeSec > 0) {
+                    (explicitResumeSec * 1000).toLong()
+                } else {
+                    0L
+                }
+                // setMediaItem(item, position) is used (instead of a separate
+                // seekTo after prepare) so the player's first ready callback
+                // already reports the resume position — no race with prepare()
+                // resetting back to 0 before our seek lands.
+                p.setMediaItem(mediaItem, initialPositionMs)
+                p.prepare()
+
+                // If the caller didn't pass an explicit resume position, fall
+                // back to fetching it from the API. The seek issued here is
+                // applied as soon as the player has buffered enough to seek.
+                if (!startFromBeginning && explicitResumeSec <= 0) {
                     val progressResult = api.getProgress()
                     progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
                         if (progress.percentComplete < 95 && progress.currentTime > 0) {
@@ -789,6 +898,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 playerView.findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.setOnClickListener {
                     showQualityPicker()
                 }
+                enhanceControlFocus(playerView)
             }
         })
 
@@ -1093,9 +1203,111 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         p.addListener(listener)
     }
 
+    /**
+     * Stronger, on-brand focus state for the media3 controls. Focused buttons
+     * get a 2dp white outline ring + slight scale-up; the time bar is always
+     * red (YouTube-style) regardless of focus so the played position is
+     * unmistakable. Called every time the controls become visible — the
+     * operation is idempotent.
+     */
+    private fun enhanceControlFocus(pv: PlayerView) {
+        val red = 0xFFE3192C.toInt()
+        val white = 0xFFFFFFFF.toInt()
+        val density = resources.displayMetrics.density
+        val ringStroke = (2 * density).toInt()
+
+        // Walk the controller subtree and apply the halo treatment to every
+        // focusable view — covers play/pause, the rewind/ffwd "with amount"
+        // FrameLayouts (which aren't ImageButtons), settings, subtitle, prev/
+        // next (when the player advertises those commands), the overflow
+        // ▶︎/◀︎ buttons, and anything media3 adds later, without a hardcoded ID
+        // list. DefaultTimeBar is excluded — it gets the red-played-colour
+        // treatment below instead.
+        fun applyHalo(v: View) {
+            v.setOnFocusChangeListener { view, hasFocus ->
+                if (hasFocus) {
+                    view.background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(0x00000000)
+                        setStroke(ringStroke, white)
+                    }
+                    view.animate().scaleX(1.08f).scaleY(1.08f).setDuration(120).start()
+                } else {
+                    view.background = null
+                    view.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                }
+            }
+            // Halo + scale slightly overdraws the view's own bounds; without
+            // unclipping ancestors the ring is sliced off by exo_basic_controls
+            // and friends. Walk up to the PlayerView root flipping clipping off.
+            var p = v.parent
+            while (p is android.view.ViewGroup && p !== pv) {
+                p.clipChildren = false
+                p.clipToPadding = false
+                p = p.parent
+            }
+        }
+        fun walk(v: View) {
+            if (v is androidx.media3.ui.DefaultTimeBar) return
+            if (v !== pv && v.isFocusable) applyHalo(v)
+            if (v is android.view.ViewGroup) {
+                for (i in 0 until v.childCount) walk(v.getChildAt(i))
+            }
+        }
+        walk(pv)
+
+        // Time bar: always red so the played position reads as the YouTube /
+        // standard media-app cue. Scrubber thumb stays default; the colour
+        // shift alone is plenty obvious.
+        val timeBar = pv.findViewById<androidx.media3.ui.DefaultTimeBar>(
+            androidx.media3.ui.R.id.exo_progress
+        )
+        timeBar?.apply {
+            setPlayedColor(red)
+            setScrubberColor(red)
+        }
+    }
+
+    /**
+     * Intercept DPAD LEFT/RIGHT when the time bar is focused so we can scrub
+     * with progressively larger jumps the longer the key is held. Default
+     * media3 time-bar scrubbing has a fixed step that's too coarse on long
+     * videos and too fine on short ones; this gives a feel similar to
+     * holding rewind/forward on a remote — first taps move a few seconds,
+     * sustained holds rapidly skim through minutes.
+     */
+    @android.annotation.SuppressLint("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val isLeft = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+        val isRight = event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+        if ((isLeft || isRight) && event.action == KeyEvent.ACTION_DOWN) {
+            val p = player
+            val timeBar = if (::playerView.isInitialized) {
+                playerView.findViewById<View>(androidx.media3.ui.R.id.exo_progress)
+            } else null
+            if (p != null && timeBar != null && timeBar.isFocused) {
+                val incrementMs = scrubIncrementMs(event.repeatCount)
+                val sign = if (isRight) 1L else -1L
+                val newPos = (p.currentPosition + sign * incrementMs).coerceAtLeast(0L)
+                p.seekTo(newPos)
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun scrubIncrementMs(repeat: Int): Long = when {
+        repeat < 5 -> 5_000L          // 0–4: 5 s each
+        repeat < 15 -> 15_000L        // 5–14: 15 s each
+        repeat < 30 -> 60_000L        // 15–29: 1 min each
+        else -> 5 * 60_000L           // 30+: 5 min each
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // BACK is handled by the OnBackPressedDispatcher callback (see onCreate).
+        // ESCAPE only fires from hardware keyboards and isn't dispatched there.
         if (isQualityPickerShowing()) {
-            if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE) {
+            if (keyCode == KeyEvent.KEYCODE_ESCAPE) {
                 dismissQualityPicker()
                 return true
             }
@@ -1103,16 +1315,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
 
         return when (keyCode) {
-            KeyEvent.KEYCODE_BACK -> {
-                if (!isTv && tryEnterPip()) {
-                    true
-                } else {
-                    // Service-side periodic saver covers final-position
-                    // persistence; just finish the activity.
-                    finish()
-                    true
-                }
-            }
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> {
                 player?.let { if (it.isPlaying) it.pause() else it.play() }
                 true
@@ -1166,7 +1368,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         override fun onBindViewHolder(holder: VH, position: Int) {
             val video = videos[position]
             holder.title.text = video.title
-            holder.meta.text = if (video.publishDate.isNotEmpty()) video.publishDate.take(10) else ""
+            holder.meta.text = if (video.publishDate.isNotEmpty()) DateFormat.formatPublishDate(video.publishDate) else ""
 
             if (!video.thumbnailUrl.isNullOrEmpty()) {
                 Glide.with(holder.thumbnail)

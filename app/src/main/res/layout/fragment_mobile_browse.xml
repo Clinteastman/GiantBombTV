@@ -59,6 +59,21 @@
 
         </FrameLayout>
 
+        <!-- Chip bar — quick-jump strip of section names. Sticks above the
+             scrollable browse content. Visibility flipped on by code once
+             there's at least one section to chip. -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/chip_bar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="8dp"
+            android:clipToPadding="false"
+            android:scrollbars="none"
+            android:visibility="gone" />
+
         <!-- Swipe to refresh wrapping the main content -->
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
             android:id="@+id/swipe_refresh"

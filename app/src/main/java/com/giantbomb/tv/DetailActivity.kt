@@ -24,6 +24,7 @@ import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Video
+import com.giantbomb.tv.util.DateFormat
 import com.giantbomb.tv.util.DeviceUtil
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.*
@@ -33,6 +34,12 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
     companion object {
         const val EXTRA_VIDEO = "extra_video"
     }
+
+    // Cached resume position in seconds, populated when the playback / progress
+    // load completes. The watch button's click handler reads this so it can
+    // pass an explicit resume position to PlaybackActivity instead of forcing
+    // PlaybackActivity to refetch progress (which can race with playback start).
+    private var resumeSeconds: Double = 0.0
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
     private val density by lazy { resources.displayMetrics.density }
@@ -192,7 +199,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // Meta
         val metaView = TextView(this).apply {
             val parts = mutableListOf<String>()
-            if (video.publishDate.isNotEmpty()) parts.add(video.publishDate.take(10))
+            if (video.publishDate.isNotEmpty()) parts.add(DateFormat.formatPublishDate(video.publishDate))
             if (!video.author.isNullOrEmpty()) parts.add(video.author)
             text = parts.joinToString("  \u2022  ")
             textSize = 15f
@@ -244,6 +251,9 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             setOnClickListener {
                 val intent = Intent(this@DetailActivity, PlaybackActivity::class.java).apply {
                     putExtra(PlaybackActivity.EXTRA_VIDEO, video)
+                    if (resumeSeconds > 0) {
+                        putExtra(PlaybackActivity.EXTRA_RESUME_SECONDS, resumeSeconds)
+                    }
                 }
                 startActivity(intent)
             }
@@ -374,13 +384,16 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 val m = (totalSec % 3600) / 60
                 val durationStr = if (h > 0) "${h}h ${m}m" else "${m}m"
                 val parts = mutableListOf(durationStr)
-                if (video.publishDate.isNotEmpty()) parts.add(video.publishDate.take(10))
+                if (video.publishDate.isNotEmpty()) parts.add(DateFormat.formatPublishDate(video.publishDate))
                 if (!video.author.isNullOrEmpty()) parts.add(video.author)
                 metaView.text = parts.joinToString("  \u2022  ")
             }
 
-            // Update watch button to show Resume if there's progress
-            if (progress != null && progress.percentComplete in 1..94) {
+            // Update watch button to show Resume if there's progress, and
+            // cache the resume position so the click handler can pass it to
+            // PlaybackActivity directly.
+            if (progress != null && progress.percentComplete in 1..94 && progress.currentTime > 0) {
+                resumeSeconds = progress.currentTime
                 val resumeMin = (progress.currentTime / 60).toInt()
                 watchButton.text = "${getString(R.string.resume)} (${resumeMin}m in)"
                 restartButton.visibility = View.VISIBLE

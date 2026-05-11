@@ -50,6 +50,23 @@
             android:textStyle="bold"
             android:visibility="gone" />
 
+        <!-- Watchlist toggle: glyph + background set in code. Bottom-end
+             matches the layout used on the larger Recent cards. -->
+        <TextView
+            android:id="@+id/small_watchlist_btn"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="4dp"
+            android:gravity="center"
+            android:textColor="@color/gb_white"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Add to watchlist"
+            tools:text="+" />
+
     </FrameLayout>
 
     <TextView

@@ -6,7 +6,7 @@
     android:orientation="vertical"
     android:paddingStart="12dp"
     android:paddingEnd="12dp"
-    android:paddingBottom="16dp"
+    android:paddingBottom="28dp"
     android:background="?android:attr/selectableItemBackground">
 
     <!-- Thumbnail container with 16:9 aspect ratio enforced programmatically -->
@@ -54,12 +54,13 @@
             android:visibility="gone"
             tools:visibility="visible" />
 
-        <!-- Duration badge -->
+        <!-- Duration badge — bottom-start so it shares the bottom edge with
+             the watchlist toggle (bottom-end) without overlap. -->
         <TextView
             android:id="@+id/video_duration"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom|end"
+            android:layout_gravity="bottom|start"
             android:layout_margin="8dp"
             android:paddingStart="4dp"
             android:paddingEnd="4dp"
@@ -88,6 +89,24 @@
             android:layout_gravity="bottom|start"
             android:background="@color/gb_red"
             android:visibility="gone" />
+
+        <!-- Watchlist toggle: tap to add/remove. Bottom-end with duration
+             on bottom-start so they don't overlap. Background + glyph set
+             in code per state. -->
+        <TextView
+            android:id="@+id/video_watchlist_btn"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="8dp"
+            android:gravity="center"
+            android:textColor="@color/gb_white"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Add to watchlist"
+            tools:text="+" />
 
     </FrameLayout>
 

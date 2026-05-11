@@ -6,10 +6,13 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -34,15 +37,57 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var exitOverlay: View? = null
     private var updateOverlay: View? = null
 
+    // Activity-level long-press detection for the TV side menu. Leanback's
+    // HeadersSupportFragment installs its own click listener and BaseGridView
+    // short-circuits DPAD_CENTER to performClick() — the View framework's
+    // long-press logic never gets to run. So we intercept here: schedule a
+    // runnable on the first ACTION_DOWN, fire the context menu if it's still
+    // pending after the long-press timeout, otherwise treat it as a normal
+    // click and call performClick on whatever was focused.
+    private val longPressHandler = Handler(Looper.getMainLooper())
+    private var pendingHeaderLongPress: Runnable? = null
+    private var headerLongPressFired = false
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val isSelectKey = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
                 event.keyCode == KeyEvent.KEYCODE_ENTER ||
                 event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
                 event.keyCode == KeyEvent.KEYCODE_BUTTON_A
-        if (isSelectKey) {
-            Log.d("GBKeyEvent", "select action=${event.action} repeat=${event.repeatCount} code=${event.keyCode}")
-            if (event.repeatCount > 0) {
-                return true
+
+        if (isTv && isSelectKey) {
+            val browse = supportFragmentManager
+                .findFragmentById(R.id.main_fragment_container) as? BrowseFragment
+            // Only intercept while the side menu is up — in rows we want
+            // ordinary click behaviour (open detail / navigate).
+            if (browse != null && browse.isShowingHeaders) {
+                when (event.action) {
+                    KeyEvent.ACTION_DOWN -> {
+                        if (event.repeatCount == 0 && pendingHeaderLongPress == null) {
+                            headerLongPressFired = false
+                            val r = Runnable {
+                                pendingHeaderLongPress = null
+                                headerLongPressFired = browse.tryShowFocusedHeaderMenu()
+                            }
+                            pendingHeaderLongPress = r
+                            longPressHandler.postDelayed(
+                                r, ViewConfiguration.getLongPressTimeout().toLong()
+                            )
+                        }
+                        return true
+                    }
+                    KeyEvent.ACTION_UP -> {
+                        val pending = pendingHeaderLongPress
+                        if (pending != null) {
+                            longPressHandler.removeCallbacks(pending)
+                            pendingHeaderLongPress = null
+                            if (!headerLongPressFired) {
+                                currentFocus?.performClick()
+                            }
+                        }
+                        headerLongPressFired = false
+                        return true
+                    }
+                }
             }
         }
         return super.dispatchKeyEvent(event)
@@ -102,10 +147,17 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
             return
         }
 
-        // On TV, show exit confirmation instead of immediately closing
+        // On TV, show exit confirmation instead of immediately closing —
+        // but only when we're already on the side-menu (headers) view. If the
+        // user has dived into a row's cards, Back should slide the side menu
+        // back in via Leanback's headers transition, not exit the app.
         if (isTv) {
             val fragment = supportFragmentManager.findFragmentById(R.id.main_fragment_container)
             if (fragment is BrowseFragment) {
+                if (!fragment.isShowingHeaders) {
+                    fragment.startHeadersTransition(true)
+                    return
+                }
                 showExitConfirmation()
                 return
             }

@@ -13,6 +13,7 @@ import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.target.Target
 import com.giantbomb.tv.R
 import com.giantbomb.tv.model.Video
+import com.giantbomb.tv.util.DateFormat
 
 class CardPresenter : Presenter() {
 
@@ -35,7 +36,7 @@ class CardPresenter : Presenter() {
         cardView.setTitle(video.title)
 
         val meta = buildList {
-            if (video.publishDate.isNotEmpty()) add(video.publishDate.take(10))
+            if (video.publishDate.isNotEmpty()) add(DateFormat.formatPublishDate(video.publishDate))
             if (!video.showTitle.isNullOrEmpty()) add(video.showTitle)
         }.joinToString(" \u2022 ")
         cardView.setMeta(meta)

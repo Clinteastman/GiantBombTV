@@ -11,7 +11,14 @@ import com.giantbomb.tv.R
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Show
 
-class ShowCardPresenter : Presenter() {
+/**
+ * @param onLongClick Optional callback fired when the user long-presses
+ *   D-pad centre on a focused show card. Used by BrowseFragment to wire
+ *   pin/unpin without the fragment having to walk every row's cards.
+ */
+class ShowCardPresenter(
+    private val onLongClick: ((Show) -> Unit)? = null
+) : Presenter() {
 
     override fun onCreateViewHolder(parent: ViewGroup): ViewHolder {
         val density = parent.resources.displayMetrics.density
@@ -46,9 +53,9 @@ class ShowCardPresenter : Presenter() {
         val show = item as Show
         val cardView = viewHolder.view as ImageCardView
         val prefs = PrefsManager(viewHolder.view.context)
-        val isFav = prefs.isFavouriteShow(show.id)
-        cardView.titleText = if (isFav) "\u2605 ${show.title}" else show.title
-        cardView.contentText = if (isFav) "Pinned" else if (show.active) "Active" else ""
+        val isPinned = prefs.isPinnedShow(show.id)
+        cardView.titleText = if (isPinned) "\u2605 ${show.title}" else show.title
+        cardView.contentText = if (isPinned) "Pinned" else if (show.active) "Active" else ""
 
         val imageUrl = show.posterUrl ?: show.logoUrl
         if (!imageUrl.isNullOrEmpty()) {
@@ -58,6 +65,17 @@ class ShowCardPresenter : Presenter() {
                 .into(cardView.mainImageView)
         } else {
             cardView.mainImage = ContextCompat.getDrawable(viewHolder.view.context, R.drawable.default_card)
+        }
+
+        if (onLongClick != null) {
+            cardView.isLongClickable = true
+            cardView.setOnLongClickListener {
+                onLongClick.invoke(show)
+                true
+            }
+        } else {
+            cardView.setOnLongClickListener(null)
+            cardView.isLongClickable = false
         }
     }
 

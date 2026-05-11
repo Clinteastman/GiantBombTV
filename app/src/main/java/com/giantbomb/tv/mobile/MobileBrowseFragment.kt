@@ -5,6 +5,8 @@ import android.content.res.Configuration
 import android.graphics.drawable.GradientDrawable
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -49,25 +51,79 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     private val browseItems = mutableListOf<BrowseItem>()
     private lateinit var browseAdapter: BrowseAdapter
 
+    // Chip bar: quick-jump strip of section + per-show entries. Populated each
+    // time loadContent() finishes, hidden when there's nothing to chip.
+    private lateinit var chipBar: RecyclerView
+    private data class ChipEntry(val key: String, val label: String, val targetIndex: Int)
+    private val chipItems = mutableListOf<ChipEntry>()
+    private lateinit var chipAdapter: ChipAdapter
+    private var activeChipIndex: Int = -1
+
+    // Set of video IDs currently on the watchlist — drives the per-card
+    // bookmark overlay's filled/outlined state. Refreshed at every loadContent
+    // and mutated optimistically when the user taps the bookmark button.
+    private var watchlistIds: MutableSet<Int> = mutableSetOf()
+    // Materialised watchlist videos, kept in sync with watchlistIds so the
+    // Watchlist row can be rebuilt in place after a toggle without a full
+    // loadContent.
+    private var watchlistVideos: MutableList<Video> = mutableListOf()
+    // Progress entries (videoId → entry) cached so card taps can pass an
+    // explicit resume position to PlaybackActivity, avoiding a second
+    // network round-trip from the player and the race that comes with it.
+    private var progressByVideoId: Map<Int, ProgressEntry> = emptyMap()
+    // Indices of the watchlist header / content row in browseItems, captured
+    // at the end of loadContent. -1 if the watchlist section isn't rendered
+    // (hidden, or section order put it somewhere we can't find).
+    private var watchlistHeaderItemIndex: Int = -1
+    private var watchlistContentItemIndex: Int = -1
+
+    // Upcoming/Live row tracked separately so we can refresh just that row
+    // (and its header) every minute without rebuilding the whole grid.
+    private var upcomingRowItemIndex: Int = -1
+    private var upcomingHeaderItemIndex: Int = -1
+    private val refreshHandler = Handler(Looper.getMainLooper())
+    private var upcomingRefreshRunnable: Runnable? = null
+    private var lastUpcomingFailureMs: Long = 0L
+
+    // Section header positions, populated each time loadContent runs. Drives the
+    // chip-bar quick-jump and any other "scroll to section X" affordance.
+    private var sectionStartIndices: Map<String, Int> = emptyMap()
+
     companion object {
         private const val SETTINGS_REFRESH = 2
         private const val SETTINGS_SETUP = 3
         private const val SETTINGS_QUALITY = 4
         private const val SETTINGS_PRIVACY = 5
+        private const val SETTINGS_CUSTOMIZE = 6
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
         private const val RECENT_VERTICAL_COUNT = 5
+        // Polling /upcoming_json every 60s pushed us into the endpoint's
+        // hard rate limit (it applies to everyone, not just our UA). 180s is
+        // still snappy enough for "stream went live" to surface within a few
+        // minutes while cutting our request count to a third.
+        private const val UPCOMING_REFRESH_MS = 180_000L
+        // After a failed upcoming poll, suppress the next few ticks so we
+        // don't keep hammering an endpoint that's already throttling us.
+        private const val UPCOMING_FAILURE_BACKOFF_MS = 300_000L
     }
 
     // Sealed class representing different row types in the feed
     sealed class BrowseItem {
         data class SectionHeader(val title: String, val showSeeAll: Boolean = false) : BrowseItem()
+        // Per-show header that knows which Show it represents — long-press toggles
+        // pinned state. Visually identical to SectionHeader, distinguished only
+        // because the toggle target needs the Show object at click time.
+        data class ShowSectionHeader(val show: Show, val pinned: Boolean) : BrowseItem()
         data class HorizontalVideoRow(val videos: List<Video>) : BrowseItem()
         data class HorizontalShowRow(val shows: List<Show>) : BrowseItem()
         data class VerticalVideo(val video: Video) : BrowseItem()
         data class SettingRow(val item: SettingsItem) : BrowseItem()
         data class UpcomingRow(val streams: List<UpcomingStream>, val liveNow: UpcomingStream?) : BrowseItem()
         class LazyShowRow(val show: Show, var videos: List<Video>? = null, var isLoading: Boolean = false) : BrowseItem()
+        // Used when a section is intentionally rendered with a friendly message
+        // instead of being hidden — e.g. an empty watchlist after a fresh install.
+        data class EmptyStateRow(val message: String) : BrowseItem()
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -113,6 +169,19 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         setupLayoutManager()
         recyclerView.adapter = browseAdapter
 
+        chipBar = view.findViewById(R.id.chip_bar)
+        chipBar.layoutManager = LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+        chipAdapter = ChipAdapter()
+        chipBar.adapter = chipAdapter
+
+        // Sync the active chip + add visual breathing room between sections.
+        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                updateActiveChip()
+            }
+        })
+        recyclerView.addItemDecoration(SectionGapDecoration())
+
         swipeRefresh.setColorSchemeColors(
             ContextCompat.getColor(requireContext(), R.color.gb_red)
         )
@@ -157,6 +226,8 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     override fun onPause() {
         super.onPause()
         wasInBackground = true
+        upcomingRefreshRunnable?.let { refreshHandler.removeCallbacks(it) }
+        upcomingRefreshRunnable = null
     }
 
     override fun onResume() {
@@ -169,6 +240,92 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         }
         hasBeenVisible = true
         wasInBackground = false
+        scheduleUpcomingRefresh()
+    }
+
+    private fun scheduleUpcomingRefresh() {
+        upcomingRefreshRunnable?.let { refreshHandler.removeCallbacks(it) }
+        val r = object : Runnable {
+            override fun run() {
+                refreshUpcomingRow()
+                refreshHandler.postDelayed(this, UPCOMING_REFRESH_MS)
+            }
+        }
+        upcomingRefreshRunnable = r
+        refreshHandler.postDelayed(r, UPCOMING_REFRESH_MS)
+    }
+
+    private fun refreshUpcomingRow() {
+        val key = prefs.apiKey ?: return
+        if (key.isEmpty()) return
+        // Skip if we recently got rate-limited / failed — polling harder makes
+        // the throttle stickier, not softer.
+        if (System.currentTimeMillis() - lastUpcomingFailureMs < UPCOMING_FAILURE_BACKOFF_MS) return
+        val apiInstance = api ?: GiantBombApi(key)
+        launch {
+            val rawResult = apiInstance.getUpcoming()
+            val result = rawResult.getOrNull()
+            if (result == null) {
+                lastUpcomingFailureMs = System.currentTimeMillis()
+                return@launch
+            }
+            if (!isAdded) return@launch
+
+            val hasContent = result.liveNow != null || result.upcoming.isNotEmpty()
+            val rowIdx = upcomingRowItemIndex
+            val hdrIdx = upcomingHeaderItemIndex
+            val rowPresent = rowIdx in browseItems.indices && browseItems[rowIdx] is BrowseItem.UpcomingRow
+
+            when {
+                rowPresent && hasContent -> {
+                    browseItems[rowIdx] = BrowseItem.UpcomingRow(result.upcoming, result.liveNow)
+                    browseAdapter.notifyItemChanged(rowIdx)
+                    if (hdrIdx in browseItems.indices) {
+                        val newTitle = if (result.liveNow != null) "🔴 Upcoming & Live" else "Upcoming"
+                        val current = browseItems[hdrIdx] as? BrowseItem.SectionHeader
+                        if (current != null && current.title != newTitle) {
+                            browseItems[hdrIdx] = current.copy(title = newTitle)
+                            browseAdapter.notifyItemChanged(hdrIdx)
+                        }
+                    }
+                }
+                rowPresent && !hasContent -> {
+                    // Remove header + row pair (header sits immediately before the row).
+                    val removeFrom = if (hdrIdx in browseItems.indices && hdrIdx == rowIdx - 1) hdrIdx else rowIdx
+                    val removeCount = if (removeFrom == hdrIdx) 2 else 1
+                    repeat(removeCount) { browseItems.removeAt(removeFrom) }
+                    browseAdapter.notifyItemRangeRemoved(removeFrom, removeCount)
+                    upcomingRowItemIndex = -1
+                    upcomingHeaderItemIndex = -1
+                    // Any tracked index that sat AFTER the removal point shifts
+                    // down by `removeCount`. Without this the watchlist refresh
+                    // and the chip-bar quick-jump aim at stale positions.
+                    if (watchlistHeaderItemIndex >= removeFrom) {
+                        watchlistHeaderItemIndex -= removeCount
+                    }
+                    if (watchlistContentItemIndex >= removeFrom) {
+                        watchlistContentItemIndex -= removeCount
+                    }
+                    sectionStartIndices = sectionStartIndices
+                        .filterKeys { it != PrefsManager.SECTION_LIVE }
+                        .mapValues { (_, idx) ->
+                            if (idx >= removeFrom) idx - removeCount else idx
+                        }
+                    updateChipBar()
+                }
+                !rowPresent && hasContent -> {
+                    // Section wasn't rendered at last loadContent (either there
+                    // was no content then, or the user hid SECTION_LIVE).
+                    // Inserting blindly at index 0 would bypass the user-
+                    // defined section order and re-introduce a hidden section,
+                    // and would also break every tracked index without a
+                    // matching shift. Leave it — the next loadContent
+                    // (onResume / pull-to-refresh) will render it in its
+                    // configured position.
+                }
+                // !rowPresent && !hasContent → nothing to do
+            }
+        }
     }
 
     fun loadContent() {
@@ -207,6 +364,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                         progressMap = progress.associateBy { it.videoId }
                     }
                 }
+                progressByVideoId = progressMap
 
                 fun Video.withProgress(): Video {
                     val entry = progressMap[id]
@@ -218,148 +376,67 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     return v.withFallbackThumb()
                 }
 
-                // Upcoming & Live
+                // Resolve all the deferred fetches we'll need before rendering.
                 val upcomingResult = upcomingDeferred.await().getOrNull()
-                if (upcomingResult != null) {
-                    val hasContent = upcomingResult.liveNow != null || upcomingResult.upcoming.isNotEmpty()
-                    if (hasContent) {
-                        val headerTitle = if (upcomingResult.liveNow != null) "\uD83D\uDD34 Upcoming & Live" else "Upcoming"
-                        items.add(BrowseItem.SectionHeader(headerTitle))
-                        items.add(BrowseItem.UpcomingRow(upcomingResult.upcoming, upcomingResult.liveNow))
-                    }
-                }
-
-                // Continue Watching
-                if (key.isNotEmpty() && progressMap.isNotEmpty()) {
-                    val inProgressEntries = progressMap.values
-                        .filter { it.percentComplete in 1..94 }
-                        .sortedByDescending { it.currentTime }
-                        .take(20)
-                    val inProgressIds = inProgressEntries.map { it.videoId }.toSet()
-
-                    if (inProgressIds.isNotEmpty()) {
-                        val recentVideos = recentDeferred.await().getOrNull()
-                        val continueVideos = recentVideos?.filter { it.id in inProgressIds }
-                            ?.map { video ->
-                                val entry = progressMap[video.id]
-                                val v = if (entry != null) video.copy(progressPercent = entry.percentComplete) else video
-                                v.withFallbackThumb()
-                            }
-
-                        if (continueVideos != null && continueVideos.isNotEmpty()) {
-                            items.add(BrowseItem.SectionHeader(getString(R.string.continue_watching)))
-                            items.add(BrowseItem.HorizontalVideoRow(continueVideos))
-                        }
-                    }
-                }
-
-                // Recent Videos
-                val recent = recentDeferred.await()
-                recent.onSuccess { videos ->
-                    if (videos.isNotEmpty()) {
-                        items.add(BrowseItem.SectionHeader(getString(R.string.recent)))
-
-                        // First N as full-width vertical cards
-                        val verticalVideos = videos.take(RECENT_VERTICAL_COUNT)
-                        for (v in verticalVideos) {
-                            items.add(BrowseItem.VerticalVideo(v.withProgress()))
-                        }
-
-                        // Rest in horizontal row
-                        val remaining = videos.drop(RECENT_VERTICAL_COUNT)
-                        if (remaining.isNotEmpty()) {
-                            items.add(BrowseItem.HorizontalVideoRow(remaining.map { it.withProgress() }))
-                        }
-
-                        // Premium row
-                        val premiumVideos = videos.filter { it.premium }
-                        if (premiumVideos.size >= 2) {
-                            items.add(BrowseItem.SectionHeader("Premium"))
-                            items.add(BrowseItem.HorizontalVideoRow(premiumVideos.map { it.withProgress() }))
-                        }
-                    }
-                }
-
-                recent.onFailure { e ->
+                val recentResult = recentDeferred.await()
+                recentResult.onFailure { e ->
                     if (isAdded) {
                         Toast.makeText(requireContext(),
                             GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
                     }
                 }
+                val recentVideos = recentResult.getOrNull()?.map { it.withProgress() }
+                val watchlist = if (key.isNotEmpty()) {
+                    watchlistDeferred.await().getOrNull()?.map { it.withProgress() }
+                } else null
+                watchlistIds = watchlist?.map { it.id }?.toMutableSet() ?: mutableSetOf()
+                watchlistVideos = watchlist?.toMutableList() ?: mutableListOf()
 
-                // Per-show rows (lazy loaded when scrolled into view)
-                if (shows != null && shows.isNotEmpty()) {
-                    val activeShows = shows.filter { it.active }
+                val pinnedIds = prefs.getPinnedShowIds()
+                val hidden = prefs.getHiddenSections()
 
-                    // All Shows grid first
-                    if (activeShows.isNotEmpty()) {
-                        items.add(BrowseItem.SectionHeader("All Shows"))
-                        items.add(BrowseItem.HorizontalShowRow(activeShows))
+                // Render sections in user-defined order. Each helper appends to `items`
+                // and returns true if it produced anything; we track the first item's
+                // index so the chip bar can scroll-to-section.
+                val indices = mutableMapOf<String, Int>()
+                upcomingHeaderItemIndex = -1
+                upcomingRowItemIndex = -1
+
+                for (sectionId in prefs.getSectionOrder()) {
+                    if (sectionId in hidden) continue
+                    val startIdx = items.size
+                    val added = when (sectionId) {
+                        PrefsManager.SECTION_LIVE -> renderLiveSection(items, upcomingResult)
+                        PrefsManager.SECTION_CONTINUE -> renderContinueSection(items, recentVideos, progressMap, key)
+                        PrefsManager.SECTION_WATCHLIST -> renderWatchlistSection(items, watchlist)
+                        PrefsManager.SECTION_RECENT -> renderRecentSection(items, recentVideos)
+                        PrefsManager.SECTION_PINNED -> renderPinnedShowsSection(items, shows, pinnedIds)
+                        PrefsManager.SECTION_ACTIVE_SHOWS -> renderActiveShowsSection(items, shows, pinnedIds)
+                        PrefsManager.SECTION_PREMIUM -> renderPremiumSection(items, recentVideos)
+                        PrefsManager.SECTION_LEGACY -> renderLegacyShowsSection(items, shows, pinnedIds)
+                        PrefsManager.SECTION_SETTINGS -> renderSettingsSection(items)
+                        else -> false
                     }
-
-                    // Lazy show rows - videos load on scroll
-                    for (s in activeShows) {
-                        items.add(BrowseItem.SectionHeader(s.title))
-                        items.add(BrowseItem.LazyShowRow(s))
-                    }
+                    if (added) indices[sectionId] = startIdx
                 }
 
-                // Watchlist
-                val watchlist = if (key.isNotEmpty()) watchlistDeferred.await().getOrNull() else null
-                if (watchlist != null && watchlist.isNotEmpty()) {
-                    items.add(BrowseItem.SectionHeader("My Watchlist"))
-                    items.add(BrowseItem.HorizontalVideoRow(watchlist.map { it.withProgress() }))
+                sectionStartIndices = indices
+                indices[PrefsManager.SECTION_LIVE]?.let { liveStart ->
+                    upcomingHeaderItemIndex = liveStart
+                    upcomingRowItemIndex = liveStart + 1
                 }
-
-                // Settings
-                items.add(BrowseItem.SectionHeader(getString(R.string.settings)))
-                items.add(BrowseItem.SettingRow(SettingsItem(
-                    SETTINGS_REFRESH,
-                    getString(R.string.settings_refresh),
-                    getString(R.string.settings_refresh_desc),
-                    R.drawable.ic_settings_refresh
-                )))
-                items.add(BrowseItem.SettingRow(SettingsItem(
-                    SETTINGS_QUALITY,
-                    "Stream Quality",
-                    "Default: ${PrefsManager.qualityLabel(prefs.preferredQuality)}",
-                    R.drawable.ic_settings_quality
-                )))
-                items.add(BrowseItem.SettingRow(SettingsItem(
-                    SETTINGS_SETUP,
-                    getString(R.string.settings_setup),
-                    getString(R.string.settings_setup_desc),
-                    R.drawable.ic_settings_cog
-                )))
-                items.add(BrowseItem.SettingRow(SettingsItem(
-                    SETTINGS_PRIVACY,
-                    "Privacy Policy",
-                    "View privacy policy",
-                    R.drawable.ic_settings_about
-                )))
-
-                // Last updated timestamp
-                val now = java.text.SimpleDateFormat("EEE, MMM d 'at' h:mm:ss a", java.util.Locale.getDefault()).format(java.util.Date())
-                items.add(BrowseItem.SettingRow(SettingsItem(
-                    -1,
-                    "Last Updated",
-                    now,
-                    R.drawable.ic_settings_refresh
-                )))
-
-                // Version info
-                val packageInfo = requireContext().packageManager.getPackageInfo(requireContext().packageName, 0)
-                val versionText = "v${packageInfo.versionName} (${packageInfo.longVersionCode})"
-                items.add(BrowseItem.SettingRow(SettingsItem(
-                    -1,
-                    "Version",
-                    versionText,
-                    R.drawable.ic_settings_cog
-                )))
+                indices[PrefsManager.SECTION_WATCHLIST]?.let { wlStart ->
+                    watchlistHeaderItemIndex = wlStart
+                    watchlistContentItemIndex = wlStart + 1
+                } ?: run {
+                    watchlistHeaderItemIndex = -1
+                    watchlistContentItemIndex = -1
+                }
 
                 browseItems.clear()
                 browseItems.addAll(items)
                 browseAdapter.notifyDataSetChanged()
+                updateChipBar()
 
             } finally {
                 isLoading = false
@@ -368,6 +445,191 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 }
             }
         }
+    }
+
+    // ----------------------------------------------------------------------
+    // Section renderers
+    // Each appends to `items` and returns true if it produced anything. The
+    // driver in loadContent() iterates prefs.getSectionOrder() and calls these
+    // in the user-defined order, then records each section's start index for
+    // the chip-bar quick-jump and the upcoming-row mid-flight refresh.
+    // ----------------------------------------------------------------------
+
+    private fun renderLiveSection(
+        items: MutableList<BrowseItem>,
+        upcoming: com.giantbomb.tv.model.UpcomingResponse?
+    ): Boolean {
+        val u = upcoming ?: return false
+        if (u.liveNow == null && u.upcoming.isEmpty()) return false
+        val title = if (u.liveNow != null) "🔴 Upcoming & Live" else "Upcoming"
+        items.add(BrowseItem.SectionHeader(title))
+        items.add(BrowseItem.UpcomingRow(u.upcoming, u.liveNow))
+        return true
+    }
+
+    private fun renderContinueSection(
+        items: MutableList<BrowseItem>,
+        recentVideos: List<Video>?,
+        progressMap: Map<Int, ProgressEntry>,
+        apiKey: String
+    ): Boolean {
+        if (apiKey.isEmpty() || progressMap.isEmpty() || recentVideos.isNullOrEmpty()) return false
+        val inProgressIds = progressMap.values
+            .filter { it.percentComplete in 1..94 }
+            .sortedByDescending { it.currentTime }
+            .take(20)
+            .map { it.videoId }
+            .toSet()
+        if (inProgressIds.isEmpty()) return false
+        val videos = recentVideos.filter { it.id in inProgressIds }
+        if (videos.isEmpty()) return false
+        items.add(BrowseItem.SectionHeader(getString(R.string.continue_watching)))
+        items.add(BrowseItem.HorizontalVideoRow(videos))
+        return true
+    }
+
+    private fun renderWatchlistSection(
+        items: MutableList<BrowseItem>,
+        watchlist: List<Video>?
+    ): Boolean {
+        // null means we couldn't fetch (no key / network error) — hide.
+        if (watchlist == null) return false
+        items.add(BrowseItem.SectionHeader("My Watchlist"))
+        if (watchlist.isEmpty()) {
+            // Empty but reachable — render a friendly hint instead of hiding so
+            // users know where the watchlist lives and how to add to it.
+            items.add(BrowseItem.EmptyStateRow(
+                "Your watchlist is empty. Tap the + on any video to save it for later."
+            ))
+        } else {
+            items.add(BrowseItem.HorizontalVideoRow(watchlist))
+        }
+        return true
+    }
+
+    private fun renderRecentSection(
+        items: MutableList<BrowseItem>,
+        recentVideos: List<Video>?
+    ): Boolean {
+        if (recentVideos.isNullOrEmpty()) return false
+        items.add(BrowseItem.SectionHeader(getString(R.string.recent)))
+        recentVideos.take(RECENT_VERTICAL_COUNT).forEach { items.add(BrowseItem.VerticalVideo(it)) }
+        val remaining = recentVideos.drop(RECENT_VERTICAL_COUNT)
+        if (remaining.isNotEmpty()) {
+            items.add(BrowseItem.HorizontalVideoRow(remaining))
+        }
+        return true
+    }
+
+    private fun renderPinnedShowsSection(
+        items: MutableList<BrowseItem>,
+        shows: List<Show>?,
+        pinnedIds: List<Int>
+    ): Boolean {
+        if (shows == null || pinnedIds.isEmpty()) return false
+        // Render in pin order, not API order.
+        val byId = shows.associateBy { it.id }
+        val pinnedShows = pinnedIds.mapNotNull { byId[it] }
+        if (pinnedShows.isEmpty()) return false
+        for (s in pinnedShows) {
+            items.add(BrowseItem.ShowSectionHeader(s, pinned = true))
+            items.add(BrowseItem.LazyShowRow(s))
+        }
+        return true
+    }
+
+    private fun renderActiveShowsSection(
+        items: MutableList<BrowseItem>,
+        shows: List<Show>?,
+        pinnedIds: List<Int>
+    ): Boolean {
+        if (shows == null) return false
+        val pinnedSet = pinnedIds.toSet()
+        val nonPinnedActive = shows.filter { it.active && it.id !in pinnedSet }
+        if (nonPinnedActive.isEmpty()) return false
+        for (s in nonPinnedActive) {
+            items.add(BrowseItem.ShowSectionHeader(s, pinned = false))
+            items.add(BrowseItem.LazyShowRow(s))
+        }
+        return true
+    }
+
+    private fun renderPremiumSection(
+        items: MutableList<BrowseItem>,
+        recentVideos: List<Video>?
+    ): Boolean {
+        if (recentVideos == null) return false
+        val premium = recentVideos.filter { it.premium }
+        if (premium.size < 2) return false
+        items.add(BrowseItem.SectionHeader("Premium"))
+        items.add(BrowseItem.HorizontalVideoRow(premium))
+        return true
+    }
+
+    private fun renderLegacyShowsSection(
+        items: MutableList<BrowseItem>,
+        shows: List<Show>?,
+        pinnedIds: List<Int>
+    ): Boolean {
+        if (shows == null) return false
+        val pinnedSet = pinnedIds.toSet()
+        // Legacy shows the user has pinned bubble up to the Pinned section, so
+        // exclude them here to avoid duplicate cards.
+        val legacy = shows.filter { !it.active && it.id !in pinnedSet }
+        if (legacy.isEmpty()) return false
+        items.add(BrowseItem.SectionHeader("Legacy Shows"))
+        items.add(BrowseItem.HorizontalShowRow(legacy))
+        return true
+    }
+
+    private fun renderSettingsSection(items: MutableList<BrowseItem>): Boolean {
+        items.add(BrowseItem.SectionHeader(getString(R.string.settings)))
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_CUSTOMIZE,
+            "Customize Browse",
+            "Reorder or hide browse sections",
+            R.drawable.ic_settings_cog
+        )))
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_REFRESH,
+            getString(R.string.settings_refresh),
+            getString(R.string.settings_refresh_desc),
+            R.drawable.ic_settings_refresh
+        )))
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_QUALITY,
+            "Stream Quality",
+            "Default: ${PrefsManager.qualityLabel(prefs.preferredQuality)}",
+            R.drawable.ic_settings_quality
+        )))
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_SETUP,
+            getString(R.string.settings_setup),
+            getString(R.string.settings_setup_desc),
+            R.drawable.ic_settings_cog
+        )))
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_PRIVACY,
+            "Privacy Policy",
+            "View privacy policy",
+            R.drawable.ic_settings_about
+        )))
+        val now = java.text.SimpleDateFormat("EEE, MMM d 'at' h:mm:ss a", java.util.Locale.getDefault()).format(java.util.Date())
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            -1,
+            "Last Updated",
+            now,
+            R.drawable.ic_settings_refresh
+        )))
+        val packageInfo = requireContext().packageManager.getPackageInfo(requireContext().packageName, 0)
+        val versionText = "v${packageInfo.versionName} (${packageInfo.longVersionCode})"
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            -1,
+            "Version",
+            versionText,
+            R.drawable.ic_settings_cog
+        )))
+        return true
     }
 
     fun getMiniPlayerContainer(): FrameLayout? = miniPlayerContainer
@@ -419,12 +681,179 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
 
     override fun onDestroy() {
         super.onDestroy()
+        upcomingRefreshRunnable?.let { refreshHandler.removeCallbacks(it) }
         cancel()
     }
 
     // -----------------------------------------------------------------------
     // Adapter
     // -----------------------------------------------------------------------
+
+    private fun updateChipBar() {
+        val order = prefs.getSectionOrder()
+        val hidden = prefs.getHiddenSections()
+        chipItems.clear()
+        // Keep section starts sorted so we can find the boundary of each
+        // section when expanding pinned/active sections into per-show chips.
+        val sortedStarts = sectionStartIndices.entries
+            .filter { it.key !in hidden }
+            .sortedBy { it.value }
+        for (id in order) {
+            if (id in hidden) continue
+            val start = sectionStartIndices[id] ?: continue
+            when (id) {
+                PrefsManager.SECTION_PINNED, PrefsManager.SECTION_ACTIVE_SHOWS -> {
+                    // Expand into one chip per show. Find the slice of
+                    // browseItems that belongs to this section, pick out
+                    // each ShowSectionHeader, and emit a chip targeting
+                    // that header's row.
+                    val nextStart = sortedStarts.firstOrNull { it.value > start }
+                        ?.value ?: browseItems.size
+                    for (i in start until nextStart) {
+                        val item = browseItems.getOrNull(i) ?: break
+                        if (item is BrowseItem.ShowSectionHeader) {
+                            chipItems.add(
+                                ChipEntry(
+                                    key = "show:${item.show.id}",
+                                    label = item.show.title,
+                                    targetIndex = i
+                                )
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    chipItems.add(
+                        ChipEntry(
+                            key = id,
+                            label = PrefsManager.sectionLabel(id),
+                            targetIndex = start
+                        )
+                    )
+                }
+            }
+        }
+        activeChipIndex = -1
+        if (::chipAdapter.isInitialized) chipAdapter.notifyDataSetChanged()
+        chipBar.visibility = if (chipItems.isEmpty()) View.GONE else View.VISIBLE
+        // Snap the active chip to whatever's already in view at this point —
+        // matters on initial load and after pull-to-refresh.
+        updateActiveChip()
+    }
+
+    private fun updateActiveChip() {
+        if (chipItems.isEmpty()) return
+        val lm = recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return
+        val first = lm.findFirstVisibleItemPosition()
+        if (first < 0) return
+        // chipItems are emitted in row-order during updateChipBar, so the
+        // last one whose target is ≤ first-visible-row is the chip the user
+        // is currently sitting on.
+        var newIdx = -1
+        for ((i, chip) in chipItems.withIndex()) {
+            if (chip.targetIndex <= first) newIdx = i else break
+        }
+        if (newIdx < 0) newIdx = 0
+        if (newIdx == activeChipIndex) return
+        val old = activeChipIndex
+        activeChipIndex = newIdx
+        if (old in chipItems.indices) chipAdapter.notifyItemChanged(old)
+        if (newIdx in chipItems.indices) {
+            chipAdapter.notifyItemChanged(newIdx)
+            chipBar.smoothScrollToPosition(newIdx)
+        }
+    }
+
+    private fun jumpToChipTarget(targetIndex: Int) {
+        if (targetIndex < 0 || targetIndex >= browseItems.size) return
+        val lm = recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
+        if (lm != null) {
+            val scroller = object : androidx.recyclerview.widget.LinearSmoothScroller(requireContext()) {
+                override fun getVerticalSnapPreference(): Int = SNAP_TO_START
+            }
+            scroller.targetPosition = targetIndex
+            lm.startSmoothScroll(scroller)
+        } else {
+            recyclerView.smoothScrollToPosition(targetIndex)
+        }
+    }
+
+    private inner class ChipAdapter : RecyclerView.Adapter<ChipAdapter.VH>() {
+        inner class VH(val text: TextView) : RecyclerView.ViewHolder(text)
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val ctx = parent.context
+            val density = ctx.resources.displayMetrics.density
+            val tv = TextView(ctx).apply {
+                setPadding(
+                    (16 * density).toInt(),
+                    (8 * density).toInt(),
+                    (16 * density).toInt(),
+                    (8 * density).toInt()
+                )
+                setTextColor(ContextCompat.getColor(ctx, R.color.gb_white))
+                textSize = 13f
+                isClickable = true
+                isFocusable = true
+                layoutParams = ViewGroup.MarginLayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    marginEnd = (8 * density).toInt()
+                }
+            }
+            return VH(tv)
+        }
+
+        override fun getItemCount(): Int = chipItems.size
+
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val chip = chipItems[position]
+            holder.text.text = chip.label
+            val ctx = holder.text.context
+            val density = ctx.resources.displayMetrics.density
+            val active = position == activeChipIndex
+            holder.text.background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 100f * density
+                if (active) {
+                    setColor(ContextCompat.getColor(ctx, R.color.gb_red))
+                    setStroke((1 * density).toInt(), ContextCompat.getColor(ctx, R.color.gb_red))
+                } else {
+                    setColor(0x33FFFFFF)
+                    setStroke((1 * density).toInt(), 0x55FFFFFF)
+                }
+            }
+            holder.text.typeface = if (active) {
+                android.graphics.Typeface.DEFAULT_BOLD
+            } else {
+                android.graphics.Typeface.DEFAULT
+            }
+            holder.text.setOnClickListener { jumpToChipTarget(chip.targetIndex) }
+        }
+    }
+
+    /**
+     * Adds breathing room before each section header so the visual transition
+     * between sections is easier to spot. First item gets no gap.
+     */
+    private inner class SectionGapDecoration : RecyclerView.ItemDecoration() {
+        private val gapPx: Int = (24 * resources.displayMetrics.density).toInt()
+
+        override fun getItemOffsets(
+            outRect: android.graphics.Rect,
+            view: View,
+            parent: RecyclerView,
+            state: RecyclerView.State
+        ) {
+            val pos = parent.getChildAdapterPosition(view)
+            if (pos <= 0 || pos >= browseItems.size) return
+            val item = browseItems[pos]
+            if (item is BrowseItem.SectionHeader || item is BrowseItem.ShowSectionHeader) {
+                outRect.top = gapPx
+            }
+        }
+    }
 
     private inner class BrowseAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
@@ -435,15 +864,19 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         val TYPE_SETTING = 4
         val TYPE_UPCOMING_ROW = 5
         val TYPE_LAZY_SHOW_ROW = 6
+        val TYPE_SHOW_SECTION_HEADER = 7
+        val TYPE_EMPTY_STATE = 8
 
         override fun getItemViewType(position: Int): Int = when (browseItems[position]) {
             is BrowseItem.SectionHeader -> TYPE_SECTION_HEADER
+            is BrowseItem.ShowSectionHeader -> TYPE_SHOW_SECTION_HEADER
             is BrowseItem.HorizontalVideoRow -> TYPE_HORIZONTAL_VIDEO_ROW
             is BrowseItem.HorizontalShowRow -> TYPE_HORIZONTAL_SHOW_ROW
             is BrowseItem.VerticalVideo -> TYPE_VERTICAL_VIDEO
             is BrowseItem.SettingRow -> TYPE_SETTING
             is BrowseItem.UpcomingRow -> TYPE_UPCOMING_ROW
             is BrowseItem.LazyShowRow -> TYPE_LAZY_SHOW_ROW
+            is BrowseItem.EmptyStateRow -> TYPE_EMPTY_STATE
         }
 
         override fun getItemCount() = browseItems.size
@@ -452,12 +885,32 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             val inflater = LayoutInflater.from(parent.context)
             return when (viewType) {
                 TYPE_SECTION_HEADER -> SectionHeaderVH(inflater.inflate(R.layout.item_section_header, parent, false))
+                TYPE_SHOW_SECTION_HEADER -> ShowSectionHeaderVH(inflater.inflate(R.layout.item_show_section_header, parent, false))
                 TYPE_HORIZONTAL_VIDEO_ROW -> HorizontalVideoRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
                 TYPE_HORIZONTAL_SHOW_ROW -> HorizontalShowRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
                 TYPE_VERTICAL_VIDEO -> VerticalVideoVH(inflater.inflate(R.layout.item_mobile_video, parent, false))
                 TYPE_SETTING -> SettingVH(inflater.inflate(R.layout.item_mobile_setting, parent, false))
                 TYPE_UPCOMING_ROW -> UpcomingRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
                 TYPE_LAZY_SHOW_ROW -> LazyShowRowVH(inflater.inflate(R.layout.item_horizontal_row, parent, false))
+                TYPE_EMPTY_STATE -> {
+                    val ctx = parent.context
+                    val density = ctx.resources.displayMetrics.density
+                    val tv = TextView(ctx).apply {
+                        setPadding(
+                            (20 * density).toInt(),
+                            (8 * density).toInt(),
+                            (20 * density).toInt(),
+                            (16 * density).toInt()
+                        )
+                        textSize = 14f
+                        setTextColor(0xFFA0A0A0.toInt())
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT
+                        )
+                    }
+                    EmptyStateVH(tv)
+                }
                 else -> throw IllegalArgumentException("Unknown view type: $viewType")
             }
         }
@@ -465,13 +918,21 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
             when (val item = browseItems[position]) {
                 is BrowseItem.SectionHeader -> (holder as SectionHeaderVH).bind(item)
+                is BrowseItem.ShowSectionHeader -> (holder as ShowSectionHeaderVH).bind(item)
                 is BrowseItem.HorizontalVideoRow -> (holder as HorizontalVideoRowVH).bind(item)
                 is BrowseItem.HorizontalShowRow -> (holder as HorizontalShowRowVH).bind(item)
                 is BrowseItem.VerticalVideo -> (holder as VerticalVideoVH).bind(item)
                 is BrowseItem.SettingRow -> (holder as SettingVH).bind(item)
                 is BrowseItem.UpcomingRow -> (holder as UpcomingRowVH).bind(item)
                 is BrowseItem.LazyShowRow -> (holder as LazyShowRowVH).bind(item)
+                is BrowseItem.EmptyStateRow -> (holder as EmptyStateVH).bind(item)
             }
+        }
+    }
+
+    private inner class EmptyStateVH(val text: TextView) : RecyclerView.ViewHolder(text) {
+        fun bind(item: BrowseItem.EmptyStateRow) {
+            text.text = item.message
         }
     }
 
@@ -486,7 +947,156 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         fun bind(item: BrowseItem.SectionHeader) {
             title.text = item.title
             seeAll.visibility = if (item.showSeeAll) View.VISIBLE else View.GONE
+            itemView.setOnLongClickListener(null)
         }
+    }
+
+    private inner class ShowSectionHeaderVH(view: View) : RecyclerView.ViewHolder(view) {
+        private val title: TextView = view.findViewById(R.id.section_title)
+        private val pinStar: TextView = view.findViewById(R.id.pin_star)
+
+        fun bind(item: BrowseItem.ShowSectionHeader) {
+            title.text = item.show.title
+            // Filled ★ = pinned, outlined ☆ = pinnable. Tap toggles; long-press
+            // on the row anywhere also toggles, kept as a power-user shortcut.
+            pinStar.text = if (item.pinned) "★" else "☆"
+            pinStar.contentDescription = if (item.pinned) {
+                "Unpin ${item.show.title}"
+            } else {
+                "Pin ${item.show.title} to top"
+            }
+            pinStar.setOnClickListener { togglePin(item.show) }
+            itemView.setOnLongClickListener {
+                togglePin(item.show)
+                true
+            }
+        }
+    }
+
+    /**
+     * Style the bookmark overlay button on a video card based on whether the
+     * video is currently on the watchlist. Callers wire setOnClickListener to
+     * toggleWatchlist() so a tap flips the state.
+     */
+    private fun bindWatchlistButton(btn: TextView, video: Video) {
+        val onWatchlist = video.id in watchlistIds
+        val ctx = btn.context
+        val density = ctx.resources.displayMetrics.density
+        btn.text = if (onWatchlist) "✓" else "+"
+        btn.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            if (onWatchlist) {
+                setColor(ContextCompat.getColor(ctx, R.color.gb_red))
+            } else {
+                setColor(0x99000000.toInt())
+                setStroke((1 * density).toInt(), 0x66FFFFFF)
+            }
+        }
+        btn.contentDescription = if (onWatchlist) {
+            "Remove ${video.title} from watchlist"
+        } else {
+            "Add ${video.title} to watchlist"
+        }
+        btn.setOnClickListener { v ->
+            // Optimistic flip — animate immediately, revert on API failure.
+            v.isClickable = false
+            val nowOn = video.id !in watchlistIds
+            if (nowOn) {
+                watchlistIds.add(video.id)
+                // Add to the local watchlist (newest first matches the API).
+                if (watchlistVideos.none { it.id == video.id }) {
+                    watchlistVideos.add(0, video)
+                }
+            } else {
+                watchlistIds.remove(video.id)
+                watchlistVideos.removeAll { it.id == video.id }
+            }
+            bindWatchlistButton(btn, video)
+            refreshWatchlistRow()
+            launch {
+                val api = api ?: GiantBombApi(prefs.apiKey ?: "")
+                val result = if (nowOn) api.addToWatchlist(video.id) else api.removeFromWatchlist(video.id)
+                v.isClickable = true
+                result.onSuccess {
+                    if (isAdded) {
+                        Toast.makeText(
+                            requireContext(),
+                            if (nowOn) "Added to watchlist" else "Removed from watchlist",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+                result.onFailure {
+                    // Revert local state and re-render.
+                    if (nowOn) {
+                        watchlistIds.remove(video.id)
+                        watchlistVideos.removeAll { it.id == video.id }
+                    } else {
+                        watchlistIds.add(video.id)
+                        if (watchlistVideos.none { it.id == video.id }) {
+                            watchlistVideos.add(0, video)
+                        }
+                    }
+                    bindWatchlistButton(btn, video)
+                    refreshWatchlistRow()
+                    if (isAdded) {
+                        Toast.makeText(
+                            requireContext(),
+                            "Watchlist update failed",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Replaces the Watchlist content row in browseItems based on watchlistVideos
+     * and notifies the adapter, so the row redraws without a full loadContent.
+     * Handles the empty ↔ non-empty transition by swapping between
+     * EmptyStateRow and HorizontalVideoRow at the same row index.
+     */
+    private fun refreshWatchlistRow() {
+        val rowIdx = watchlistContentItemIndex
+        if (rowIdx !in browseItems.indices) return
+        val newRow: BrowseItem = if (watchlistVideos.isEmpty()) {
+            BrowseItem.EmptyStateRow(
+                "Your watchlist is empty. Tap the + on any video to save it for later."
+            )
+        } else {
+            BrowseItem.HorizontalVideoRow(watchlistVideos.toList())
+        }
+        browseItems[rowIdx] = newRow
+        browseAdapter.notifyItemChanged(rowIdx)
+    }
+
+    /**
+     * Builds a PlaybackActivity intent for a video card, attaching the cached
+     * resume position when we have one. Mobile taps go straight to playback
+     * (skipping DetailActivity), so without this helper the player has to do
+     * its own getProgress() round-trip — which races with playback start, so
+     * the user observes "starts from the beginning" even though they had a
+     * saved position.
+     */
+    private fun buildPlaybackIntent(video: Video): Intent {
+        val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
+            putExtra(PlaybackActivity.EXTRA_VIDEO, video)
+        }
+        val entry = progressByVideoId[video.id]
+        if (entry != null && entry.percentComplete in 1..94 && entry.currentTime > 0) {
+            intent.putExtra(PlaybackActivity.EXTRA_RESUME_SECONDS, entry.currentTime)
+        }
+        return intent
+    }
+
+    private fun togglePin(show: Show) {
+        val nowPinned = prefs.togglePinnedShow(show.id)
+        val msg = if (nowPinned) "Pinned: ${show.title}" else "Unpinned: ${show.title}"
+        if (isAdded) Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+        // Re-render so the show jumps in/out of the Pinned section. Cheap enough
+        // — pin is a low-frequency action.
+        loadContent()
     }
 
     private inner class VerticalVideoVH(view: View) : RecyclerView.ViewHolder(view) {
@@ -499,6 +1109,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         private val progressTrack: View = view.findViewById(R.id.video_progress_track)
         private val progressBar: View = view.findViewById(R.id.video_progress_bar)
         private val durationView: TextView = view.findViewById(R.id.video_duration)
+        private val watchlistBtn: TextView = view.findViewById(R.id.video_watchlist_btn)
 
         init {
             val density = view.resources.displayMetrics.density
@@ -588,11 +1199,10 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 thumbnail.setImageResource(R.drawable.default_card)
             }
 
+            bindWatchlistButton(watchlistBtn, video)
+
             itemView.setOnClickListener {
-                val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
-                    putExtra(PlaybackActivity.EXTRA_VIDEO, video)
-                }
-                startActivity(intent)
+                startActivity(buildPlaybackIntent(video))
             }
         }
     }
@@ -639,9 +1249,14 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     SETTINGS_SETUP -> launchSetup()
                     SETTINGS_QUALITY -> cycleQuality()
                     SETTINGS_PRIVACY -> openPrivacyPolicy()
+                    SETTINGS_CUSTOMIZE -> launchCustomizeBrowse()
                 }
             }
         }
+    }
+
+    private fun launchCustomizeBrowse() {
+        startActivity(Intent(requireContext(), CustomizeBrowseActivity::class.java))
     }
 
     private inner class UpcomingRowVH(view: View) : RecyclerView.ViewHolder(view) {
@@ -705,6 +1320,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             val progressTrack: View = view.findViewById(R.id.small_progress_track)
             val progressBar: View = view.findViewById(R.id.small_progress_bar)
             val watched: TextView = view.findViewById(R.id.small_watched)
+            val watchlistBtn: TextView = view.findViewById(R.id.small_watchlist_btn)
 
             init {
                 watched.background = GradientDrawable().apply {
@@ -755,11 +1371,10 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 holder.thumbnail.setImageResource(R.drawable.default_card)
             }
 
+            bindWatchlistButton(holder.watchlistBtn, video)
+
             holder.itemView.setOnClickListener {
-                val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
-                    putExtra(PlaybackActivity.EXTRA_VIDEO, video)
-                }
-                startActivity(intent)
+                startActivity(buildPlaybackIntent(video))
             }
         }
     }
@@ -798,6 +1413,10 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     putExtra(ShowActivity.EXTRA_SHOW, show)
                 }
                 startActivity(intent)
+            }
+            holder.itemView.setOnLongClickListener {
+                togglePin(show)
+                true
             }
         }
     }
@@ -886,11 +1505,9 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 holder.liveBadge.visibility = View.VISIBLE
                 holder.countdownGroup.visibility = View.GONE
                 holder.time.text = "Streaming now"
-                // Load Twitch preview thumbnail for live streams
-                Glide.with(holder.image.context)
-                    .load("https://static-cdn.jtvnw.net/previews-ttv/live_user_giantbomb-640x360.jpg")
-                    .centerCrop()
-                    .into(holder.image)
+                // stream.image is already the 1280x720 cache-busted Twitch preview
+                // (populated by the API layer when live) — loaded by the shared
+                // Glide call above.
             } else {
                 holder.liveBadge.visibility = View.GONE
                 val targetMs = UpcomingCardView.parseDate(stream.date)
@@ -971,23 +1588,8 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     // Helpers
     // -----------------------------------------------------------------------
 
-    private fun formatDate(dateStr: String): String {
-        // publishDate format: "2024-01-15 12:00:00" or similar
-        return try {
-            val parts = dateStr.split(" ")[0].split("-")
-            if (parts.size == 3) {
-                val months = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-                val month = parts[1].toIntOrNull()?.let { months.getOrNull(it - 1) } ?: parts[1]
-                val day = parts[2].toIntOrNull()?.toString() ?: parts[2]
-                "$month $day, ${parts[0]}"
-            } else {
-                dateStr
-            }
-        } catch (_: Exception) {
-            dateStr
-        }
-    }
+    private fun formatDate(dateStr: String): String =
+        com.giantbomb.tv.util.DateFormat.formatPublishDate(dateStr)
 
     private fun formatDuration(seconds: Int): String {
         val h = seconds / 3600

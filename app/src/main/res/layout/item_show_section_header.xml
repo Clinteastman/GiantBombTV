@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Show-row section header. Same visual weight as item_section_header but
+  with a tappable star button to toggle the pinned state of the show.
+  The star is a TextView (Unicode ★/☆) so we don't need a drawable asset
+  and it tints with the rest of the row.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="14dp"
+    android:paddingEnd="6dp"
+    android:paddingTop="16dp"
+    android:paddingBottom="6dp">
+
+    <TextView
+        android:id="@+id/section_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textAllCaps="true"
+        android:textColor="@color/gb_white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.03"
+        android:ellipsize="end"
+        android:maxLines="1"
+        tools:text="QUICK LOOKS" />
+
+    <TextView
+        android:id="@+id/pin_star"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:gravity="center"
+        android:textSize="22sp"
+        android:textColor="@color/gb_white"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Toggle pinned"
+        tools:text="☆" />
+
+</LinearLayout>
