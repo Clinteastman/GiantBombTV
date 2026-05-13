@@ -1,5 +1,9 @@
 # Giant Bomb TV
 
+[![Build & Test](https://img.shields.io/github/actions/workflow/status/Clinteastman/GiantBombTV/build.yml?branch=master&label=build%20%26%20test)](https://github.com/Clinteastman/GiantBombTV/actions/workflows/build.yml)
+[![Latest release](https://img.shields.io/github/v/release/Clinteastman/GiantBombTV?label=release&color=blue)](https://github.com/Clinteastman/GiantBombTV/releases/latest)
+[![Android 5.0+](https://img.shields.io/badge/min%20SDK-21-3DDC84?logo=android&logoColor=white)](https://developer.android.com/about/versions/lollipop)
+
 An unofficial Android TV and mobile app for watching [Giant Bomb](https://www.giantbomb.com) videos. Glassmorphism-inspired TV UI and a YouTube-style mobile layout.
 
 > **Disclaimer:** This is a fan-made, unofficial app. It is not affiliated with or endorsed by Giant Bomb. All Giant Bomb content is property of its respective owners.
