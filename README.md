@@ -50,9 +50,17 @@ An unofficial Android TV and mobile app for watching [Giant Bomb](https://www.gi
 
 ## Installation
 
-Download the latest APK from the [Releases](https://github.com/Clinteastman/GiantBombTV/releases) page, or use one of the methods below.
+The app is published on the **Amazon Appstore** (Fire TV) — Google Play is coming soon. You can also sideload the latest APK from the [Releases](https://github.com/Clinteastman/GiantBombTV/releases) page if you prefer to manage updates yourself.
 
-### Obtainium (recommended for auto-updates)
+### Amazon Appstore (Fire TV — recommended)
+
+[Giant Bomb TV on the Amazon Appstore](https://www.amazon.co.uk/dp/B0H1DSRF54). Install directly from your Fire TV's appstore search ("Giant Bomb TV") or from the link on a phone/computer to push to your Fire TV. Updates are delivered automatically through the appstore.
+
+### Google Play (coming soon)
+
+A Google Play listing for Android TV and Android phones is in the pipeline. Until it lands, use Obtainium / Downloader / ADB below.
+
+### Obtainium (recommended for auto-updates on non-Fire TV devices)
 
 [Obtainium](https://github.com/ImranR98/Obtainium) tracks GitHub releases and notifies you when updates are available. You can sideload Obtainium onto your TV via ADB, then manage updates directly from the TV.
 
