@@ -1,5 +1,9 @@
 # Giant Bomb TV
 
+[![Build & Test](https://img.shields.io/github/actions/workflow/status/Clinteastman/GiantBombTV/build.yml?branch=master&label=build%20%26%20test)](https://github.com/Clinteastman/GiantBombTV/actions/workflows/build.yml)
+[![Latest release](https://img.shields.io/github/v/release/Clinteastman/GiantBombTV?label=release&color=blue)](https://github.com/Clinteastman/GiantBombTV/releases/latest)
+[![Android 5.0+](https://img.shields.io/badge/min%20SDK-21-3DDC84?logo=android&logoColor=white)](https://developer.android.com/about/versions/lollipop)
+
 An unofficial Android TV and mobile app for watching [Giant Bomb](https://www.giantbomb.com) videos. Glassmorphism-inspired TV UI and a YouTube-style mobile layout.
 
 > **Disclaimer:** This is a fan-made, unofficial app. It is not affiliated with or endorsed by Giant Bomb. All Giant Bomb content is property of its respective owners.
@@ -50,9 +54,11 @@ An unofficial Android TV and mobile app for watching [Giant Bomb](https://www.gi
 
 ## Installation
 
-The app is published on the **Amazon Appstore** (Fire TV) — Google Play is coming soon. You can also sideload the latest APK from the [Releases](https://github.com/Clinteastman/GiantBombTV/releases) page if you prefer to manage updates yourself.
+The app is published on the **Amazon Appstore** (Fire TV); Google Play is coming soon. You can also sideload the latest APK from the [Releases](https://github.com/Clinteastman/GiantBombTV/releases) page if you prefer to manage updates yourself.
 
-### Amazon Appstore (Fire TV — recommended)
+### Amazon Appstore (Fire TV, recommended)
+
+[![Available on Amazon Fire TV](screenshots/amazon-appstore-badge.png)](https://www.amazon.co.uk/dp/B0H1DSRF54)
 
 [Giant Bomb TV on the Amazon Appstore](https://www.amazon.co.uk/dp/B0H1DSRF54). Install directly from your Fire TV's appstore search ("Giant Bomb TV") or from the link on a phone/computer to push to your Fire TV. Updates are delivered automatically through the appstore.
 
@@ -179,7 +185,7 @@ app/src/main/java/com/giantbomb/tv/
 │   ├── Video.kt                 # Video, Show, PlaybackInfo, ProgressEntry, Upcoming models
 │   └── SettingsItem.kt          # Settings row item model
 ├── playback/
-│   └── PlaybackService.kt       # Foreground MediaSessionService — owns the ExoPlayer instance
+│   └── PlaybackService.kt       # Foreground MediaSessionService; owns the ExoPlayer instance
 ├── mobile/
 │   ├── MobileBrowseFragment.kt  # YouTube-style vertical feed with horizontal rows
 │   └── MobileSearchFragment.kt  # Mobile search with text input and list results
@@ -220,7 +226,7 @@ scripts/
 |--------|-----------------|-------------------|
 | D-pad | Navigate cards | Seek / show controls (progressive scrub speed when held) |
 | Select/Enter | Open video detail | Play/pause |
-| Select/Enter (hold) | Open context menu on the focused side-menu header (pin show, reorder section) — or pin/unpin a show card | - |
+| Select/Enter (hold) | Open context menu on the focused side-menu header (pin show, reorder section), or pin/unpin a show card | - |
 | Back | Slide the side menu back in / exit confirmation (TV); swipe-back → PiP (mobile) | Enter PiP (mobile) / save progress & exit (TV) |
 | Menu | - | Open quality picker |
 | Search orb | Open search | - |
