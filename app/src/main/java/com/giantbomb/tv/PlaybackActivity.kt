@@ -511,6 +511,23 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         connectController()
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Stop the chat embed's JS timers + media work when the user isn't
+        // looking; resumed in onResume. pauseTimers is process-wide but only
+        // affects WebView timers, so it's safe to call here.
+        chatWebView?.onPause()
+        chatWebView?.pauseTimers()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        chatWebView?.let {
+            it.resumeTimers()
+            it.onResume()
+        }
+    }
+
     private fun requestNotificationPermissionIfNeeded() {
         // Android 13 (API 33) introduced runtime permission for POST_NOTIFICATIONS.
         // Without it the foreground-service media notification is silently
@@ -900,10 +917,16 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private fun initializeLivePlayer(hlsUrl: String) {
         val liveTitle = intent.getStringExtra(EXTRA_LIVE_TITLE) ?: "Giant Bomb Live"
         // Side-by-side chat only makes sense in landscape — on a portrait phone
-        // the 30% panel reduces the player to an unwatchable strip. Gate the
-        // split here even though MobileBrowseFragment always passes the extra.
-        val isLandscape = resources.configuration.orientation ==
-            Configuration.ORIENTATION_LANDSCAPE
+        // the 30% panel reduces the player to an unwatchable strip. PlaybackActivity
+        // declares configChanges for orientation in the manifest, so the runtime
+        // Configuration is the *current* orientation, not the one we requested in
+        // buildTvLayout / buildMobileLiveLayout. Use requestedOrientation, which
+        // both code paths set to a landscape variant before initializeLivePlayer
+        // runs.
+        val isLandscape = requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
+            requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE ||
+            requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE ||
+            requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
         val twitchChannel = intent.getStringExtra(EXTRA_LIVE_TWITCH_CHANNEL)
             ?.takeIf { prefs.showTwitchChat }
             ?.takeIf { isLandscape }
@@ -995,8 +1018,14 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
         return WebView(this).apply {
             setBackgroundColor(0xFF18181B.toInt())
+            contentDescription = "Twitch chat"
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            // Lock down filesystem-adjacent surfaces. The embed only needs HTTP(S);
+            // keep file:// and content:// off so a redirect or document edit can't
+            // pull local files into the WebView's document.
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
             // Make focusable so a TV remote can D-pad into the chat panel.
             isFocusable = true
             isFocusableInTouchMode = true
@@ -1448,6 +1477,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         releaseCastPlayer()
         chatWebView?.let { wv ->
             wv.stopLoading()
+            // Documented WebView teardown order: drop the current page and its
+            // history before destroy() so any pending JS / network work is
+            // unhooked from the Activity context first.
+            wv.loadUrl("about:blank")
+            wv.clearHistory()
             (wv.parent as? ViewGroup)?.removeView(wv)
             wv.destroy()
         }
