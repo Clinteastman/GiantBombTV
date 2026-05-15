@@ -264,13 +264,19 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 )
             }
             setOnClickListener {
-                val intent = Intent(this@DetailActivity, PlaybackActivity::class.java).apply {
-                    putExtra(PlaybackActivity.EXTRA_VIDEO, video)
-                    if (resumeSeconds > 0) {
-                        putExtra(PlaybackActivity.EXTRA_RESUME_SECONDS, resumeSeconds)
+                // If the post-playback refresh is still mid-flight, wait for it
+                // before launching so we don't pass a stale resumeSeconds that
+                // was captured before PlaybackService's final save landed.
+                launch {
+                    progressRefreshJob?.join()
+                    val intent = Intent(this@DetailActivity, PlaybackActivity::class.java).apply {
+                        putExtra(PlaybackActivity.EXTRA_VIDEO, video)
+                        if (resumeSeconds > 0) {
+                            putExtra(PlaybackActivity.EXTRA_RESUME_SECONDS, resumeSeconds)
+                        }
                     }
+                    startActivity(intent)
                 }
-                startActivity(intent)
             }
         }
         buttonLayout.addView(watchButton)
@@ -413,7 +419,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 watchlistButton.tag = true
             }
         }
-        refreshProgress(video, api, watchButton, restartButton)
+        refreshProgress(video, api, watchButton, restartButton, withRetry = false)
 
         // Staggered entrance animation
         animViews.forEachIndexed { index, view ->
@@ -450,14 +456,15 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val api = detailApi ?: return
         val watch = watchButtonRef ?: return
         val restart = restartButtonRef ?: return
-        refreshProgress(video, api, watch, restart)
+        refreshProgress(video, api, watch, restart, withRetry = true)
     }
 
     private fun refreshProgress(
         video: Video,
         api: GiantBombApi,
         watch: Button,
-        restart: Button
+        restart: Button,
+        withRetry: Boolean
     ) {
         // Cancel any earlier load so its result can't land after this one's.
         progressRefreshJob?.cancel()
@@ -465,14 +472,16 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             // Immediate fetch — correct on cold-open and on returns where the
             // playback service finished flushing before we resumed.
             fetchAndApply(video, api, watch, restart)
+            // Only the return-from-playback path needs the second fetch:
             // PlaybackService's final saveCurrentProgress() runs on its own
             // scope and may still be in flight as DetailActivity resumes —
             // Android can resurface this activity before the finishing one
-            // reaches onStop. Refetch shortly after so a freshly-flushed
-            // position overwrites the stale value we just read, instead of
-            // waiting for the next user interaction.
-            delay(1500L)
-            fetchAndApply(video, api, watch, restart)
+            // reaches onStop. cold-open never has that race, so skip the
+            // extra API call.
+            if (withRetry) {
+                delay(1500L)
+                fetchAndApply(video, api, watch, restart)
+            }
         }
     }
 
