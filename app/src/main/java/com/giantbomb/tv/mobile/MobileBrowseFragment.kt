@@ -95,6 +95,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         private const val SETTINGS_QUALITY = 4
         private const val SETTINGS_PRIVACY = 5
         private const val SETTINGS_CUSTOMIZE = 6
+        private const val SETTINGS_TWITCH_CHAT = 7
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
         private const val RECENT_VERTICAL_COUNT = 5
@@ -609,6 +610,12 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             R.drawable.ic_settings_cog
         )))
         items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_TWITCH_CHAT,
+            "Twitch Chat",
+            if (prefs.showTwitchChat) "Shown on live streams" else "Hidden on live streams",
+            R.drawable.ic_settings_cog
+        )))
+        items.add(BrowseItem.SettingRow(SettingsItem(
             SETTINGS_PRIVACY,
             "Privacy Policy",
             "View privacy policy",
@@ -634,6 +641,14 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
 
     fun getMiniPlayerContainer(): FrameLayout? = miniPlayerContainer
 
+    private fun toggleTwitchChat() {
+        prefs.showTwitchChat = !prefs.showTwitchChat
+        val msg = if (prefs.showTwitchChat) "Twitch chat: shown on live streams"
+                  else "Twitch chat: hidden on live streams"
+        Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+        loadContent()
+    }
+
     private fun cycleQuality() {
         val options = PrefsManager.QUALITY_OPTIONS
         val current = prefs.preferredQuality
@@ -653,6 +668,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
                     putExtra(PlaybackActivity.EXTRA_LIVE_HLS_URL, stream.hlsUrl)
                     putExtra(PlaybackActivity.EXTRA_LIVE_TITLE, liveTitle)
+                    putExtra(PlaybackActivity.EXTRA_LIVE_TWITCH_CHANNEL, "giantbomb")
                 }
                 startActivity(intent)
             }
@@ -1250,6 +1266,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     SETTINGS_QUALITY -> cycleQuality()
                     SETTINGS_PRIVACY -> openPrivacyPolicy()
                     SETTINGS_CUSTOMIZE -> launchCustomizeBrowse()
+                    SETTINGS_TWITCH_CHAT -> toggleTwitchChat()
                 }
             }
         }

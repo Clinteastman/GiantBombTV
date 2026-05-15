@@ -56,6 +56,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         const val SETTINGS_SETUP = 3
         const val SETTINGS_QUALITY = 4
         const val SETTINGS_PRIVACY = 5
+        const val SETTINGS_TWITCH_CHAT = 6
         private const val BACKDROP_DELAY_MS = 300L
         private const val CROSSFADE_DURATION = 600L
         private const val BACKDROP_ALPHA = 0.5f
@@ -328,6 +329,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                         SETTINGS_SETUP -> launchSetup()
                         SETTINGS_QUALITY -> cycleQuality()
                         SETTINGS_PRIVACY -> openPrivacyPolicy()
+                        SETTINGS_TWITCH_CHAT -> toggleTwitchChat()
                     }
                 }
             }
@@ -674,6 +676,14 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         }
     }
 
+    private fun toggleTwitchChat() {
+        prefs.showTwitchChat = !prefs.showTwitchChat
+        val msg = if (prefs.showTwitchChat) "Twitch chat: shown on live streams"
+                  else "Twitch chat: hidden on live streams"
+        Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+        loadContent()
+    }
+
     private fun cycleQuality() {
         val options = PrefsManager.QUALITY_OPTIONS
         val current = prefs.preferredQuality
@@ -932,6 +942,12 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             R.drawable.ic_settings_cog
         ))
         utilAdapter.add(SettingsItem(
+            SETTINGS_TWITCH_CHAT,
+            "Twitch Chat",
+            if (prefs.showTwitchChat) "Shown on live streams" else "Hidden on live streams",
+            R.drawable.ic_settings_cog
+        ))
+        utilAdapter.add(SettingsItem(
             SETTINGS_PRIVACY,
             "Privacy Policy",
             "View privacy policy",
@@ -969,6 +985,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
                     putExtra(PlaybackActivity.EXTRA_LIVE_HLS_URL, stream.hlsUrl)
                     putExtra(PlaybackActivity.EXTRA_LIVE_TITLE, liveTitle)
+                    putExtra(PlaybackActivity.EXTRA_LIVE_TWITCH_CHANNEL, "giantbomb")
                 }
                 startActivity(intent)
             }

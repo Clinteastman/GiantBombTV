@@ -19,6 +19,9 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -66,6 +69,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         const val EXTRA_VIDEO = "extra_video"
         const val EXTRA_LIVE_HLS_URL = "extra_live_hls_url"
         const val EXTRA_LIVE_TITLE = "extra_live_title"
+        // Twitch channel login for the read-only chat WebView shown alongside
+        // a live stream. Optional — if null, no chat panel is rendered.
+        const val EXTRA_LIVE_TWITCH_CHANNEL = "extra_live_twitch_channel"
         // Optional resume position in seconds, passed by DetailActivity so
         // PlaybackActivity doesn't have to re-fetch progress (which can race
         // with playback start or fail through Cloudflare).
@@ -877,6 +883,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     private fun initializeLivePlayer(hlsUrl: String) {
         val liveTitle = intent.getStringExtra(EXTRA_LIVE_TITLE) ?: "Giant Bomb Live"
+        val twitchChannel = intent.getStringExtra(EXTRA_LIVE_TWITCH_CHANNEL)
+            ?.takeIf { PrefsManager(this).showTwitchChat }
 
         qualityOptions.clear()
         qualityOptions.add(QualityOption("Live", hlsUrl, isHls = true))
@@ -890,7 +898,28 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val index = parent.indexOfChild(playerView)
         val lp = playerView.layoutParams
         parent.removeView(playerView)
-        parent.addView(livePlayerView, index, lp)
+
+        if (twitchChannel != null) {
+            // Split the area: player on the left (70%), read-only Twitch chat on the right (30%).
+            val splitLayout = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = lp
+                setBackgroundColor(Color.BLACK)
+            }
+            livePlayerView.layoutParams = LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.MATCH_PARENT, 7f
+            )
+            splitLayout.addView(livePlayerView)
+            val chat = createTwitchChatWebView(twitchChannel).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.MATCH_PARENT, 3f
+                )
+            }
+            splitLayout.addView(chat)
+            parent.addView(splitLayout, index)
+        } else {
+            parent.addView(livePlayerView, index, lp)
+        }
         playerView = livePlayerView
 
         playerView.setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
@@ -933,6 +962,53 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 }
             }
         })
+    }
+
+    /**
+     * Builds a WebView that renders Twitch's read-only chat embed for [channel].
+     *
+     * Twitch's embed checks the `parent` query param against the host of the page
+     * that contains the iframe. WebView has no real origin by default, so the
+     * embed errors out with "Refused to display ... in a frame". To get around
+     * that we host the iframe in an HTML string loaded with baseUrl
+     * https://www.twitch.tv — the iframe then sees window.parent as a twitch.tv
+     * origin, which satisfies the parent= check.
+     */
+    private fun createTwitchChatWebView(channel: String): WebView {
+        val webView = WebView(this)
+        // Twitch chat iframes set tracking cookies on their own domain; without
+        // third-party cookie access the embed errors out.
+        android.webkit.CookieManager.getInstance().apply {
+            setAcceptCookie(true)
+            setAcceptThirdPartyCookies(webView, true)
+        }
+        return webView.apply {
+            setBackgroundColor(0xFF18181B.toInt())
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.mediaPlaybackRequiresUserGesture = false
+            // Make focusable so a TV remote can D-pad into the chat panel.
+            isFocusable = true
+            isFocusableInTouchMode = true
+
+            webChromeClient = WebChromeClient()
+            webViewClient = WebViewClient()
+
+            val html = """
+                <!DOCTYPE html>
+                <html><head>
+                <meta name="viewport" content="width=device-width,initial-scale=1">
+                <style>
+                  html,body{margin:0;padding:0;background:#18181B;height:100%;overflow:hidden;}
+                  iframe{display:block;border:0;width:100%;height:100%;}
+                </style>
+                </head><body>
+                <iframe src="https://www.twitch.tv/embed/$channel/chat?parent=www.twitch.tv&darkpopout" allowfullscreen></iframe>
+                </body></html>
+            """.trimIndent()
+
+            loadDataWithBaseURL("https://www.twitch.tv", html, "text/html", "UTF-8", null)
+        }
     }
 
     private fun switchQuality(index: Int) {
