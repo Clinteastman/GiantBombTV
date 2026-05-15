@@ -111,6 +111,16 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var playerContainer: FrameLayout? = null
     private var relatedRecycler: RecyclerView? = null
 
+    // Held so onDestroy can stopLoading + destroy the WebView. Otherwise the
+    // WebView's native context and Twitch's JS timers leak past activity death.
+    private var chatWebView: WebView? = null
+
+    // Twitch logins are 4-25 chars from [a-zA-Z0-9_]. The channel name flows
+    // through an Intent extra and gets interpolated into an HTML string + URL
+    // query param, so reject anything outside that charset to keep us out of
+    // injection territory if the source ever changes from a hardcoded literal.
+    private val twitchLoginRegex = Regex("^[a-zA-Z0-9_]{4,25}$")
+
     // Quality selection
     private data class QualityOption(val label: String, val url: String, val isHls: Boolean = false)
     private var qualityOptions = mutableListOf<QualityOption>()
@@ -885,6 +895,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val liveTitle = intent.getStringExtra(EXTRA_LIVE_TITLE) ?: "Giant Bomb Live"
         val twitchChannel = intent.getStringExtra(EXTRA_LIVE_TWITCH_CHANNEL)
             ?.takeIf { PrefsManager(this).showTwitchChat }
+            ?.takeIf { twitchLoginRegex.matches(it) }
 
         qualityOptions.clear()
         qualityOptions.add(QualityOption("Live", hlsUrl, isHls = true))
@@ -915,6 +926,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     0, ViewGroup.LayoutParams.MATCH_PARENT, 3f
                 )
             }
+            chatWebView = chat
             splitLayout.addView(chat)
             parent.addView(splitLayout, index)
         } else {
@@ -1416,6 +1428,12 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // service: it keeps playing (with notification) when the activity dies.
         disconnectController()
         releaseCastPlayer()
+        chatWebView?.let { wv ->
+            wv.stopLoading()
+            (wv.parent as? ViewGroup)?.removeView(wv)
+            wv.destroy()
+        }
+        chatWebView = null
         super.onDestroy()
         cancel()
     }
