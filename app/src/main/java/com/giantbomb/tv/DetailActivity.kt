@@ -23,6 +23,7 @@ import androidx.activity.enableEdgeToEdge
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
+import com.giantbomb.tv.model.ProgressEntry
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.util.DateFormat
 import com.giantbomb.tv.util.DeviceUtil
@@ -40,6 +41,26 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
     // pass an explicit resume position to PlaybackActivity instead of forcing
     // PlaybackActivity to refetch progress (which can race with playback start).
     private var resumeSeconds: Double = 0.0
+
+    // Refs needed by onResume to refresh the Resume label/position after
+    // returning from playback, so the button reflects the new watch time
+    // instead of replaying from the stale offset captured at onCreate.
+    private var detailVideo: Video? = null
+    private var detailApi: GiantBombApi? = null
+    private var watchButtonRef: Button? = null
+    private var restartButtonRef: Button? = null
+    // The in-flight progress fetch. onResume cancels and replaces it so a slow
+    // onCreate request that returns *after* the refresh doesn't paint stale
+    // resume offsets back onto the buttons.
+    private var progressRefreshJob: Job? = null
+    // True only while a post-playback refresh (withRetry=true) is running. The
+    // Watch click waits on the job for *that* case so it doesn't pass a stale
+    // resumeSeconds; on cold start the click shouldn't be delayed by the
+    // initial fetch at all.
+    private var awaitingPostPlaybackRefresh = false
+    // Prevents a double-tap during the click-time wait from queueing two
+    // PlaybackActivity launches.
+    private var watchLaunchInFlight = false
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
     private val density by lazy { resources.displayMetrics.density }
@@ -61,6 +82,8 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val prefs = PrefsManager(this)
         val apiKey = prefs.apiKey ?: ""
         val api = GiantBombApi(apiKey)
+        detailVideo = video
+        detailApi = api
 
         val root = FrameLayout(this).apply {
             setBackgroundResource(R.drawable.bg_ambient_gradient)
@@ -249,13 +272,25 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 )
             }
             setOnClickListener {
-                val intent = Intent(this@DetailActivity, PlaybackActivity::class.java).apply {
-                    putExtra(PlaybackActivity.EXTRA_VIDEO, video)
-                    if (resumeSeconds > 0) {
-                        putExtra(PlaybackActivity.EXTRA_RESUME_SECONDS, resumeSeconds)
+                if (watchLaunchInFlight) return@setOnClickListener
+                watchLaunchInFlight = true
+                isEnabled = false
+                launch {
+                    // Only the post-playback refresh has the flush race to wait
+                    // on. The cold-start fetch is informational; don't make
+                    // Watch feel frozen for it on a slow network. Cap any wait
+                    // so an offline retry can't lock the primary action.
+                    if (awaitingPostPlaybackRefresh) {
+                        withTimeoutOrNull(2_000L) { progressRefreshJob?.join() }
                     }
+                    val intent = Intent(this@DetailActivity, PlaybackActivity::class.java).apply {
+                        putExtra(PlaybackActivity.EXTRA_VIDEO, video)
+                        if (resumeSeconds > 0) {
+                            putExtra(PlaybackActivity.EXTRA_RESUME_SECONDS, resumeSeconds)
+                        }
+                    }
+                    startActivity(intent)
                 }
-                startActivity(intent)
             }
         }
         buttonLayout.addView(watchButton)
@@ -348,6 +383,9 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         buttonLayout.addView(watchlistButton)
 
+        watchButtonRef = watchButton
+        restartButtonRef = restartButton
+
         content.addView(buttonLayout)
         animViews.add(buttonLayout)
 
@@ -366,14 +404,14 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
         setContentView(root)
 
-        // Fetch duration, progress, and watchlist state asynchronously
+        // Fetch duration + watchlist state. Progress is fetched in a separate
+        // coroutine (see refreshProgress below) so onResume can cancel/replace
+        // it without affecting the duration/watchlist loads.
         launch {
             val playbackDeferred = async { api.getPlayback(video.id) }
-            val progressDeferred = async { api.getProgress() }
             val watchlistDeferred = async { api.getWatchlist() }
 
             val playback = playbackDeferred.await().getOrNull()
-            val progress = progressDeferred.await().getOrNull()?.find { it.videoId == video.id }
             val watchlist = watchlistDeferred.await().getOrNull()
             val isOnWatchlist = watchlist?.any { it.id == video.id } == true
 
@@ -389,22 +427,13 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 metaView.text = parts.joinToString("  \u2022  ")
             }
 
-            // Update watch button to show Resume if there's progress, and
-            // cache the resume position so the click handler can pass it to
-            // PlaybackActivity directly.
-            if (progress != null && progress.percentComplete in 1..94 && progress.currentTime > 0) {
-                resumeSeconds = progress.currentTime
-                val resumeMin = (progress.currentTime / 60).toInt()
-                watchButton.text = "${getString(R.string.resume)} (${resumeMin}m in)"
-                restartButton.visibility = View.VISIBLE
-            }
-
             // Update watchlist button state
             if (isOnWatchlist) {
                 watchlistButton.text = "\u2713 Watchlist"
                 watchlistButton.tag = true
             }
         }
+        refreshProgress(video, api, watchButton, restartButton, withRetry = false)
 
         // Staggered entrance animation
         animViews.forEachIndexed { index, view ->
@@ -420,6 +449,118 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
 
         watchButton.requestFocus()
+    }
+
+    // Track whether we've completed the first lifecycle pass — the very first
+    // onResume fires right after onCreate's initial coroutine launches, and we
+    // don't want to double-fetch progress on cold start.
+    private var hasResumedOnce = false
+
+    override fun onResume() {
+        super.onResume()
+        // Re-enable the Watch button after returning from playback so the
+        // user can launch again.
+        watchLaunchInFlight = false
+        watchButtonRef?.isEnabled = true
+        if (!hasResumedOnce) {
+            hasResumedOnce = true
+            return
+        }
+        // Returning from PlaybackActivity: re-fetch progress so the Resume label
+        // and the cached resumeSeconds reflect the new watched position. Without
+        // this, hitting Resume a second time replays from the stale offset that
+        // was captured at first open.
+        val video = detailVideo ?: return
+        val api = detailApi ?: return
+        val watch = watchButtonRef ?: return
+        val restart = restartButtonRef ?: return
+        refreshProgress(video, api, watch, restart, withRetry = true)
+    }
+
+    private fun refreshProgress(
+        video: Video,
+        api: GiantBombApi,
+        watch: Button,
+        restart: Button,
+        withRetry: Boolean
+    ) {
+        // Cancel any earlier load so its result can't land after this one's.
+        progressRefreshJob?.cancel()
+        awaitingPostPlaybackRefresh = withRetry
+        lateinit var thisJob: Job
+        thisJob = launch {
+            try {
+                // Immediate fetch — correct on cold-open and on returns where
+                // the playback service finished flushing before we resumed.
+                fetchAndApply(video, api, watch, restart)
+                // Only the return-from-playback path needs the second fetch:
+                // PlaybackService's final saveCurrentProgress() runs on its own
+                // scope and may still be in flight as DetailActivity resumes —
+                // Android can resurface this activity before the finishing one
+                // reaches onStop. cold-open never has that race, so skip the
+                // extra API call.
+                if (withRetry) {
+                    delay(1500L)
+                    fetchAndApply(video, api, watch, restart)
+                }
+            } finally {
+                // Identity-check before clearing: a cancelled previous job's
+                // finally block can land after a fresh refreshProgress() has
+                // already installed a new job + set the flag. Clearing
+                // unconditionally would wipe the new job's flag mid-flight.
+                if (progressRefreshJob === thisJob) {
+                    awaitingPostPlaybackRefresh = false
+                }
+            }
+        }
+        progressRefreshJob = thisJob
+    }
+
+    private suspend fun fetchAndApply(
+        video: Video,
+        api: GiantBombApi,
+        watch: Button,
+        restart: Button
+    ) {
+        // Only repaint on success. A transient network error would otherwise
+        // collapse to null and wipe a still-valid Resume label/offset.
+        api.getProgress().onSuccess { entries ->
+            val progress = entries.find { it.videoId == video.id }
+            applyProgressState(progress, watch, restart)
+        }
+    }
+
+    private fun applyProgressState(
+        progress: ProgressEntry?,
+        watch: Button,
+        restart: Button
+    ) {
+        val videoTitle = detailVideo?.title.orEmpty()
+        when {
+            progress != null && progress.percentComplete in 1..94 && progress.currentTime > 0 -> {
+                resumeSeconds = progress.currentTime
+                val resumeMin = (progress.currentTime / 60).toInt()
+                val label = "${getString(R.string.resume)} (${resumeMin}m in)"
+                watch.text = label
+                // Keep TalkBack in sync so screen-reader users hear the resume
+                // action, not the stale "Watch <title>" set at view creation.
+                watch.contentDescription = "$label $videoTitle".trim()
+                restart.visibility = View.VISIBLE
+            }
+            else -> {
+                // Covers three reset cases that all need the same UI:
+                //   - progress is null (server has no entry yet, or it was cleared)
+                //   - percentComplete >= 95 (watched, marked-complete)
+                //   - currentTime <= 0 (Watch-from-Start path saved 0.0/1.0)
+                // Without this branch the previous Resume label/offset would
+                // linger and a later click would replay from a stale position.
+                resumeSeconds = 0.0
+                val label = getString(R.string.watch)
+                watch.text = label
+                watch.contentDescription = "$label $videoTitle".trim()
+                restart.visibility = View.GONE
+            }
+        }
     }
 
     private fun createGlassButton(
