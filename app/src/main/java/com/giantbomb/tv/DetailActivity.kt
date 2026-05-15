@@ -487,7 +487,8 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // Cancel any earlier load so its result can't land after this one's.
         progressRefreshJob?.cancel()
         awaitingPostPlaybackRefresh = withRetry
-        progressRefreshJob = launch {
+        lateinit var thisJob: Job
+        thisJob = launch {
             try {
                 // Immediate fetch — correct on cold-open and on returns where
                 // the playback service finished flushing before we resumed.
@@ -503,9 +504,16 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     fetchAndApply(video, api, watch, restart)
                 }
             } finally {
-                awaitingPostPlaybackRefresh = false
+                // Identity-check before clearing: a cancelled previous job's
+                // finally block can land after a fresh refreshProgress() has
+                // already installed a new job + set the flag. Clearing
+                // unconditionally would wipe the new job's flag mid-flight.
+                if (progressRefreshJob === thisJob) {
+                    awaitingPostPlaybackRefresh = false
+                }
             }
         }
+        progressRefreshJob = thisJob
     }
 
     private suspend fun fetchAndApply(
