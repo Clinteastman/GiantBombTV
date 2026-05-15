@@ -85,6 +85,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         const val EXTRA_RESUME_SECONDS = "extra_resume_seconds"
     }
 
+    private lateinit var prefs: PrefsManager
     private var player: MediaController? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
     // Single Player.Listener instance so we can remove on disconnect / re-attach.
@@ -145,7 +146,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             enableEdgeToEdge()
         }
 
-        val prefs = PrefsManager(this)
+        prefs = PrefsManager(this)
         api = GiantBombApi(prefs.apiKey ?: "")
 
         requestNotificationPermissionIfNeeded()
@@ -898,8 +899,14 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     private fun initializeLivePlayer(hlsUrl: String) {
         val liveTitle = intent.getStringExtra(EXTRA_LIVE_TITLE) ?: "Giant Bomb Live"
+        // Side-by-side chat only makes sense in landscape — on a portrait phone
+        // the 30% panel reduces the player to an unwatchable strip. Gate the
+        // split here even though MobileBrowseFragment always passes the extra.
+        val isLandscape = resources.configuration.orientation ==
+            Configuration.ORIENTATION_LANDSCAPE
         val twitchChannel = intent.getStringExtra(EXTRA_LIVE_TWITCH_CHANNEL)
-            ?.takeIf { PrefsManager(this).showTwitchChat }
+            ?.takeIf { prefs.showTwitchChat }
+            ?.takeIf { isLandscape }
             ?.takeIf { TWITCH_LOGIN_REGEX.matches(it) }
 
         qualityOptions.clear()
@@ -986,16 +993,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         require(TWITCH_LOGIN_REGEX.matches(channel)) {
             "Invalid Twitch channel: $channel"
         }
-        val webView = WebView(this)
-        // Per-WebView, scoped to this instance — avoids the process-wide
-        // side-effect of CookieManager.setAcceptCookie(true).
-        android.webkit.CookieManager.getInstance()
-            .setAcceptThirdPartyCookies(webView, true)
-        return webView.apply {
+        return WebView(this).apply {
             setBackgroundColor(0xFF18181B.toInt())
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            settings.mediaPlaybackRequiresUserGesture = false
             // Make focusable so a TV remote can D-pad into the chat panel.
             isFocusable = true
             isFocusableInTouchMode = true
@@ -1009,17 +1010,17 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 }
             }
             webViewClient = object : WebViewClient() {
-                // Keep top-frame navigations inside twitch.tv. The host page runs
-                // with a twitch.tv-origin baseUrl, so any cross-origin redirect we
-                // honoured would execute under that origin with access to whatever
-                // cookies the embed has set.
                 override fun shouldOverrideUrlLoading(
                     view: WebView?,
                     request: WebResourceRequest?
                 ): Boolean {
-                    val host = request?.url?.host ?: return true
-                    return !host.equals("twitch.tv", ignoreCase = true) &&
-                        !host.endsWith(".twitch.tv", ignoreCase = true)
+                    val url = request?.url ?: return false
+                    // Let the initial about:blank / data: load through so the
+                    // embed can boot. After that, only allow twitch.tv hosts.
+                    val scheme = url.scheme?.lowercase()
+                    if (scheme == "about" || scheme == "data") return false
+                    val host = url.host?.lowercase() ?: return true
+                    return host != "twitch.tv" && !host.endsWith(".twitch.tv")
                 }
             }
 

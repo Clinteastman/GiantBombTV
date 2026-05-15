@@ -678,9 +678,11 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     }
 
     private fun toggleTwitchChat() {
-        val nowShown = prefs.toggleTwitchChatPref()
-        val msg = if (nowShown) "Twitch chat: shown on live streams"
-                  else "Twitch chat: hidden on live streams"
+        val nowShown = prefs.toggleTwitchChatPref(this)
+        val msg = getString(
+            if (nowShown) R.string.toast_twitch_chat_shown
+            else R.string.toast_twitch_chat_hidden
+        )
         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
         loadContent()
     }
@@ -944,8 +946,11 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         ))
         utilAdapter.add(SettingsItem(
             SETTINGS_TWITCH_CHAT,
-            "Twitch Chat",
-            if (prefs.showTwitchChat) "Shown on live streams" else "Hidden on live streams",
+            getString(R.string.settings_twitch_chat),
+            getString(
+                if (prefs.showTwitchChat) R.string.settings_twitch_chat_shown
+                else R.string.settings_twitch_chat_hidden
+            ),
             R.drawable.ic_settings_cog
         ))
         utilAdapter.add(SettingsItem(
