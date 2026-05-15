@@ -105,6 +105,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var playerContainer: FrameLayout? = null
     private var relatedRecycler: RecyclerView? = null
 
+    // TV-only title overlay shown alongside the playback controls. Populated
+    // once video metadata is known and faded in/out via the controller
+    // visibility listener.
+    private var tvTitleOverlay: TextView? = null
+
     // Quality selection
     private data class QualityOption(val label: String, val url: String, val isHls: Boolean = false)
     private var qualityOptions = mutableListOf<QualityOption>()
@@ -200,11 +205,39 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                         showQualityPicker()
                     }
                     enhanceControlFocus(this)
+                    tvTitleOverlay?.visibility = View.VISIBLE
+                } else {
+                    tvTitleOverlay?.visibility = View.INVISIBLE
                 }
             })
         }
 
         rootLayout.addView(playerView)
+
+        // Title overlay sits above the controller's progress strip so the viewer
+        // can see what they're watching whenever the controls are visible.
+        val overlayText = video?.title
+            ?: intent.getStringExtra(EXTRA_LIVE_TITLE)
+            ?: ""
+        tvTitleOverlay = TextView(this).apply {
+            text = overlayText
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            // Soft drop shadow so the text stays readable against any frame.
+            setShadowLayer(6f, 0f, 2f, 0x99000000.toInt())
+            visibility = View.INVISIBLE
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM or Gravity.START
+            ).apply {
+                setMargins(40.dp(), 0, 40.dp(), 90.dp())
+            }
+        }
+        rootLayout.addView(tvTitleOverlay)
         setContentView(rootLayout)
     }
 
