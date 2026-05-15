@@ -462,8 +462,13 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // Cancel any earlier load so its result can't land after this one's.
         progressRefreshJob?.cancel()
         progressRefreshJob = launch {
-            val progress = api.getProgress().getOrNull()?.find { it.videoId == video.id }
-            applyProgressState(progress, watch, restart)
+            val result = api.getProgress()
+            // Only repaint on success. A transient network error would otherwise
+            // collapse to null and wipe a still-valid Resume label/offset.
+            result.onSuccess { entries ->
+                val progress = entries.find { it.videoId == video.id }
+                applyProgressState(progress, watch, restart)
+            }
         }
     }
 
