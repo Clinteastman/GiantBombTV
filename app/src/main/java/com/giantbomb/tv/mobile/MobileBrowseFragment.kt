@@ -29,6 +29,7 @@ import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.ProgressEntry
 import com.giantbomb.tv.model.SettingsItem
 import com.giantbomb.tv.data.TwitchExtractor
+import com.giantbomb.tv.data.toggleTwitchChatPref
 import com.giantbomb.tv.model.Show
 import com.giantbomb.tv.model.UpcomingStream
 import com.giantbomb.tv.model.Video
@@ -642,12 +643,8 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     fun getMiniPlayerContainer(): FrameLayout? = miniPlayerContainer
 
     private fun toggleTwitchChat() {
-        prefs.showTwitchChat = !prefs.showTwitchChat
-        if (!prefs.showTwitchChat) {
-            android.webkit.CookieManager.getInstance().removeAllCookies(null)
-            android.webkit.WebStorage.getInstance().deleteAllData()
-        }
-        val msg = if (prefs.showTwitchChat) "Twitch chat: shown on live streams"
+        val nowShown = prefs.toggleTwitchChatPref()
+        val msg = if (nowShown) "Twitch chat: shown on live streams"
                   else "Twitch chat: hidden on live streams"
         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
         loadContent()

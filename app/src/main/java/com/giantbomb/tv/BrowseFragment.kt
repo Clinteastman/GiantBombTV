@@ -20,6 +20,7 @@ import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
+import com.giantbomb.tv.data.toggleTwitchChatPref
 import com.giantbomb.tv.model.ProgressEntry
 import com.giantbomb.tv.model.SettingsItem
 import com.giantbomb.tv.model.Show
@@ -677,12 +678,8 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     }
 
     private fun toggleTwitchChat() {
-        prefs.showTwitchChat = !prefs.showTwitchChat
-        if (!prefs.showTwitchChat) {
-            android.webkit.CookieManager.getInstance().removeAllCookies(null)
-            android.webkit.WebStorage.getInstance().deleteAllData()
-        }
-        val msg = if (prefs.showTwitchChat) "Twitch chat: shown on live streams"
+        val nowShown = prefs.toggleTwitchChatPref()
+        val msg = if (nowShown) "Twitch chat: shown on live streams"
                   else "Twitch chat: hidden on live streams"
         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
         loadContent()
