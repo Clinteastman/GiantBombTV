@@ -53,6 +53,14 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
     // onCreate request that returns *after* the refresh doesn't paint stale
     // resume offsets back onto the buttons.
     private var progressRefreshJob: Job? = null
+    // True only while a post-playback refresh (withRetry=true) is running. The
+    // Watch click waits on the job for *that* case so it doesn't pass a stale
+    // resumeSeconds; on cold start the click shouldn't be delayed by the
+    // initial fetch at all.
+    private var awaitingPostPlaybackRefresh = false
+    // Prevents a double-tap during the click-time wait from queueing two
+    // PlaybackActivity launches.
+    private var watchLaunchInFlight = false
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
     private val density by lazy { resources.displayMetrics.density }
@@ -264,13 +272,17 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 )
             }
             setOnClickListener {
-                // If the post-playback refresh is still mid-flight, wait briefly
-                // for it before launching so we don't pass a stale resumeSeconds
-                // captured before PlaybackService's final save landed. Cap the
-                // wait so a slow / offline network can't make the primary button
-                // feel unresponsive — fall through with whatever value we have.
+                if (watchLaunchInFlight) return@setOnClickListener
+                watchLaunchInFlight = true
+                isEnabled = false
                 launch {
-                    withTimeoutOrNull(2_000L) { progressRefreshJob?.join() }
+                    // Only the post-playback refresh has the flush race to wait
+                    // on. The cold-start fetch is informational; don't make
+                    // Watch feel frozen for it on a slow network. Cap any wait
+                    // so an offline retry can't lock the primary action.
+                    if (awaitingPostPlaybackRefresh) {
+                        withTimeoutOrNull(2_000L) { progressRefreshJob?.join() }
+                    }
                     val intent = Intent(this@DetailActivity, PlaybackActivity::class.java).apply {
                         putExtra(PlaybackActivity.EXTRA_VIDEO, video)
                         if (resumeSeconds > 0) {
@@ -446,6 +458,10 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     override fun onResume() {
         super.onResume()
+        // Re-enable the Watch button after returning from playback so the
+        // user can launch again.
+        watchLaunchInFlight = false
+        watchButtonRef?.isEnabled = true
         if (!hasResumedOnce) {
             hasResumedOnce = true
             return
@@ -470,19 +486,24 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
     ) {
         // Cancel any earlier load so its result can't land after this one's.
         progressRefreshJob?.cancel()
+        awaitingPostPlaybackRefresh = withRetry
         progressRefreshJob = launch {
-            // Immediate fetch — correct on cold-open and on returns where the
-            // playback service finished flushing before we resumed.
-            fetchAndApply(video, api, watch, restart)
-            // Only the return-from-playback path needs the second fetch:
-            // PlaybackService's final saveCurrentProgress() runs on its own
-            // scope and may still be in flight as DetailActivity resumes —
-            // Android can resurface this activity before the finishing one
-            // reaches onStop. cold-open never has that race, so skip the
-            // extra API call.
-            if (withRetry) {
-                delay(1500L)
+            try {
+                // Immediate fetch — correct on cold-open and on returns where
+                // the playback service finished flushing before we resumed.
                 fetchAndApply(video, api, watch, restart)
+                // Only the return-from-playback path needs the second fetch:
+                // PlaybackService's final saveCurrentProgress() runs on its own
+                // scope and may still be in flight as DetailActivity resumes —
+                // Android can resurface this activity before the finishing one
+                // reaches onStop. cold-open never has that race, so skip the
+                // extra API call.
+                if (withRetry) {
+                    delay(1500L)
+                    fetchAndApply(video, api, watch, restart)
+                }
+            } finally {
+                awaitingPostPlaybackRefresh = false
             }
         }
     }
