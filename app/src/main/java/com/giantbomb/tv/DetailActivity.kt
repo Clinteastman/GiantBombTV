@@ -41,6 +41,14 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
     // PlaybackActivity to refetch progress (which can race with playback start).
     private var resumeSeconds: Double = 0.0
 
+    // Refs needed by onResume to refresh the Resume label/position after
+    // returning from playback, so the button reflects the new watch time
+    // instead of replaying from the stale offset captured at onCreate.
+    private var detailVideo: Video? = null
+    private var detailApi: GiantBombApi? = null
+    private var watchButtonRef: Button? = null
+    private var restartButtonRef: Button? = null
+
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
     private val density by lazy { resources.displayMetrics.density }
 
@@ -61,6 +69,8 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val prefs = PrefsManager(this)
         val apiKey = prefs.apiKey ?: ""
         val api = GiantBombApi(apiKey)
+        detailVideo = video
+        detailApi = api
 
         val root = FrameLayout(this).apply {
             setBackgroundResource(R.drawable.bg_ambient_gradient)
@@ -348,6 +358,9 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         buttonLayout.addView(watchlistButton)
 
+        watchButtonRef = watchButton
+        restartButtonRef = restartButton
+
         content.addView(buttonLayout)
         animViews.add(buttonLayout)
 
@@ -420,6 +433,42 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
 
         watchButton.requestFocus()
+    }
+
+    // Track whether we've completed the first lifecycle pass — the very first
+    // onResume fires right after onCreate's initial coroutine launches, and we
+    // don't want to double-fetch progress on cold start.
+    private var hasResumedOnce = false
+
+    override fun onResume() {
+        super.onResume()
+        if (!hasResumedOnce) {
+            hasResumedOnce = true
+            return
+        }
+        // Returning from PlaybackActivity: re-fetch progress so the Resume label
+        // and the cached resumeSeconds reflect the new watched position. Without
+        // this, hitting Resume a second time replays from the stale offset that
+        // was captured at first open.
+        val video = detailVideo ?: return
+        val api = detailApi ?: return
+        val watch = watchButtonRef ?: return
+        val restart = restartButtonRef ?: return
+        launch {
+            val progress = api.getProgress().getOrNull()?.find { it.videoId == video.id }
+            if (progress != null && progress.percentComplete in 1..94 && progress.currentTime > 0) {
+                resumeSeconds = progress.currentTime
+                val resumeMin = (progress.currentTime / 60).toInt()
+                watch.text = "${getString(R.string.resume)} (${resumeMin}m in)"
+                restart.visibility = View.VISIBLE
+            } else if (progress != null && progress.percentComplete >= 95) {
+                // Marked-watched on the previous session: revert to a fresh
+                // "Watch" button (no Resume label, no Restart affordance).
+                resumeSeconds = 0.0
+                watch.text = getString(R.string.watch)
+                restart.visibility = View.GONE
+            }
+        }
     }
 
     private fun createGlassButton(
