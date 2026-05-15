@@ -1486,7 +1486,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             wv.destroy()
         }
         chatWebView = null
-        splitLayout?.let { sl -> (sl.parent as? ViewGroup)?.removeView(sl) }
+        splitLayout?.let { sl ->
+            sl.removeAllViews()
+            (sl.parent as? ViewGroup)?.removeView(sl)
+        }
         splitLayout = null
         super.onDestroy()
         cancel()

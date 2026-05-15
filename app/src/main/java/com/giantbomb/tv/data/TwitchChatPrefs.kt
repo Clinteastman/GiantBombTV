@@ -39,6 +39,9 @@ fun PrefsManager.toggleTwitchChatPref(): Boolean {
     return nowShown
 }
 
+private const val COOKIE_EXPIRY_HEADER =
+    "Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+
 private fun clearTwitchChatCookies() {
     val cookieManager = CookieManager.getInstance()
     for (url in TWITCH_ORIGINS) {
@@ -48,10 +51,13 @@ private fun clearTwitchChatCookies() {
             val name = cookie.substringBefore("=").trim()
             if (name.isEmpty()) continue
             // Cover both the wildcard-domain variant (Set-Cookie with Domain=.twitch.tv)
-            // and host-only cookies that were set without a Domain attribute.
-            cookieManager.setCookie(url, "$name=; Max-Age=0; Path=/; Domain=.twitch.tv")
-            cookieManager.setCookie(url, "$name=; Max-Age=0; Path=/; Domain=$host")
-            cookieManager.setCookie(url, "$name=; Max-Age=0; Path=/")
+            // and host-only cookies that were set without a Domain attribute. Pair
+            // Max-Age=0 with an explicit past Expires for older WebView builds
+            // (notably some Fire TV pre-Chromium-parity versions) that don't
+            // honour Max-Age via CookieManager.setCookie.
+            cookieManager.setCookie(url, "$name=; $COOKIE_EXPIRY_HEADER; Path=/; Domain=.twitch.tv")
+            cookieManager.setCookie(url, "$name=; $COOKIE_EXPIRY_HEADER; Path=/; Domain=$host")
+            cookieManager.setCookie(url, "$name=; $COOKIE_EXPIRY_HEADER; Path=/")
         }
     }
     cookieManager.flush()
