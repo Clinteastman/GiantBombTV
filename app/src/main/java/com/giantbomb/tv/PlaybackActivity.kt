@@ -72,6 +72,12 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // Twitch channel login for the read-only chat WebView shown alongside
         // a live stream. Optional — if null, no chat panel is rendered.
         const val EXTRA_LIVE_TWITCH_CHANNEL = "extra_live_twitch_channel"
+        // Default Giant Bomb live channel. Single source of truth for callers
+        // that launch live playback so the slug doesn't drift across surfaces.
+        const val DEFAULT_TWITCH_CHANNEL = "giantbomb"
+        // Twitch login charset: 4-25 alphanumeric or underscore. Reject anything
+        // outside that before we interpolate the value into HTML / URL strings.
+        private val TWITCH_LOGIN_REGEX = Regex("^[a-zA-Z0-9_]{4,25}$")
         // Optional resume position in seconds, passed by DetailActivity so
         // PlaybackActivity doesn't have to re-fetch progress (which can race
         // with playback start or fail through Cloudflare).
@@ -114,12 +120,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     // Held so onDestroy can stopLoading + destroy the WebView. Otherwise the
     // WebView's native context and Twitch's JS timers leak past activity death.
     private var chatWebView: WebView? = null
-
-    // Twitch logins are 4-25 chars from [a-zA-Z0-9_]. The channel name flows
-    // through an Intent extra and gets interpolated into an HTML string + URL
-    // query param, so reject anything outside that charset to keep us out of
-    // injection territory if the source ever changes from a hardcoded literal.
-    private val twitchLoginRegex = Regex("^[a-zA-Z0-9_]{4,25}$")
 
     // Quality selection
     private data class QualityOption(val label: String, val url: String, val isHls: Boolean = false)
@@ -895,7 +895,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val liveTitle = intent.getStringExtra(EXTRA_LIVE_TITLE) ?: "Giant Bomb Live"
         val twitchChannel = intent.getStringExtra(EXTRA_LIVE_TWITCH_CHANNEL)
             ?.takeIf { PrefsManager(this).showTwitchChat }
-            ?.takeIf { twitchLoginRegex.matches(it) }
+            ?.takeIf { TWITCH_LOGIN_REGEX.matches(it) }
 
         qualityOptions.clear()
         qualityOptions.add(QualityOption("Live", hlsUrl, isHls = true))
@@ -976,24 +976,15 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         })
     }
 
-    /**
-     * Builds a WebView that renders Twitch's read-only chat embed for [channel].
-     *
-     * Twitch's embed checks the `parent` query param against the host of the page
-     * that contains the iframe. WebView has no real origin by default, so the
-     * embed errors out with "Refused to display ... in a frame". To get around
-     * that we host the iframe in an HTML string loaded with baseUrl
-     * https://www.twitch.tv — the iframe then sees window.parent as a twitch.tv
-     * origin, which satisfies the parent= check.
-     */
     private fun createTwitchChatWebView(channel: String): WebView {
-        val webView = WebView(this)
-        // Twitch chat iframes set tracking cookies on their own domain; without
-        // third-party cookie access the embed errors out.
-        android.webkit.CookieManager.getInstance().apply {
-            setAcceptCookie(true)
-            setAcceptThirdPartyCookies(webView, true)
+        require(TWITCH_LOGIN_REGEX.matches(channel)) {
+            "Invalid Twitch channel: $channel"
         }
+        val webView = WebView(this)
+        // Per-WebView, scoped to this instance — avoids the process-wide
+        // side-effect of CookieManager.setAcceptCookie(true).
+        android.webkit.CookieManager.getInstance()
+            .setAcceptThirdPartyCookies(webView, true)
         return webView.apply {
             setBackgroundColor(0xFF18181B.toInt())
             settings.javaScriptEnabled = true

@@ -643,6 +643,10 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
 
     private fun toggleTwitchChat() {
         prefs.showTwitchChat = !prefs.showTwitchChat
+        if (!prefs.showTwitchChat) {
+            android.webkit.CookieManager.getInstance().removeAllCookies(null)
+            android.webkit.WebStorage.getInstance().deleteAllData()
+        }
         val msg = if (prefs.showTwitchChat) "Twitch chat: shown on live streams"
                   else "Twitch chat: hidden on live streams"
         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
@@ -668,7 +672,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
                     putExtra(PlaybackActivity.EXTRA_LIVE_HLS_URL, stream.hlsUrl)
                     putExtra(PlaybackActivity.EXTRA_LIVE_TITLE, liveTitle)
-                    putExtra(PlaybackActivity.EXTRA_LIVE_TWITCH_CHANNEL, "giantbomb")
+                    putExtra(PlaybackActivity.EXTRA_LIVE_TWITCH_CHANNEL, PlaybackActivity.DEFAULT_TWITCH_CHANNEL)
                 }
                 startActivity(intent)
             }
