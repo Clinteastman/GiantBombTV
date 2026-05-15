@@ -462,13 +462,31 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // Cancel any earlier load so its result can't land after this one's.
         progressRefreshJob?.cancel()
         progressRefreshJob = launch {
-            val result = api.getProgress()
-            // Only repaint on success. A transient network error would otherwise
-            // collapse to null and wipe a still-valid Resume label/offset.
-            result.onSuccess { entries ->
-                val progress = entries.find { it.videoId == video.id }
-                applyProgressState(progress, watch, restart)
-            }
+            // Immediate fetch — correct on cold-open and on returns where the
+            // playback service finished flushing before we resumed.
+            fetchAndApply(video, api, watch, restart)
+            // PlaybackService's final saveCurrentProgress() runs on its own
+            // scope and may still be in flight as DetailActivity resumes —
+            // Android can resurface this activity before the finishing one
+            // reaches onStop. Refetch shortly after so a freshly-flushed
+            // position overwrites the stale value we just read, instead of
+            // waiting for the next user interaction.
+            delay(1500L)
+            fetchAndApply(video, api, watch, restart)
+        }
+    }
+
+    private suspend fun fetchAndApply(
+        video: Video,
+        api: GiantBombApi,
+        watch: Button,
+        restart: Button
+    ) {
+        // Only repaint on success. A transient network error would otherwise
+        // collapse to null and wipe a still-valid Resume label/offset.
+        api.getProgress().onSuccess { entries ->
+            val progress = entries.find { it.videoId == video.id }
+            applyProgressState(progress, watch, restart)
         }
     }
 
@@ -477,11 +495,16 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         watch: Button,
         restart: Button
     ) {
+        val videoTitle = detailVideo?.title.orEmpty()
         when {
             progress != null && progress.percentComplete in 1..94 && progress.currentTime > 0 -> {
                 resumeSeconds = progress.currentTime
                 val resumeMin = (progress.currentTime / 60).toInt()
-                watch.text = "${getString(R.string.resume)} (${resumeMin}m in)"
+                val label = "${getString(R.string.resume)} (${resumeMin}m in)"
+                watch.text = label
+                // Keep TalkBack in sync so screen-reader users hear the resume
+                // action, not the stale "Watch <title>" set at view creation.
+                watch.contentDescription = "$label $videoTitle".trim()
                 restart.visibility = View.VISIBLE
             }
             else -> {
@@ -492,7 +515,9 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 // Without this branch the previous Resume label/offset would
                 // linger and a later click would replay from a stale position.
                 resumeSeconds = 0.0
-                watch.text = getString(R.string.watch)
+                val label = getString(R.string.watch)
+                watch.text = label
+                watch.contentDescription = "$label $videoTitle".trim()
                 restart.visibility = View.GONE
             }
         }
