@@ -217,9 +217,13 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // Title overlay sits above the controller's progress strip so the viewer
         // can see what they're watching whenever the controls are visible.
         // Skip entirely if neither a Video nor a live title is available, so we
-        // don't animate a blank string in/out alongside the controls.
+        // don't animate a blank string in/out alongside the controls. Match the
+        // fallback that initializeLivePlayer uses so a live launch with no
+        // EXTRA_LIVE_TITLE still gets the same default label on the overlay.
+        val isLive = intent.getStringExtra(EXTRA_LIVE_HLS_URL) != null
         val overlayText = video?.title
             ?: intent.getStringExtra(EXTRA_LIVE_TITLE)
+            ?: "Giant Bomb Live".takeIf { isLive }
         if (!overlayText.isNullOrBlank()) {
             tvTitleOverlay = TextView(this).apply {
                 text = overlayText
@@ -255,12 +259,22 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             overlay.animate()
                 .alpha(1f)
                 .setDuration(250L)
+                .setListener(null)
                 .start()
         } else {
+            // AnimatorListenerAdapter rather than withEndAction: the latter
+            // fires on cancel too, so a hide→show toggle could land with the
+            // overlay still INVISIBLE behind a freshly-animated alpha=1. The
+            // listener checks the current alpha so it only hides when the
+            // fade-out actually finished.
             overlay.animate()
                 .alpha(0f)
                 .setDuration(250L)
-                .withEndAction { overlay.visibility = View.INVISIBLE }
+                .setListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        if (overlay.alpha == 0f) overlay.visibility = View.INVISIBLE
+                    }
+                })
                 .start()
         }
     }
