@@ -646,7 +646,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     fun getMiniPlayerContainer(): FrameLayout? = miniPlayerContainer
 
     private fun toggleTwitchChat() {
-        val nowShown = prefs.toggleTwitchChatPref(this)
+        val nowShown = prefs.toggleTwitchChatPref()
         val msg = getString(
             if (nowShown) R.string.toast_twitch_chat_shown
             else R.string.toast_twitch_chat_hidden

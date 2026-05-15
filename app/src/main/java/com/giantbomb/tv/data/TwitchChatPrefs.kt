@@ -4,30 +4,35 @@ import android.webkit.CookieManager
 import android.webkit.WebStorage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val TWITCH_HOSTS = listOf("www.twitch.tv", "twitch.tv", "m.twitch.tv")
 private val TWITCH_ORIGINS = TWITCH_HOSTS.map { "https://$it" }
 
+// Process-lived so an opt-out always finishes even if the user immediately
+// rotates or backs out of the screen that triggered the toggle. A fragment-
+// scoped launch would get cancelled mid-clear and leave cookies on disk.
+private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
 /**
  * Flip the show-Twitch-chat pref. When turning it off, also clear any
  * twitch.tv cookies and DOM storage the chat embed left behind, so opting
  * out actually drops the tracking state. Returns the new pref value.
  *
- * The clear runs through [scope] (cookies on IO, DOM storage on Main per
- * WebStorage's threading contract) so the UI thread isn't blocked by disk
- * I/O when the user toggles after a long chat session.
+ * The cookie wipe runs on Dispatchers.IO; the DOM-storage delete runs back
+ * on Main because WebView APIs (including WebStorage) must be called from
+ * the thread that initialised the WebView, which is the UI thread.
  *
  * Shared between TV and mobile so the two surfaces can't drift.
  */
-fun PrefsManager.toggleTwitchChatPref(scope: CoroutineScope): Boolean {
+fun PrefsManager.toggleTwitchChatPref(): Boolean {
     val nowShown = !showTwitchChat
     showTwitchChat = nowShown
     if (!nowShown) {
-        scope.launch {
+        cleanupScope.launch {
             withContext(Dispatchers.IO) { clearTwitchChatCookies() }
-            // WebStorage APIs are documented as main-thread-only.
             clearTwitchChatDomStorage()
         }
     }
