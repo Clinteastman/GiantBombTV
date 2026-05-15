@@ -205,9 +205,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                         showQualityPicker()
                     }
                     enhanceControlFocus(this)
-                    tvTitleOverlay?.visibility = View.VISIBLE
+                    fadeTitleOverlay(visible = true)
                 } else {
-                    tvTitleOverlay?.visibility = View.INVISIBLE
+                    fadeTitleOverlay(visible = false)
                 }
             })
         }
@@ -228,6 +228,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             ellipsize = android.text.TextUtils.TruncateAt.END
             // Soft drop shadow so the text stays readable against any frame.
             setShadowLayer(6f, 0f, 2f, 0x99000000.toInt())
+            alpha = 0f
             visibility = View.INVISIBLE
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -239,6 +240,26 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
         rootLayout.addView(tvTitleOverlay)
         setContentView(rootLayout)
+    }
+
+    // Matches Media3 PlayerView's default controller fade so the title rides
+    // alongside the controls instead of popping in/out.
+    private fun fadeTitleOverlay(visible: Boolean) {
+        val overlay = tvTitleOverlay ?: return
+        overlay.animate().cancel()
+        if (visible) {
+            overlay.visibility = View.VISIBLE
+            overlay.animate()
+                .alpha(1f)
+                .setDuration(250L)
+                .start()
+        } else {
+            overlay.animate()
+                .alpha(0f)
+                .setDuration(250L)
+                .withEndAction { overlay.visibility = View.INVISIBLE }
+                .start()
+        }
     }
 
     private fun buildMobileLiveLayout() {
