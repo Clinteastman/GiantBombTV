@@ -264,11 +264,13 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 )
             }
             setOnClickListener {
-                // If the post-playback refresh is still mid-flight, wait for it
-                // before launching so we don't pass a stale resumeSeconds that
-                // was captured before PlaybackService's final save landed.
+                // If the post-playback refresh is still mid-flight, wait briefly
+                // for it before launching so we don't pass a stale resumeSeconds
+                // captured before PlaybackService's final save landed. Cap the
+                // wait so a slow / offline network can't make the primary button
+                // feel unresponsive — fall through with whatever value we have.
                 launch {
-                    progressRefreshJob?.join()
+                    withTimeoutOrNull(2_000L) { progressRefreshJob?.join() }
                     val intent = Intent(this@DetailActivity, PlaybackActivity::class.java).apply {
                         putExtra(PlaybackActivity.EXTRA_VIDEO, video)
                         if (resumeSeconds > 0) {
