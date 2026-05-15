@@ -216,29 +216,32 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         // Title overlay sits above the controller's progress strip so the viewer
         // can see what they're watching whenever the controls are visible.
+        // Skip entirely if neither a Video nor a live title is available, so we
+        // don't animate a blank string in/out alongside the controls.
         val overlayText = video?.title
             ?: intent.getStringExtra(EXTRA_LIVE_TITLE)
-            ?: ""
-        tvTitleOverlay = TextView(this).apply {
-            text = overlayText
-            textSize = 18f
-            setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            // Soft drop shadow so the text stays readable against any frame.
-            setShadowLayer(6f, 0f, 2f, 0x99000000.toInt())
-            alpha = 0f
-            visibility = View.INVISIBLE
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM or Gravity.START
-            ).apply {
-                setMargins(40.dp(), 0, 40.dp(), 90.dp())
+        if (!overlayText.isNullOrBlank()) {
+            tvTitleOverlay = TextView(this).apply {
+                text = overlayText
+                textSize = 18f
+                setTextColor(Color.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                // Soft drop shadow so the text stays readable against any frame.
+                setShadowLayer(6f, 0f, 2f, 0x99000000.toInt())
+                alpha = 0f
+                visibility = View.INVISIBLE
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM or Gravity.START
+                ).apply {
+                    setMargins(40.dp(), 0, 40.dp(), 90.dp())
+                }
             }
+            rootLayout.addView(tvTitleOverlay)
         }
-        rootLayout.addView(tvTitleOverlay)
         setContentView(rootLayout)
     }
 
@@ -953,6 +956,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     showQualityPicker()
                 }
                 enhanceControlFocus(playerView)
+                fadeTitleOverlay(visible = true)
+            } else {
+                fadeTitleOverlay(visible = false)
             }
         })
 
