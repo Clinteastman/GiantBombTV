@@ -19,7 +19,11 @@ private val TWITCH_ORIGINS = listOf(
 fun PrefsManager.toggleTwitchChatPref(): Boolean {
     val nowShown = !showTwitchChat
     showTwitchChat = nowShown
-    if (!nowShown) clearTwitchChatStorage()
+    if (!nowShown) {
+        // CookieManager / WebStorage hit disk; push to a worker thread so a long
+        // chat session worth of cookies doesn't jank the UI when the user toggles.
+        Thread({ clearTwitchChatStorage() }, "twitch-chat-clear").start()
+    }
     return nowShown
 }
 

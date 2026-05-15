@@ -20,6 +20,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
@@ -120,6 +121,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     // Held so onDestroy can stopLoading + destroy the WebView. Otherwise the
     // WebView's native context and Twitch's JS timers leak past activity death.
     private var chatWebView: WebView? = null
+    // Container that wraps the player + chat panel on live. Tracked so cleanup
+    // can detach the whole thing instead of leaving the wrapper as an orphan
+    // when later code paths only target playerView's parent.
+    private var splitLayout: LinearLayout? = null
 
     // Quality selection
     private data class QualityOption(val label: String, val url: String, val isHls: Boolean = false)
@@ -912,7 +917,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         if (twitchChannel != null) {
             // Split the area: player on the left (70%), read-only Twitch chat on the right (30%).
-            val splitLayout = LinearLayout(this).apply {
+            val split = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutParams = lp
                 setBackgroundColor(Color.BLACK)
@@ -920,15 +925,16 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             livePlayerView.layoutParams = LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.MATCH_PARENT, 7f
             )
-            splitLayout.addView(livePlayerView)
+            split.addView(livePlayerView)
             val chat = createTwitchChatWebView(twitchChannel).apply {
                 layoutParams = LinearLayout.LayoutParams(
                     0, ViewGroup.LayoutParams.MATCH_PARENT, 3f
                 )
             }
             chatWebView = chat
-            splitLayout.addView(chat)
-            parent.addView(splitLayout, index)
+            split.addView(chat)
+            splitLayout = split
+            parent.addView(split, index)
         } else {
             parent.addView(livePlayerView, index, lp)
         }
@@ -994,8 +1000,28 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             isFocusable = true
             isFocusableInTouchMode = true
 
-            webChromeClient = WebChromeClient()
-            webViewClient = WebViewClient()
+            webChromeClient = object : WebChromeClient() {
+                // Embed shouldn't promote to fullscreen in our context; swallow
+                // any attempt rather than letting the WebView surface a custom
+                // view we never reparent or dismiss.
+                override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                    callback?.onCustomViewHidden()
+                }
+            }
+            webViewClient = object : WebViewClient() {
+                // Keep top-frame navigations inside twitch.tv. The host page runs
+                // with a twitch.tv-origin baseUrl, so any cross-origin redirect we
+                // honoured would execute under that origin with access to whatever
+                // cookies the embed has set.
+                override fun shouldOverrideUrlLoading(
+                    view: WebView?,
+                    request: WebResourceRequest?
+                ): Boolean {
+                    val host = request?.url?.host ?: return true
+                    return !host.equals("twitch.tv", ignoreCase = true) &&
+                        !host.endsWith(".twitch.tv", ignoreCase = true)
+                }
+            }
 
             val html = """
                 <!DOCTYPE html>
@@ -1425,6 +1451,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             wv.destroy()
         }
         chatWebView = null
+        splitLayout?.let { sl -> (sl.parent as? ViewGroup)?.removeView(sl) }
+        splitLayout = null
         super.onDestroy()
         cancel()
     }
