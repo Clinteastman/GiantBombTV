@@ -38,9 +38,9 @@ An unofficial Android TV and mobile app for watching [Giant Bomb](https://www.gi
 
 ### Android TV
 
-| Browse | Detail |
-|--------|--------|
-| ![Browse](screenshots/browse.png) | ![Detail](screenshots/detail.png) |
+| Setup | Detail |
+|-------|--------|
+| ![Setup](screenshots/browse.png) | ![Detail](screenshots/detail.png) |
 
 | Playback | Quality Picker |
 |----------|---------------|
