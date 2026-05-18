@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Root FrameLayout stacks (back-to-front):
+    1. Two crossfading backdrop images + darkening overlay (TV only).
+    2. Vertical LinearLayout holding the fragment container above the
+       bottom navigation bar. On TV the nav is gone and the container
+       fills the screen, exactly as before. On mobile the nav takes its
+       natural height and the fragment is laid out above it.
+    3. A loading spinner overlay on top.
+-->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/gb_background">
@@ -26,10 +36,28 @@
         android:layout_height="match_parent"
         android:background="#60000000" />
 
-    <FrameLayout
-        android:id="@+id/main_fragment_container"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:id="@+id/main_fragment_container"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottom_nav"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/gb_surface_elevated"
+            android:visibility="gone"
+            app:itemIconTint="@color/bottom_nav_item_color"
+            app:itemTextColor="@color/bottom_nav_item_color"
+            app:labelVisibilityMode="labeled"
+            app:menu="@menu/bottom_nav_mobile" />
+    </LinearLayout>
 
     <!-- Loading spinner -->
     <ProgressBar
