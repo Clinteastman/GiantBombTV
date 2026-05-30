@@ -22,6 +22,17 @@ class PrefsManager(context: Context) {
         set(value) = prefs.edit().putString("preferred_quality", value).apply()
 
     /**
+     * When true, pressing Back in the phone video player enters
+     * Picture-in-Picture instead of returning to the previous screen.
+     * Defaults to false: many users read Back→PiP as "the app closed", and
+     * the PiP-on-back path also tangles with the playback-service lifecycle.
+     * The Home button still triggers PiP via onUserLeaveHint regardless.
+     */
+    var backEntersPip: Boolean
+        get() = prefs.getBoolean("back_enters_pip", false)
+        set(value) = prefs.edit().putBoolean("back_enters_pip", value).apply()
+
+    /**
      * Pinned show IDs in user-defined order. The browse screen renders these
      * as their own per-show rows at the top of the Pinned Shows section.
      * Stored as a CSV string so the order persists; the pre-existing Set-based

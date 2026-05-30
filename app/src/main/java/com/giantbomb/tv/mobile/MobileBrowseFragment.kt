@@ -95,6 +95,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         private const val SETTINGS_QUALITY = 4
         private const val SETTINGS_PRIVACY = 5
         private const val SETTINGS_CUSTOMIZE = 6
+        private const val SETTINGS_PIP_BACK = 7
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
         private const val RECENT_VERTICAL_COUNT = 5
@@ -603,6 +604,13 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             R.drawable.ic_settings_quality
         )))
         items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_PIP_BACK,
+            "Back Enters Picture-in-Picture",
+            if (prefs.backEntersPip) "On — Back shrinks the player into a floating window"
+            else "Off — Back returns to the previous screen",
+            R.drawable.ic_settings_cog
+        )))
+        items.add(BrowseItem.SettingRow(SettingsItem(
             SETTINGS_SETUP,
             getString(R.string.settings_setup),
             getString(R.string.settings_setup_desc),
@@ -641,6 +649,15 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         prefs.preferredQuality = options[nextIndex]
         Toast.makeText(requireContext(),
             "Default quality: ${PrefsManager.qualityLabel(options[nextIndex])}", Toast.LENGTH_SHORT).show()
+        loadContent()
+    }
+
+    private fun toggleBackPip() {
+        val enabled = !prefs.backEntersPip
+        prefs.backEntersPip = enabled
+        Toast.makeText(requireContext(),
+            if (enabled) "Back now enters Picture-in-Picture"
+            else "Back now returns to the previous screen", Toast.LENGTH_SHORT).show()
         loadContent()
     }
 
@@ -1250,6 +1267,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     SETTINGS_QUALITY -> cycleQuality()
                     SETTINGS_PRIVACY -> openPrivacyPolicy()
                     SETTINGS_CUSTOMIZE -> launchCustomizeBrowse()
+                    SETTINGS_PIP_BACK -> toggleBackPip()
                 }
             }
         }

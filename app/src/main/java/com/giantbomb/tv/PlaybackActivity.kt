@@ -130,16 +130,19 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         requestNotificationPermissionIfNeeded()
 
         // Modern Android (gesture nav) routes back through OnBackPressedDispatcher,
-        // not onKeyDown(KEYCODE_BACK). Wire PiP entry + quality-picker dismissal here
-        // so swipe-back on phones reliably triggers PiP. Falls through to default
-        // (finish the activity) when neither applies.
+        // not onKeyDown(KEYCODE_BACK). Wire quality-picker dismissal here, and —
+        // only when the user has opted in via prefs.backEntersPip — PiP entry, so
+        // swipe-back on phones can trigger PiP. By default Back just finishes the
+        // activity and returns to the previous screen (users read Back→PiP as
+        // "the app closed"). The Home button still triggers PiP via
+        // onUserLeaveHint regardless of this setting.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (isQualityPickerShowing()) {
                     dismissQualityPicker()
                     return
                 }
-                if (!isTv && tryEnterPip()) return
+                if (!isTv && prefs.backEntersPip && tryEnterPip()) return
                 isEnabled = false
                 onBackPressedDispatcher.onBackPressed()
             }
@@ -582,6 +585,14 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     private var enteredPip = false
 
+    // Set when we're replacing this activity with a new PlaybackActivity for the
+    // next/related video (startActivity + finish). The shared PlaybackService
+    // must survive the handoff — without this guard, onStop() stops the service
+    // while the incoming activity is still asynchronously binding its
+    // MediaController, the bind fails, and that activity finish()es straight back
+    // to home. That's the "stuck after a playlist, can't open anything" report.
+    private var transferringToNextVideo = false
+
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         if (isInPictureInPictureMode) {
@@ -623,11 +634,14 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // releasing the sender-side player wrapper itself is fine.
         releaseCastPlayer()
         enteredPip = false
-        if (explicitlyFinishing || wasInPip) {
+        if ((explicitlyFinishing || wasInPip) && !transferringToNextVideo) {
             // The user dismissed the player UI on purpose — PiP X, PiP swipe-away,
             // drag-to-remove, or Back when PiP couldn't engage. Stop the service
             // so audio doesn't keep playing with no obvious way to silence it.
             // Idempotent: onPictureInPictureModeChanged may have already stopped it.
+            // Skipped during a next-video handoff: the incoming PlaybackActivity
+            // is about to rebind to this same service, so stopping it here would
+            // break that bind and bounce the user back to home.
             stopPlaybackService()
         }
     }
@@ -1156,14 +1170,24 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             val currentIndex = videos.indexOfFirst { it.id == current.id }
             val nextVideo = if (currentIndex > 0) videos[currentIndex - 1] else null
             if (nextVideo != null) {
-                val intent = Intent(this@PlaybackActivity, PlaybackActivity::class.java).apply {
-                    putExtra(EXTRA_VIDEO, nextVideo)
-                }
-                startActivity(intent)
-                finish()
+                launchVideoReplacingThis(nextVideo)
                 return
             }
         }
+        finish()
+    }
+
+    /**
+     * Replace this player with a fresh PlaybackActivity for [next] (used by
+     * auto-advance and the related-video list). Flags the handoff so onStop()
+     * leaves the shared PlaybackService running for the incoming activity.
+     */
+    private fun launchVideoReplacingThis(next: Video) {
+        transferringToNextVideo = true
+        val intent = Intent(this, PlaybackActivity::class.java).apply {
+            putExtra(EXTRA_VIDEO, next)
+        }
+        startActivity(intent)
         finish()
     }
 
@@ -1378,11 +1402,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             }
 
             holder.itemView.setOnClickListener {
-                val intent = Intent(this@PlaybackActivity, PlaybackActivity::class.java).apply {
-                    putExtra(EXTRA_VIDEO, video)
-                }
-                startActivity(intent)
-                finish()
+                launchVideoReplacingThis(video)
             }
         }
     }

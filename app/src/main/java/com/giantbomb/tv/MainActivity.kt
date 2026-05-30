@@ -54,7 +54,14 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
                 event.keyCode == KeyEvent.KEYCODE_BUTTON_A
 
-        if (isTv && isSelectKey) {
+        // While a modal overlay (exit / update) is up, never intercept select
+        // keys — the BrowseFragment is still "showing headers" underneath, so
+        // without this guard the long-press logic below swallows the press and
+        // the dialog's own buttons never get clicked (a held press past the
+        // long-press timeout clears pendingHeaderLongPress, so ACTION_UP skips
+        // performClick entirely). Let the framework dispatch select to the
+        // focused button normally.
+        if (isTv && isSelectKey && exitOverlay == null && updateOverlay == null) {
             val browse = supportFragmentManager
                 .findFragmentById(R.id.main_fragment_container) as? BrowseFragment
             // Only intercept while the side menu is up — in rows we want
