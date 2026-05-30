@@ -606,8 +606,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         items.add(BrowseItem.SettingRow(SettingsItem(
             SETTINGS_PIP_BACK,
             "Back Enters Picture-in-Picture",
-            if (prefs.backEntersPip) "On — Back shrinks the player into a floating window"
-            else "Off — Back returns to the previous screen",
+            backPipSubtitle(prefs.backEntersPip),
             R.drawable.ic_settings_cog
         )))
         items.add(BrowseItem.SettingRow(SettingsItem(
@@ -652,12 +651,14 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         loadContent()
     }
 
+    private fun backPipSubtitle(enabled: Boolean): String =
+        if (enabled) "On — Back shrinks the player into a floating window"
+        else "Off — Back returns to the previous screen"
+
     private fun toggleBackPip() {
         val enabled = !prefs.backEntersPip
         prefs.backEntersPip = enabled
-        Toast.makeText(requireContext(),
-            if (enabled) "Back now enters Picture-in-Picture"
-            else "Back now returns to the previous screen", Toast.LENGTH_SHORT).show()
+        Toast.makeText(requireContext(), backPipSubtitle(enabled), Toast.LENGTH_SHORT).show()
         loadContent()
     }
 

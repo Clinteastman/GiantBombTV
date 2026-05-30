@@ -100,6 +100,17 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
         return super.dispatchKeyEvent(event)
     }
 
+    // Cancel any in-flight header long-press. dispatchKeyEvent stops intercepting
+    // select keys once an overlay is up, so the ACTION_UP that would normally
+    // remove this callback never runs — without this, a press held while an
+    // overlay appears would later pop the header context menu under the dialog
+    // and leave pendingHeaderLongPress non-null, breaking the next long-press.
+    private fun cancelPendingHeaderLongPress() {
+        pendingHeaderLongPress?.let { longPressHandler.removeCallbacks(it) }
+        pendingHeaderLongPress = null
+        headerLongPressFired = false
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         isTv = DeviceUtil.isTv(this)
         if (isTv) {
@@ -189,6 +200,7 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     private fun showExitConfirmation() {
         if (exitOverlay != null) return
+        cancelPendingHeaderLongPress()
 
         val density = resources.displayMetrics.density
         fun Int.dp() = (this * density).toInt()
@@ -335,6 +347,7 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     private fun showUpdateDialog(update: UpdateChecker.UpdateInfo) {
         if (updateOverlay != null) return
+        cancelPendingHeaderLongPress()
 
         val density = resources.displayMetrics.density
         fun Int.dp() = (this * density).toInt()

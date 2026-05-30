@@ -1165,6 +1165,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
 
         val result = api.getVideos(limit = 50, showId = showId)
+        // The user may have pressed Back while we were fetching. If so, this
+        // activity is already finishing (its onStop has stopped the service):
+        // don't yank them into the next episode or fight the teardown.
+        if (isFinishing || isDestroyed) return
         val videos = result.getOrNull()
         if (videos != null && videos.size > 1) {
             val currentIndex = videos.indexOfFirst { it.id == current.id }
