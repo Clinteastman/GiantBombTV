@@ -89,7 +89,12 @@ class ShowBrowseFragment : VerticalGridSupportFragment(), CoroutineScope by Main
         val cardTotal = res.getDimensionPixelSize(R.dimen.card_width) +
             res.getDimensionPixelSize(R.dimen.card_margin) * 2
         if (cardTotal <= 0) return MIN_COLUMNS
-        val fit = res.displayMetrics.widthPixels / cardTotal
+        // The leanback grid is a centred wrap_content view with browse padding
+        // on each side; subtract it so a near-boundary width doesn't pick one
+        // column too many and clip the outer cards.
+        val sidePadding = res.getDimensionPixelSize(androidx.leanback.R.dimen.lb_browse_padding_start) * 2
+        val usable = res.displayMetrics.widthPixels - sidePadding
+        val fit = usable / cardTotal
         return fit.coerceIn(MIN_COLUMNS, MAX_COLUMNS)
     }
 

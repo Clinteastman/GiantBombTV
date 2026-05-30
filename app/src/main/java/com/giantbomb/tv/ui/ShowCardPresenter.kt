@@ -41,7 +41,7 @@ class ShowCardPresenter(
 
         // Shows without artwork are identifiable only by their title, but
         // ImageCardView truncates it to one ellipsized line. Marquee the
-        // title (and content line) so the full name scrolls while focused.
+        // title so the full name scrolls while the card is focused.
         val titleView = cardView.findViewById<TextView>(androidx.leanback.R.id.title_text)
         titleView?.apply {
             ellipsize = TextUtils.TruncateAt.MARQUEE
