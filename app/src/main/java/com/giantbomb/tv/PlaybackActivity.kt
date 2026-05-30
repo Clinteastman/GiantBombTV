@@ -104,6 +104,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var mobileContentScroll: ScrollView? = null
     private var playerContainer: FrameLayout? = null
     private var relatedRecycler: RecyclerView? = null
+    // Mobile portrait per-video metadata views, re-bound on autoplay advance.
+    private var titleView: TextView? = null
+    private var metaView: TextView? = null
+    private var descView: TextView? = null
 
     // Quality selection
     private data class QualityOption(val label: String, val url: String, val isHls: Boolean = false)
@@ -344,9 +348,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             setPadding(16.dp(), 12.dp(), 16.dp(), 24.dp())
         }
 
-        // Video title
-        val titleView = TextView(this).apply {
-            text = v.title
+        // Video title (text bound in bindVideoMetadata so autoplay can refresh it)
+        titleView = TextView(this).apply {
             textSize = 18f
             setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
@@ -355,30 +358,22 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         contentLayout.addView(titleView)
 
         // Meta line
-        val metaView = TextView(this).apply {
-            val parts = mutableListOf<String>()
-            if (!v.showTitle.isNullOrEmpty()) parts.add(v.showTitle)
-            if (v.publishDate.isNotEmpty()) parts.add(DateFormat.formatPublishDate(v.publishDate))
-            if (!v.author.isNullOrEmpty()) parts.add(v.author)
-            text = parts.joinToString("  \u2022  ")
+        metaView = TextView(this).apply {
             textSize = 13f
             setTextColor(0xFFA0A0A0.toInt())
             setPadding(0, 4.dp(), 0, 0)
         }
         contentLayout.addView(metaView)
 
-        // Description
-        if (!v.description.isNullOrEmpty()) {
-            val descView = TextView(this).apply {
-                text = v.description.replace(Regex("<[^>]*>"), "")
-                textSize = 14f
-                setTextColor(0xFF999999.toInt())
-                setPadding(0, 12.dp(), 0, 0)
-                maxLines = 6
-                setLineSpacing(0f, 1.3f)
-            }
-            contentLayout.addView(descView)
+        // Description (always added; hidden via bindVideoMetadata when empty)
+        descView = TextView(this).apply {
+            textSize = 14f
+            setTextColor(0xFF999999.toInt())
+            setPadding(0, 12.dp(), 0, 0)
+            maxLines = 6
+            setLineSpacing(0f, 1.3f)
         }
+        contentLayout.addView(descView)
 
         // Quality button
         val qualityBtn = TextView(this).apply {
@@ -430,8 +425,40 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // Set initial layout based on current orientation
         updateMobileOrientation(resources.configuration.orientation)
 
-        // Load related videos
-        loadRelatedVideos(v)
+        // Populate title / meta / description + "Up Next" for the current video.
+        bindVideoMetadata(v)
+    }
+
+    /**
+     * Refreshes the mobile portrait metadata UI (title, meta line, description,
+     * and the "Up Next" list) for [v]. Called on initial layout and again when
+     * autoplay advances to the next episode in place — the player swaps media
+     * without recreating the activity, so these views must be re-bound by hand.
+     * No-op on the TV / live layouts, which don't render this metadata.
+     */
+    private fun bindVideoMetadata(v: Video) {
+        titleView?.text = v.title
+
+        metaView?.let { mv ->
+            val parts = mutableListOf<String>()
+            if (!v.showTitle.isNullOrEmpty()) parts.add(v.showTitle)
+            if (v.publishDate.isNotEmpty()) parts.add(DateFormat.formatPublishDate(v.publishDate))
+            if (!v.author.isNullOrEmpty()) parts.add(v.author)
+            mv.text = parts.joinToString("  •  ")
+        }
+
+        descView?.let { dv ->
+            val desc = v.description?.replace(Regex("<[^>]*>"), "")
+            if (desc.isNullOrEmpty()) {
+                dv.visibility = View.GONE
+            } else {
+                dv.text = desc
+                dv.visibility = View.VISIBLE
+            }
+        }
+
+        // Only the mobile layout has an "Up Next" list; skip the fetch otherwise.
+        if (relatedRecycler != null) loadRelatedVideos(v)
     }
 
     private fun loadRelatedVideos(v: Video) {
@@ -1181,11 +1208,20 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // Play the next episode in place on the existing player and surface.
         // Recreating the activity hands the shared service player a freshly
         // created SurfaceView mid-transition, which lands as audio-only with a
-        // black video frame. Keep the intent's EXTRA_VIDEO in sync so an
-        // activity recreation (config change, PiP, process restart) resumes the
-        // episode we're actually on.
+        // black video frame.
         video = nextVideo
+        // Keep the intent in sync so an activity recreation (config change, PiP,
+        // process restart) re-opens the episode we're actually on. Drop the
+        // launch-time resume extras: they belonged to the originally launched
+        // video, and leaving them would seek this episode to that stale
+        // position on recreation. Cleared, it resumes from its own saved
+        // progress instead.
         intent.putExtra(EXTRA_VIDEO, nextVideo)
+        intent.removeExtra(EXTRA_RESUME_SECONDS)
+        intent.removeExtra("start_from_beginning")
+        // The player swaps media without recreating the activity, so refresh the
+        // activity-owned per-video UI (title, meta, description, "Up Next").
+        bindVideoMetadata(nextVideo)
         loadVideo(nextVideo, initialPositionMs = 0L, resumeFromApi = false)
     }
 
