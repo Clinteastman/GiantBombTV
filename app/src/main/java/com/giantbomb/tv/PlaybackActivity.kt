@@ -756,122 +756,136 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         val v = video ?: return
 
-        launch {
-            val result = api.getPlayback(v.id)
+        val startFromBeginning = intent.getBooleanExtra("start_from_beginning", false)
+        val explicitResumeSec = intent.getDoubleExtra(EXTRA_RESUME_SECONDS, 0.0)
+        val initialPositionMs = if (!startFromBeginning && explicitResumeSec > 0) {
+            (explicitResumeSec * 1000).toLong()
+        } else {
+            0L
+        }
+        // With no explicit resume position, fall back to the server-saved
+        // progress for this video (fetched inside loadVideo).
+        val resumeFromApi = !startFromBeginning && explicitResumeSec <= 0
 
-            result.onSuccess { playback ->
-                videoDuration = playback.duration
+        launch { loadVideo(v, initialPositionMs, resumeFromApi) }
+    }
 
-                // Build quality options list
-                qualityOptions.clear()
-                if (!playback.hlsUrl.isNullOrEmpty()) {
-                    qualityOptions.add(QualityOption("Auto (HLS)", playback.hlsUrl, isHls = true))
-                }
-                playback.mp4s.sortedByDescending { it.height }.forEach { mp4 ->
-                    val label = if (mp4.height > 0) "${mp4.height}p" else mp4.label.ifEmpty { "MP4" }
-                    qualityOptions.add(QualityOption(label, mp4.url))
-                }
+    /**
+     * Loads [v] into the existing shared service player and binds it to the
+     * current PlayerView surface. Used for both the initial video and autoplay
+     * of the next episode. Playing in place reuses the live surface instead of
+     * recreating the activity — recreating it hands the shared service player a
+     * brand-new SurfaceView mid-transition, which renders as audio-only / black
+     * video.
+     */
+    private suspend fun loadVideo(v: Video, initialPositionMs: Long, resumeFromApi: Boolean) {
+        val result = api.getPlayback(v.id)
 
-                // YouTube fallback
-                if (qualityOptions.isEmpty() && !playback.youtubeUrl.isNullOrEmpty()) {
-                    if (BuildConfig.ENABLE_INLINE_YOUTUBE) {
-                        // Inline extraction using internal YouTube API (sideload builds only)
-                        val ytUrl = playback.youtubeUrl
-                        if (ytUrl != null) {
-                            val ytResult = com.giantbomb.tv.data.YouTubeExtractor().extract(ytUrl)
-                            ytResult.onSuccess { yt ->
-                                if (yt.hlsUrl != null) {
-                                    qualityOptions.add(QualityOption("YouTube HLS", yt.hlsUrl, isHls = true))
-                                }
-                                yt.streams
-                                    .filter { !it.isAdaptive && it.hasVideo }
-                                    .sortedByDescending { it.height }
-                                    .forEach { stream ->
-                                        val label = "YT ${stream.qualityLabel ?: "${stream.height}p"}"
-                                        qualityOptions.add(QualityOption(label, stream.url))
-                                    }
-                                if (videoDuration == 0.0 && yt.duration > 0) {
-                                    videoDuration = yt.duration.toDouble()
-                                }
+        result.onSuccess { playback ->
+            videoDuration = playback.duration
+
+            // Build quality options list
+            qualityOptions.clear()
+            if (!playback.hlsUrl.isNullOrEmpty()) {
+                qualityOptions.add(QualityOption("Auto (HLS)", playback.hlsUrl, isHls = true))
+            }
+            playback.mp4s.sortedByDescending { it.height }.forEach { mp4 ->
+                val label = if (mp4.height > 0) "${mp4.height}p" else mp4.label.ifEmpty { "MP4" }
+                qualityOptions.add(QualityOption(label, mp4.url))
+            }
+
+            // YouTube fallback
+            if (qualityOptions.isEmpty() && !playback.youtubeUrl.isNullOrEmpty()) {
+                if (BuildConfig.ENABLE_INLINE_YOUTUBE) {
+                    // Inline extraction using internal YouTube API (sideload builds only)
+                    val ytUrl = playback.youtubeUrl
+                    if (ytUrl != null) {
+                        val ytResult = com.giantbomb.tv.data.YouTubeExtractor().extract(ytUrl)
+                        ytResult.onSuccess { yt ->
+                            if (yt.hlsUrl != null) {
+                                qualityOptions.add(QualityOption("YouTube HLS", yt.hlsUrl, isHls = true))
                             }
-                            ytResult.onFailure { e ->
-                                android.util.Log.w("PlaybackActivity", "YouTube extraction failed: ${e.message}")
+                            yt.streams
+                                .filter { !it.isAdaptive && it.hasVideo }
+                                .sortedByDescending { it.height }
+                                .forEach { stream ->
+                                    val label = "YT ${stream.qualityLabel ?: "${stream.height}p"}"
+                                    qualityOptions.add(QualityOption(label, stream.url))
+                                }
+                            if (videoDuration == 0.0 && yt.duration > 0) {
+                                videoDuration = yt.duration.toDouble()
                             }
                         }
-                    } else {
-                        // Store-compliant: open in YouTube app / browser
-                        val ytIntent = android.content.Intent(
-                            android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse(playback.youtubeUrl)
-                        )
-                        startActivity(ytIntent)
-                        finish()
-                        return@onSuccess
+                        ytResult.onFailure { e ->
+                            android.util.Log.w("PlaybackActivity", "YouTube extraction failed: ${e.message}")
+                        }
                     }
-                }
-
-                if (qualityOptions.isEmpty()) {
-                    Toast.makeText(this@PlaybackActivity, "No playback source available", Toast.LENGTH_LONG).show()
+                } else {
+                    // Store-compliant: open in YouTube app / browser
+                    val ytIntent = android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse(playback.youtubeUrl)
+                    )
+                    startActivity(ytIntent)
                     finish()
                     return@onSuccess
                 }
+            }
 
-                val preferred = PrefsManager(this@PlaybackActivity).preferredQuality
-                currentQualityIndex = if (preferred == "auto") {
-                    0
-                } else {
-                    qualityOptions.indexOfFirst { it.label.equals(preferred, ignoreCase = true) }
-                        .takeIf { it >= 0 } ?: 0
-                }
+            if (qualityOptions.isEmpty()) {
+                Toast.makeText(this@PlaybackActivity, "No playback source available", Toast.LENGTH_LONG).show()
+                finish()
+                return@onSuccess
+            }
 
-                val p = player ?: return@onSuccess
-                val mediaItem = MediaItem.Builder()
-                    .setUri(qualityOptions[currentQualityIndex].url)
-                    .setMediaId("vod:${v.id}")
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle(v.title)
-                            .setArtist(v.showTitle)
-                            .setArtworkUri(v.thumbnailUrl?.let { Uri.parse(it) })
-                            .build()
-                    )
-                    .build()
+            val preferred = PrefsManager(this@PlaybackActivity).preferredQuality
+            currentQualityIndex = if (preferred == "auto") {
+                0
+            } else {
+                qualityOptions.indexOfFirst { it.label.equals(preferred, ignoreCase = true) }
+                    .takeIf { it >= 0 } ?: 0
+            }
 
-                val startFromBeginning = intent.getBooleanExtra("start_from_beginning", false)
-                val explicitResumeSec = intent.getDoubleExtra(EXTRA_RESUME_SECONDS, 0.0)
-                val initialPositionMs = if (!startFromBeginning && explicitResumeSec > 0) {
-                    (explicitResumeSec * 1000).toLong()
-                } else {
-                    0L
-                }
-                // setMediaItem(item, position) is used (instead of a separate
-                // seekTo after prepare) so the player's first ready callback
-                // already reports the resume position — no race with prepare()
-                // resetting back to 0 before our seek lands.
-                p.setMediaItem(mediaItem, initialPositionMs)
-                p.prepare()
+            val p = player ?: return@onSuccess
+            val mediaItem = MediaItem.Builder()
+                .setUri(qualityOptions[currentQualityIndex].url)
+                .setMediaId("vod:${v.id}")
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(v.title)
+                        .setArtist(v.showTitle)
+                        .setArtworkUri(v.thumbnailUrl?.let { Uri.parse(it) })
+                        .build()
+                )
+                .build()
 
-                // If the caller didn't pass an explicit resume position, fall
-                // back to fetching it from the API. The seek issued here is
-                // applied as soon as the player has buffered enough to seek.
-                if (!startFromBeginning && explicitResumeSec <= 0) {
-                    val progressResult = api.getProgress()
-                    progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
-                        if (progress.percentComplete < 95 && progress.currentTime > 0) {
-                            p.seekTo((progress.currentTime * 1000).toLong())
-                        }
+            // setMediaItem(item, position) is used (instead of a separate
+            // seekTo after prepare) so the player's first ready callback
+            // already reports the resume position — no race with prepare()
+            // resetting back to 0 before our seek lands.
+            p.setMediaItem(mediaItem, initialPositionMs)
+            p.prepare()
+
+            // If the caller asked us to, fall back to the server-saved
+            // resume position. The seek issued here is applied as soon as
+            // the player has buffered enough to seek.
+            if (resumeFromApi) {
+                val progressResult = api.getProgress()
+                progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
+                    if (progress.percentComplete < 95 && progress.currentTime > 0) {
+                        p.seekTo((progress.currentTime * 1000).toLong())
                     }
                 }
-
-                attachPlayerListener(p)
-                p.playWhenReady = true
             }
 
-            result.onFailure { e ->
-                Toast.makeText(this@PlaybackActivity,
-                    GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
-                finish()
-            }
+            attachPlayerListener(p)
+            p.playWhenReady = true
+        }
+
+        result.onFailure { e ->
+            Toast.makeText(this@PlaybackActivity,
+                GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
+            finish()
         }
     }
 
@@ -1152,19 +1166,27 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         val result = api.getVideos(limit = 50, showId = showId)
         val videos = result.getOrNull()
-        if (videos != null && videos.size > 1) {
+        val nextVideo = if (videos != null && videos.size > 1) {
             val currentIndex = videos.indexOfFirst { it.id == current.id }
-            val nextVideo = if (currentIndex > 0) videos[currentIndex - 1] else null
-            if (nextVideo != null) {
-                val intent = Intent(this@PlaybackActivity, PlaybackActivity::class.java).apply {
-                    putExtra(EXTRA_VIDEO, nextVideo)
-                }
-                startActivity(intent)
-                finish()
-                return
-            }
+            if (currentIndex > 0) videos[currentIndex - 1] else null
+        } else {
+            null
         }
-        finish()
+
+        if (nextVideo == null) {
+            finish()
+            return
+        }
+
+        // Play the next episode in place on the existing player and surface.
+        // Recreating the activity hands the shared service player a freshly
+        // created SurfaceView mid-transition, which lands as audio-only with a
+        // black video frame. Keep the intent's EXTRA_VIDEO in sync so an
+        // activity recreation (config change, PiP, process restart) resumes the
+        // episode we're actually on.
+        video = nextVideo
+        intent.putExtra(EXTRA_VIDEO, nextVideo)
+        loadVideo(nextVideo, initialPositionMs = 0L, resumeFromApi = false)
     }
 
     private fun disconnectController() {
