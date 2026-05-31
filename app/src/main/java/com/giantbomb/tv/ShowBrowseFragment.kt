@@ -11,6 +11,7 @@ import com.giantbomb.tv.model.ProgressEntry
 import com.giantbomb.tv.model.Show
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.ui.CardPresenter
+import com.giantbomb.tv.util.DeviceUtil
 import kotlinx.coroutines.*
 
 /**
@@ -88,14 +89,18 @@ class ShowBrowseFragment : VerticalGridSupportFragment(), CoroutineScope by Main
         val res = resources
         val cardTotal = res.getDimensionPixelSize(R.dimen.card_width) +
             res.getDimensionPixelSize(R.dimen.card_margin) * 2
-        if (cardTotal <= 0) return MIN_COLUMNS
+        // This fragment is shared with the phone UI. On a narrow phone two
+        // fixed-width cards can exceed the usable width, so allow a single
+        // column there; only TV (always wide) gets the 2-column floor.
+        val minColumns = if (DeviceUtil.isTv(requireContext())) MIN_COLUMNS else 1
+        if (cardTotal <= 0) return minColumns
         // The leanback grid is a centred wrap_content view with browse padding
         // on each side; subtract it so a near-boundary width doesn't pick one
         // column too many and clip the outer cards.
         val sidePadding = res.getDimensionPixelSize(androidx.leanback.R.dimen.lb_browse_padding_start) * 2
         val usable = res.displayMetrics.widthPixels - sidePadding
         val fit = usable / cardTotal
-        return fit.coerceIn(MIN_COLUMNS, MAX_COLUMNS)
+        return fit.coerceIn(minColumns, MAX_COLUMNS)
     }
 
     private fun loadContent() {
