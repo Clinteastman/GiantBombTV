@@ -21,16 +21,29 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.fragment.app.FragmentActivity
 import com.giantbomb.tv.data.UpdateChecker
 import com.giantbomb.tv.mobile.MobileBrowseFragment
+import com.giantbomb.tv.mobile.MobileShowGridFragment
 import com.giantbomb.tv.util.DeviceUtil
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import kotlinx.coroutines.*
 
 class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     companion object {
         const val SETUP_REQUEST = 1001
+
+        // Tags for the three mobile bottom-nav tabs. We add all three
+        // fragments on first launch and show/hide rather than replace, so
+        // each tab keeps its scroll/load state when the user switches away
+        // and back.
+        private const val TAG_HOME = "mobile.home"
+        private const val TAG_SHOWS = "mobile.shows"
+        private const val TAG_PODCASTS = "mobile.podcasts"
     }
 
     private var isTv = false
@@ -125,20 +138,78 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
         setContentView(R.layout.activity_main)
 
         if (savedInstanceState == null) {
-            val fragment = if (isTv) {
-                BrowseFragment()
+            if (isTv) {
+                supportFragmentManager.beginTransaction()
+                    .replace(R.id.main_fragment_container, BrowseFragment())
+                    .commit()
             } else {
-                MobileBrowseFragment()
+                setUpMobileTabs()
             }
-            supportFragmentManager.beginTransaction()
-                .replace(R.id.main_fragment_container, fragment)
-                .commit()
 
             // Check for updates silently (sideload builds only)
             if (BuildConfig.ENABLE_SELF_UPDATE) {
                 checkForUpdate()
             }
+        } else if (!isTv) {
+            // Recreated activity: re-attach the bottom-nav listener; the
+            // fragments themselves are restored by FragmentManager.
+            wireMobileBottomNav()
         }
+    }
+
+    private fun setUpMobileTabs() {
+        val fm = supportFragmentManager
+        val tx = fm.beginTransaction()
+
+        val home = MobileBrowseFragment()
+        tx.add(R.id.main_fragment_container, home, TAG_HOME)
+
+        val shows = MobileShowGridFragment.newInstance(MobileShowGridFragment.Mode.SHOWS)
+        tx.add(R.id.main_fragment_container, shows, TAG_SHOWS).hide(shows)
+
+        val podcasts = MobileShowGridFragment.newInstance(MobileShowGridFragment.Mode.PODCASTS)
+        tx.add(R.id.main_fragment_container, podcasts, TAG_PODCASTS).hide(podcasts)
+
+        tx.commit()
+
+        wireMobileBottomNav()
+    }
+
+    private fun wireMobileBottomNav() {
+        val nav = findViewById<BottomNavigationView>(R.id.bottom_nav) ?: return
+        nav.visibility = View.VISIBLE
+
+        // Edge-to-edge is on for phones, so the nav would otherwise sit under the
+        // gesture pill / 3-button bar. Pad it down by the bottom system-bar inset.
+        // Capture the base padding once so repeated inset passes don't accumulate.
+        val basePadBottom = nav.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(nav) { v, insets ->
+            val bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+            v.updatePadding(bottom = basePadBottom + bottom)
+            insets
+        }
+
+        nav.setOnItemSelectedListener { item ->
+            val tag = when (item.itemId) {
+                R.id.nav_home -> TAG_HOME
+                R.id.nav_shows -> TAG_SHOWS
+                R.id.nav_podcasts -> TAG_PODCASTS
+                else -> return@setOnItemSelectedListener false
+            }
+            showOnlyMobileTab(tag)
+            true
+        }
+        nav.setOnItemReselectedListener { /* no-op for now; could scroll to top */ }
+    }
+
+    private fun showOnlyMobileTab(activeTag: String) {
+        val fm = supportFragmentManager
+        val tx = fm.beginTransaction()
+        listOf(TAG_HOME, TAG_SHOWS, TAG_PODCASTS).forEach { tag ->
+            val frag = fm.findFragmentByTag(tag) ?: return@forEach
+            if (tag == activeTag) tx.show(frag) else tx.hide(frag)
+        }
+        tx.commit()
     }
 
     private fun checkForUpdate() {
@@ -177,6 +248,18 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     return
                 }
                 showExitConfirmation()
+                return
+            }
+        }
+
+        // On mobile, Back from a secondary tab (Shows / Podcasts) returns to the
+        // Home tab first rather than finishing the activity — standard bottom-nav
+        // behaviour. Setting selectedItemId fires the listener, which swaps the
+        // visible fragment via showOnlyMobileTab.
+        if (!isTv) {
+            val nav = findViewById<BottomNavigationView>(R.id.bottom_nav)
+            if (nav != null && nav.visibility == View.VISIBLE && nav.selectedItemId != R.id.nav_home) {
+                nav.selectedItemId = R.id.nav_home
                 return
             }
         }
@@ -555,10 +638,15 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == SETUP_REQUEST && resultCode == Activity.RESULT_OK) {
-            val fragment = supportFragmentManager.findFragmentById(R.id.main_fragment_container)
-            when (fragment) {
-                is BrowseFragment -> fragment.loadContent()
-                is MobileBrowseFragment -> fragment.loadContent()
+            if (isTv) {
+                val tvFrag = supportFragmentManager.findFragmentById(R.id.main_fragment_container)
+                (tvFrag as? BrowseFragment)?.loadContent()
+            } else {
+                // Mobile path now has three fragments in the container; look up
+                // Home by tag rather than findFragmentById, which returns
+                // whichever fragment was attached most recently.
+                val home = supportFragmentManager.findFragmentByTag(TAG_HOME)
+                (home as? MobileBrowseFragment)?.loadContent()
             }
         }
     }
