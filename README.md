@@ -19,6 +19,7 @@ An unofficial Android TV and mobile app for watching [Giant Bomb](https://www.gi
 - **Continue Watching** with server-synced progress tracking and resume
 - **Watchlist** management (add/remove from detail screen, tap-to-toggle bookmark on any mobile card)
 - **Background playback** - foreground media service keeps audio playing when you leave the app or lock the phone, with transport-control notification
+- **Offline downloads** - save videos for offline viewing via a foreground download service with live progress; play them back with no connection. Start a download from the detail screen (TV) or next to the quality control in the mobile player, and manage them from the Downloads tab (mobile) or settings row (TV)
 - **Search** across all Giant Bomb videos
 - **Show browsing** with infinite scroll through episodes (TV shows a vertical episode grid with marquee show titles)
 - **Autoplay next episode** - automatically advances to the next episode when the current one finishes, swapping in place so playback stays smooth
@@ -34,7 +35,7 @@ An unofficial Android TV and mobile app for watching [Giant Bomb](https://www.gi
 - **Blurred backdrop** with smooth crossfade transitions as you navigate (TV)
 - **D-pad optimized** navigation for TV remotes, with white focus halos on every playback control and a per-row context menu reachable by holding Select on a header
 - **Mobile phone layout** - YouTube-style vertical feed with horizontal category rows
-- **Bottom navigation** (mobile) - Home, Shows, and Podcasts tabs
+- **Bottom navigation** (mobile) - Home, Shows, Podcasts, and Downloads tabs
 - **Podcasts tab** - a full-width featured hero for the newest podcast (tap to play) with an "Up Next" row, above the grid of podcast shows
 - **Favourite shows** - long-press a show card (mobile) to pin it; pinned shows sort to the front and appear in your Home "Pinned Shows" section
 - **Chip-bar quick-jump** - tap a section name (mobile) to jump straight to that section
@@ -177,8 +178,10 @@ app/src/main/java/com/giantbomb/tv/
 ├── BrowseFragment.kt            # TV browse screen (Leanback BrowseSupportFragment)
 ├── CastOptionsProvider.kt       # Google Cast SDK configuration
 ├── CustomizeBrowseActivity.kt   # Drag-to-reorder + hide-section settings screen
-├── DetailActivity.kt            # Video detail screen (responsive TV/mobile)
-├── PlaybackActivity.kt          # Playback UI (controls, Cast, PiP, title overlay, Twitch chat, autoplay-next); player itself lives in the service
+├── DetailActivity.kt            # Video detail screen (responsive TV/mobile), with quality-aware Download button
+├── DownloadsActivity.kt         # Thin host for the Downloads screen (TV settings entry)
+├── DownloadsFragment.kt         # Lists completed + in-flight downloads with live progress
+├── PlaybackActivity.kt          # Playback UI (controls, Cast, PiP, title overlay, Twitch chat, autoplay-next, offline playback); player itself lives in the service
 ├── SearchActivity.kt            # Search screen host (loads TV or mobile search)
 ├── GiantBombSearchFragment.kt   # Leanback search with debounced API queries (TV)
 ├── ShowActivity.kt              # Show episode browser
@@ -196,7 +199,10 @@ app/src/main/java/com/giantbomb/tv/
 │   ├── Video.kt                 # Video, Show, PlaybackInfo, ProgressEntry, Upcoming models
 │   └── SettingsItem.kt          # Settings row item model
 ├── playback/
-│   └── PlaybackService.kt       # Foreground MediaSessionService; owns the ExoPlayer instance
+│   ├── PlaybackService.kt       # Foreground MediaSessionService; owns the ExoPlayer instance
+│   ├── Downloads.kt             # App-wide StateFlow registry the UI observes (enqueue/cancel/delete)
+│   ├── DownloadStore.kt         # On-disk persistence (.mp4/.part/.json) + Video (de)serialization
+│   └── VideoDownloadService.kt  # Foreground service that drains the download queue with progress
 ├── mobile/
 │   ├── MobileBrowseFragment.kt   # YouTube-style vertical feed; mobile bottom-nav Home tab
 │   ├── MobileShowGridFragment.kt # Shows / Podcasts tabs (grid + podcast hero + Up Next)
