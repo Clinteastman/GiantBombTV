@@ -44,6 +44,7 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
         private const val TAG_HOME = "mobile.home"
         private const val TAG_SHOWS = "mobile.shows"
         private const val TAG_PODCASTS = "mobile.podcasts"
+        private const val TAG_DOWNLOADS = "mobile.downloads"
     }
 
     private var isTv = false
@@ -170,6 +171,9 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val podcasts = MobileShowGridFragment.newInstance(MobileShowGridFragment.Mode.PODCASTS)
         tx.add(R.id.main_fragment_container, podcasts, TAG_PODCASTS).hide(podcasts)
 
+        val downloads = DownloadsFragment()
+        tx.add(R.id.main_fragment_container, downloads, TAG_DOWNLOADS).hide(downloads)
+
         tx.commit()
 
         wireMobileBottomNav()
@@ -194,6 +198,7 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 R.id.nav_home -> TAG_HOME
                 R.id.nav_shows -> TAG_SHOWS
                 R.id.nav_podcasts -> TAG_PODCASTS
+                R.id.nav_downloads -> TAG_DOWNLOADS
                 else -> return@setOnItemSelectedListener false
             }
             showOnlyMobileTab(tag)
@@ -205,7 +210,7 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private fun showOnlyMobileTab(activeTag: String) {
         val fm = supportFragmentManager
         val tx = fm.beginTransaction()
-        listOf(TAG_HOME, TAG_SHOWS, TAG_PODCASTS).forEach { tag ->
+        listOf(TAG_HOME, TAG_SHOWS, TAG_PODCASTS, TAG_DOWNLOADS).forEach { tag ->
             val frag = fm.findFragmentByTag(tag) ?: return@forEach
             if (tag == activeTag) tx.show(frag) else tx.hide(frag)
         }

@@ -57,7 +57,10 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
+import com.giantbomb.tv.model.Mp4Source
 import com.giantbomb.tv.model.Video
+import com.giantbomb.tv.playback.DownloadStatus
+import com.giantbomb.tv.playback.Downloads
 import com.giantbomb.tv.util.DateFormat
 import com.giantbomb.tv.util.DeviceUtil
 import com.google.android.gms.cast.framework.CastButtonFactory
@@ -142,6 +145,12 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var currentQualityIndex = 0
     private var qualityOverlay: View? = null
     private var isLiveStream = false
+
+    // Mobile offline-download control (built in buildMobileLayout). The chosen
+    // MP4 source is resolved once playback info loads; the button reflects live
+    // state from Downloads.state.
+    private var downloadBtn: TextView? = null
+    private var downloadSource: Mp4Source? = null
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
 
@@ -490,6 +499,34 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             setOnClickListener { showQualityPicker() }
         }
         contentLayout.addView(qualityBtn)
+
+        // Download (offline) button — mobile's only entry to downloads, since
+        // phone card taps go straight to the player (skipping DetailActivity).
+        // Hidden until an MP4 source is known or a download already exists.
+        downloadBtn = TextView(this).apply {
+            text = "Download"
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(16.dp(), 8.dp(), 16.dp(), 8.dp())
+            val density = resources.displayMetrics.density
+            background = GradientDrawable().apply {
+                setColor(0x33FFFFFF)
+                cornerRadius = 6f * density
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 8.dp() }
+            visibility = View.GONE
+            setOnClickListener { onDownloadButtonClicked() }
+        }
+        contentLayout.addView(downloadBtn)
+
+        // Stream live download state into the button while the screen is open
+        // (so it updates Download -> Downloading X% -> Downloaded in place).
+        Downloads.ensureLoaded(this)
+        launch { Downloads.state.collect { renderDownloadButton() } }
 
         // "Up Next" header
         val upNextHeader = TextView(this).apply {
@@ -924,6 +961,38 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
      * video.
      */
     private suspend fun loadVideo(v: Video, initialPositionMs: Long, resumeFromApi: Boolean) {
+        // Offline-first: if a completed download exists on disk, play the local
+        // file and skip the network entirely. Reuses the shared-controller path
+        // via a single synthetic "Downloaded" quality option. Progress still
+        // syncs (mediaId stays vod:<id>) so a later online session is in sync.
+        val downloadedFile = com.giantbomb.tv.playback.DownloadStore.videoFile(this, v.id)
+        if (downloadedFile.exists()) {
+            videoDuration = v.durationSeconds.toDouble()
+            qualityOptions.clear()
+            qualityOptions.add(
+                QualityOption("Downloaded", Uri.fromFile(downloadedFile).toString())
+            )
+            currentQualityIndex = 0
+
+            val p = player ?: return
+            val mediaItem = MediaItem.Builder()
+                .setUri(qualityOptions[0].url)
+                .setMediaId("vod:${v.id}")
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(v.title)
+                        .setArtist(v.showTitle)
+                        .setArtworkUri(v.thumbnailUrl?.let { Uri.parse(it) })
+                        .build()
+                )
+                .build()
+            p.setMediaItem(mediaItem, initialPositionMs)
+            p.prepare()
+            attachPlayerListener(p)
+            p.playWhenReady = true
+            return
+        }
+
         val result = api.getPlayback(v.id)
 
         result.onSuccess { playback ->
@@ -938,6 +1007,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 val label = if (mp4.height > 0) "${mp4.height}p" else mp4.label.ifEmpty { "MP4" }
                 qualityOptions.add(QualityOption(label, mp4.url))
             }
+
+            // Reveal the offline-download button now that we know the MP4s.
+            downloadSource = chooseDownloadSource(playback.mp4s, prefs.preferredQuality)
+            renderDownloadButton()
 
             // YouTube fallback
             if (qualityOptions.isEmpty() && !playback.youtubeUrl.isNullOrEmpty()) {
@@ -1191,6 +1264,70 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
             loadDataWithBaseURL("https://www.twitch.tv", html, "text/html", "UTF-8", null)
         }
+    }
+
+    /**
+     * Picks which MP4 rendition to download: the user's preferred quality if
+     * present, otherwise the highest resolution available. Null when the video
+     * has no progressive MP4 (HLS-only), in which case download is hidden.
+     */
+    private fun chooseDownloadSource(mp4s: List<Mp4Source>?, preferred: String): Mp4Source? {
+        if (mp4s.isNullOrEmpty()) return null
+        if (preferred != "auto") {
+            mp4s.firstOrNull {
+                "${it.height}p".equals(preferred, ignoreCase = true) ||
+                    it.label.equals(preferred, ignoreCase = true)
+            }?.let { return it }
+        }
+        return mp4s.maxByOrNull { it.height }
+    }
+
+    /** Reflects the current download state into the mobile Download button. */
+    private fun renderDownloadButton() {
+        val btn = downloadBtn ?: return
+        val v = video
+        if (v == null || isLiveStream) {
+            btn.visibility = View.GONE
+            return
+        }
+        val d = Downloads.get(v.id)
+        btn.visibility = if (d != null || downloadSource != null) View.VISIBLE else View.GONE
+        btn.text = when (d?.status) {
+            DownloadStatus.COMPLETED -> "✓ Downloaded"
+            DownloadStatus.DOWNLOADING -> "Downloading ${d.progressPercent}%"
+            DownloadStatus.QUEUED -> "Queued…"
+            DownloadStatus.FAILED -> "Retry Download"
+            else -> "Download"
+        }
+    }
+
+    private fun onDownloadButtonClicked() {
+        val v = video ?: return
+        when (Downloads.get(v.id)?.status) {
+            DownloadStatus.COMPLETED -> confirmDeleteDownload(v)
+            DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED -> Downloads.cancel(this, v.id)
+            else -> {
+                val src = downloadSource
+                if (src == null) {
+                    Toast.makeText(this,
+                        "Download isn't available for this video", Toast.LENGTH_SHORT).show()
+                } else {
+                    val label = src.label.ifEmpty { if (src.height > 0) "${src.height}p" else "MP4" }
+                    requestNotificationPermissionIfNeeded()
+                    Downloads.enqueue(this, v, src.url, label)
+                    Toast.makeText(this, "Download started", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun confirmDeleteDownload(v: Video) {
+        android.app.AlertDialog.Builder(this, R.style.GbDialogTheme)
+            .setTitle(v.title)
+            .setMessage("Remove this download from your device?")
+            .setPositiveButton("Remove") { _, _ -> Downloads.delete(this, v.id) }
+            .setNegativeButton("Keep", null)
+            .show()
     }
 
     private fun switchQuality(index: Int) {

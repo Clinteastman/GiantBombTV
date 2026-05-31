@@ -59,6 +59,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         const val SETTINGS_PRIVACY = 5
         const val SETTINGS_CUSTOMIZE = 6
         const val SETTINGS_TWITCH_CHAT = 7
+        const val SETTINGS_DOWNLOADS = 8
         private const val BACKDROP_DELAY_MS = 300L
         private const val CROSSFADE_DURATION = 600L
         private const val BACKDROP_ALPHA = 0.5f
@@ -353,6 +354,9 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                         SETTINGS_PRIVACY -> openPrivacyPolicy()
                         SETTINGS_CUSTOMIZE -> launchCustomize()
                         SETTINGS_TWITCH_CHAT -> toggleTwitchChat()
+                        SETTINGS_DOWNLOADS -> startActivity(
+                            Intent(requireContext(), DownloadsActivity::class.java)
+                        )
                     }
                 }
             }
@@ -959,6 +963,12 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             "Stream Quality",
             "Default: ${PrefsManager.qualityLabel(prefs.preferredQuality)}",
             R.drawable.ic_settings_quality
+        ))
+        utilAdapter.add(SettingsItem(
+            SETTINGS_DOWNLOADS,
+            "Downloads",
+            "Watch saved videos offline",
+            R.drawable.ic_settings_downloads
         ))
         utilAdapter.add(SettingsItem(
             SETTINGS_CUSTOMIZE,
