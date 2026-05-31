@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/grid_section_header"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp"
+    android:paddingTop="18dp"
+    android:paddingBottom="8dp"
+    android:textColor="@color/gb_text_primary"
+    android:textSize="16sp"
+    android:textStyle="bold" />
