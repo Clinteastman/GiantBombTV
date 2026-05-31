@@ -1,8 +1,10 @@
 package com.giantbomb.tv.ui
 
 import android.graphics.drawable.GradientDrawable
+import android.text.TextUtils
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.leanback.widget.ImageCardView
 import androidx.leanback.widget.Presenter
@@ -37,6 +39,16 @@ class ShowCardPresenter(
             setInfoAreaBackgroundColor(0x0DFFFFFF)
         }
 
+        // Shows without artwork are identifiable only by their title, but
+        // ImageCardView truncates it to one ellipsized line. Marquee the
+        // title so the full name scrolls while the card is focused.
+        val titleView = cardView.findViewById<TextView>(androidx.leanback.R.id.title_text)
+        titleView?.apply {
+            ellipsize = TextUtils.TruncateAt.MARQUEE
+            marqueeRepeatLimit = -1
+            isSingleLine = true
+        }
+
         cardView.setOnFocusChangeListener { v, hasFocus ->
             val scale = if (hasFocus) 1.05f else 1.0f
             v.animate().scaleX(scale).scaleY(scale).setDuration(150).start()
@@ -44,6 +56,9 @@ class ShowCardPresenter(
                 setColor(if (hasFocus) 0x28FFFFFF else 0x18FFFFFF)
                 setCornerRadius(cornerRadius)
             }
+            // Marquee only animates while the view is "selected"; tie that to
+            // focus so the focused card scrolls its full title.
+            titleView?.isSelected = hasFocus
         }
 
         return ViewHolder(cardView)
