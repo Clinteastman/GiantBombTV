@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.GiantBombTV" parent="Theme.AppCompat.NoActionBar">
+    <!-- Bridge parent: inherits AppCompat behaviour (so the existing Leanback TV
+         UI and AppCompat dialogs are unchanged) while supplying the Material
+         theme attributes that com.google.android.material widgets such as
+         BottomNavigationView require — without a Material theme they throw at
+         inflation, which previously crashed every mobile launch. -->
+    <style name="Theme.GiantBombTV" parent="Theme.MaterialComponents.NoActionBar.Bridge">
         <item name="android:colorPrimary">@color/gb_red</item>
         <item name="android:colorPrimaryDark">@color/gb_red_dark</item>
         <item name="android:colorAccent">@color/gb_red</item>

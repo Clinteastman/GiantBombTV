@@ -21,6 +21,9 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.fragment.app.FragmentActivity
 import com.giantbomb.tv.data.UpdateChecker
 import com.giantbomb.tv.mobile.MobileBrowseFragment
@@ -157,6 +160,17 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private fun wireMobileBottomNav() {
         val nav = findViewById<BottomNavigationView>(R.id.bottom_nav) ?: return
         nav.visibility = View.VISIBLE
+
+        // Edge-to-edge is on for phones, so the nav would otherwise sit under the
+        // gesture pill / 3-button bar. Pad it down by the bottom system-bar inset.
+        // Capture the base padding once so repeated inset passes don't accumulate.
+        val basePadBottom = nav.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(nav) { v, insets ->
+            val bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+            v.updatePadding(bottom = basePadBottom + bottom)
+            insets
+        }
+
         nav.setOnItemSelectedListener { item ->
             val tag = when (item.itemId) {
                 R.id.nav_home -> TAG_HOME
@@ -216,6 +230,18 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     return
                 }
                 showExitConfirmation()
+                return
+            }
+        }
+
+        // On mobile, Back from a secondary tab (Shows / Podcasts) returns to the
+        // Home tab first rather than finishing the activity — standard bottom-nav
+        // behaviour. Setting selectedItemId fires the listener, which swaps the
+        // visible fragment via showOnlyMobileTab.
+        if (!isTv) {
+            val nav = findViewById<BottomNavigationView>(R.id.bottom_nav)
+            if (nav != null && nav.visibility == View.VISIBLE && nav.selectedItemId != R.id.nav_home) {
+                nav.selectedItemId = R.id.nav_home
                 return
             }
         }
