@@ -134,16 +134,19 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         requestNotificationPermissionIfNeeded()
 
         // Modern Android (gesture nav) routes back through OnBackPressedDispatcher,
-        // not onKeyDown(KEYCODE_BACK). Wire PiP entry + quality-picker dismissal here
-        // so swipe-back on phones reliably triggers PiP. Falls through to default
-        // (finish the activity) when neither applies.
+        // not onKeyDown(KEYCODE_BACK). Wire quality-picker dismissal here, and —
+        // only when the user has opted in via prefs.backEntersPip — PiP entry, so
+        // swipe-back on phones can trigger PiP. By default Back just finishes the
+        // activity and returns to the previous screen (users read Back→PiP as
+        // "the app closed"). The Home button still triggers PiP via
+        // onUserLeaveHint regardless of this setting.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (isQualityPickerShowing()) {
                     dismissQualityPicker()
                     return
                 }
-                if (!isTv && tryEnterPip()) return
+                if (!isTv && prefs.backEntersPip && tryEnterPip()) return
                 isEnabled = false
                 onBackPressedDispatcher.onBackPressed()
             }
