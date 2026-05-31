@@ -1,7 +1,7 @@
 # Giant Bomb TV
 
 [![Build & Test](https://img.shields.io/github/actions/workflow/status/Clinteastman/GiantBombTV/build.yml?branch=master&label=build%20%26%20test)](https://github.com/Clinteastman/GiantBombTV/actions/workflows/build.yml)
-[![Latest release](https://img.shields.io/github/v/release/Clinteastman/GiantBombTV?label=release&color=blue)](https://github.com/Clinteastman/GiantBombTV/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/Clinteastman/GiantBombTV?label=release&color=blue&cacheSeconds=3600)](https://github.com/Clinteastman/GiantBombTV/releases/latest)
 [![Android 5.0+](https://img.shields.io/badge/min%20SDK-21-3DDC84?logo=android&logoColor=white)](https://developer.android.com/about/versions/lollipop)
 [![Google Play](https://img.shields.io/badge/Google%20Play-Available-414141?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.giantbomb.tv)
 [![Amazon Appstore](https://img.shields.io/badge/Amazon%20Appstore-Available-FF9900?logo=amazon&logoColor=white)](https://www.amazon.co.uk/dp/B0H1DSRF54)
