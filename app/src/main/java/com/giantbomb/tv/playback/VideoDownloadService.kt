@@ -154,7 +154,7 @@ class VideoDownloadService : Service() {
                 )
                 DownloadStore.writeMeta(ctx, completed)
                 Downloads.put(completed)
-                notifyComplete(download.video.title)
+                notifyComplete(id, download.video.title)
             }
         } catch (_: CancellationSignal) {
             part.delete()
@@ -172,7 +172,7 @@ class VideoDownloadService : Service() {
                         error = e.message ?: "Download failed"
                     )
                 )
-                notifyFailed(download.video.title)
+                notifyFailed(id, download.video.title)
             }
         }
     }
@@ -228,7 +228,7 @@ class VideoDownloadService : Service() {
             ?.notify(NOTIFICATION_ID, buildNotification(title, percent, indeterminate))
     }
 
-    private fun notifyComplete(title: String) {
+    private fun notifyComplete(videoId: Int, title: String) {
         val n = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Download complete")
             .setContentText(title)
@@ -237,10 +237,10 @@ class VideoDownloadService : Service() {
             .setContentIntent(contentIntent())
             .build()
         ContextCompat.getSystemService(this, NotificationManager::class.java)
-            ?.notify(title.hashCode(), n)
+            ?.notify(doneNotificationId(videoId), n)
     }
 
-    private fun notifyFailed(title: String) {
+    private fun notifyFailed(videoId: Int, title: String) {
         val n = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Download failed")
             .setContentText(title)
@@ -249,8 +249,14 @@ class VideoDownloadService : Service() {
             .setContentIntent(contentIntent())
             .build()
         ContextCompat.getSystemService(this, NotificationManager::class.java)
-            ?.notify(title.hashCode(), n)
+            ?.notify(doneNotificationId(videoId), n)
     }
+
+    // Per-video terminal-notification id, offset off the ongoing-progress id so
+    // it never collides with it. Keyed on the video id (not the title) so two
+    // videos that share a title don't overwrite each other's complete/failed
+    // notification.
+    private fun doneNotificationId(videoId: Int): Int = NOTIFICATION_ID + 1 + videoId
 
     /** Internal signal used to unwind the read loop on cancellation. */
     private class CancellationSignal : Exception()
@@ -258,11 +264,11 @@ class VideoDownloadService : Service() {
     companion object {
         private const val CHANNEL_ID = "downloads"
         private const val NOTIFICATION_ID = 4242
-        private const val EXTRA_VIDEO_ID = "video_id"
 
+        // The worker drains Downloads.nextQueued(), so the start intent only
+        // needs to wake the service — the specific id isn't read here.
         fun start(context: Context, videoId: Int) {
             val intent = Intent(context, VideoDownloadService::class.java)
-                .putExtra(EXTRA_VIDEO_ID, videoId)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {

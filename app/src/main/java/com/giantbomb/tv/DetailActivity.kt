@@ -20,7 +20,12 @@ import android.widget.TextView
 import android.widget.ScrollView
 import android.widget.Toast
 import android.app.AlertDialog
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
@@ -38,6 +43,23 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     companion object {
         const val EXTRA_VIDEO = "extra_video"
+    }
+
+    // Requested when the user starts a download so the foreground-service
+    // progress notification can actually show on Android 13+. Result is
+    // ignored — denial just means no progress notification, the download
+    // still runs.
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* ignore */ }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     // Cached resume position in seconds, populated when the playback / progress
@@ -448,6 +470,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                             "Download isn't available for this video", Toast.LENGTH_SHORT).show()
                     } else {
                         val label = src.label.ifEmpty { if (src.height > 0) "${src.height}p" else "MP4" }
+                        requestNotificationPermissionIfNeeded()
                         Downloads.enqueue(this@DetailActivity, video, src.url, label)
                         Toast.makeText(this@DetailActivity,
                             "Download started", Toast.LENGTH_SHORT).show()
