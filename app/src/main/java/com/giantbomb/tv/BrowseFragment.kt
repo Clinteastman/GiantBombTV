@@ -56,6 +56,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         const val SETTINGS_SETUP = 3
         const val SETTINGS_QUALITY = 4
         const val SETTINGS_PRIVACY = 5
+        const val SETTINGS_CUSTOMIZE = 6
         private const val BACKDROP_DELAY_MS = 300L
         private const val CROSSFADE_DURATION = 600L
         private const val BACKDROP_ALPHA = 0.5f
@@ -253,6 +254,12 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             is HeaderContext.Section -> {
                 items += "Move up" to { moveSection(ctx.id, -1) }
                 items += "Move down" to { moveSection(ctx.id, +1) }
+                // Never offer "Hide row" for Settings: the only entry point to
+                // re-enable hidden rows lives inside the Settings row, so hiding
+                // it would strand the user with no way back to Customize Browse.
+                if (ctx.id != PrefsManager.SECTION_SETTINGS) {
+                    items += "Hide row" to { hideSection(ctx.id) }
+                }
             }
             is HeaderContext.Show -> {
                 items += (if (ctx.pinned) "Unpin" else "Pin to top") to { togglePin(ctx.show) }
@@ -280,6 +287,20 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         current.add(newIdx, sectionId)
         prefs.setSectionOrder(current)
         loadContent()
+    }
+
+    private fun hideSection(sectionId: String) {
+        val hidden = prefs.getHiddenSections().toMutableSet()
+        if (hidden.add(sectionId)) {
+            prefs.setHiddenSections(hidden)
+            val label = PrefsManager.sectionLabel(sectionId)
+            Toast.makeText(
+                requireContext(),
+                "Hidden: $label. Re-enable in Settings > Customize Browse.",
+                Toast.LENGTH_LONG
+            ).show()
+            loadContent()
+        }
     }
 
     private fun movePinnedShow(showId: Int, direction: Int) {
@@ -328,6 +349,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                         SETTINGS_SETUP -> launchSetup()
                         SETTINGS_QUALITY -> cycleQuality()
                         SETTINGS_PRIVACY -> openPrivacyPolicy()
+                        SETTINGS_CUSTOMIZE -> launchCustomize()
                     }
                 }
             }
@@ -926,6 +948,12 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             R.drawable.ic_settings_quality
         ))
         utilAdapter.add(SettingsItem(
+            SETTINGS_CUSTOMIZE,
+            "Customize Browse",
+            "Reorder, hide, or restore rows",
+            R.drawable.ic_settings_feed
+        ))
+        utilAdapter.add(SettingsItem(
             SETTINGS_SETUP,
             getString(R.string.settings_setup),
             getString(R.string.settings_setup_desc),
@@ -983,6 +1011,11 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         val intent = Intent(requireContext(), SetupActivity::class.java)
         @Suppress("DEPRECATION")
         requireActivity().startActivityForResult(intent, MainActivity.SETUP_REQUEST)
+    }
+
+    private fun launchCustomize() {
+        val intent = Intent(requireContext(), CustomizeBrowseActivity::class.java)
+        startActivity(intent)
     }
 
     private fun openPrivacyPolicy() {
