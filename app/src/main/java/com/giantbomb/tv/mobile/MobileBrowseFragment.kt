@@ -29,6 +29,7 @@ import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.ProgressEntry
 import com.giantbomb.tv.model.SettingsItem
 import com.giantbomb.tv.data.TwitchExtractor
+import com.giantbomb.tv.data.toggleTwitchChatPref
 import com.giantbomb.tv.model.Show
 import com.giantbomb.tv.model.UpcomingStream
 import com.giantbomb.tv.model.Video
@@ -96,6 +97,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         private const val SETTINGS_PRIVACY = 5
         private const val SETTINGS_CUSTOMIZE = 6
         private const val SETTINGS_PIP_BACK = 7
+        private const val SETTINGS_TWITCH_CHAT = 8
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
         private const val RECENT_VERTICAL_COUNT = 5
@@ -616,6 +618,15 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             R.drawable.ic_settings_cog
         )))
         items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_TWITCH_CHAT,
+            getString(R.string.settings_twitch_chat),
+            getString(
+                if (prefs.showTwitchChat) R.string.settings_twitch_chat_shown
+                else R.string.settings_twitch_chat_hidden
+            ),
+            R.drawable.ic_settings_cog
+        )))
+        items.add(BrowseItem.SettingRow(SettingsItem(
             SETTINGS_PRIVACY,
             "Privacy Policy",
             "View privacy policy",
@@ -640,6 +651,16 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     }
 
     fun getMiniPlayerContainer(): FrameLayout? = miniPlayerContainer
+
+    private fun toggleTwitchChat() {
+        val nowShown = prefs.toggleTwitchChatPref()
+        val msg = getString(
+            if (nowShown) R.string.toast_twitch_chat_shown
+            else R.string.toast_twitch_chat_hidden
+        )
+        Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+        loadContent()
+    }
 
     private fun cycleQuality() {
         val options = PrefsManager.QUALITY_OPTIONS
@@ -671,6 +692,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
                     putExtra(PlaybackActivity.EXTRA_LIVE_HLS_URL, stream.hlsUrl)
                     putExtra(PlaybackActivity.EXTRA_LIVE_TITLE, liveTitle)
+                    putExtra(PlaybackActivity.EXTRA_LIVE_TWITCH_CHANNEL, PlaybackActivity.DEFAULT_TWITCH_CHANNEL)
                 }
                 startActivity(intent)
             }
@@ -1269,6 +1291,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     SETTINGS_PRIVACY -> openPrivacyPolicy()
                     SETTINGS_CUSTOMIZE -> launchCustomizeBrowse()
                     SETTINGS_PIP_BACK -> toggleBackPip()
+                    SETTINGS_TWITCH_CHAT -> toggleTwitchChat()
                 }
             }
         }

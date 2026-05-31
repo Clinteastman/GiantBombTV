@@ -19,6 +19,10 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -66,12 +70,22 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         const val EXTRA_VIDEO = "extra_video"
         const val EXTRA_LIVE_HLS_URL = "extra_live_hls_url"
         const val EXTRA_LIVE_TITLE = "extra_live_title"
+        // Twitch channel login for the read-only chat WebView shown alongside
+        // a live stream. Optional — if null, no chat panel is rendered.
+        const val EXTRA_LIVE_TWITCH_CHANNEL = "extra_live_twitch_channel"
+        // Default Giant Bomb live channel. Single source of truth for callers
+        // that launch live playback so the slug doesn't drift across surfaces.
+        const val DEFAULT_TWITCH_CHANNEL = "giantbomb"
+        // Twitch login charset: 4-25 alphanumeric or underscore. Reject anything
+        // outside that before we interpolate the value into HTML / URL strings.
+        private val TWITCH_LOGIN_REGEX = Regex("^[a-zA-Z0-9_]{4,25}$")
         // Optional resume position in seconds, passed by DetailActivity so
         // PlaybackActivity doesn't have to re-fetch progress (which can race
         // with playback start or fail through Cloudflare).
         const val EXTRA_RESUME_SECONDS = "extra_resume_seconds"
     }
 
+    private lateinit var prefs: PrefsManager
     private var player: MediaController? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
     // Single Player.Listener instance so we can remove on disconnect / re-attach.
@@ -114,6 +128,14 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     // visibility listener.
     private var tvTitleOverlay: TextView? = null
 
+    // Held so onDestroy can stopLoading + destroy the WebView. Otherwise the
+    // WebView's native context and Twitch's JS timers leak past activity death.
+    private var chatWebView: WebView? = null
+    // Container that wraps the player + chat panel on live. Tracked so cleanup
+    // can detach the whole thing instead of leaving the wrapper as an orphan
+    // when later code paths only target playerView's parent.
+    private var splitLayout: LinearLayout? = null
+
     // Quality selection
     private data class QualityOption(val label: String, val url: String, val isHls: Boolean = false)
     private var qualityOptions = mutableListOf<QualityOption>()
@@ -133,7 +155,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             enableEdgeToEdge()
         }
 
-        val prefs = PrefsManager(this)
+        prefs = PrefsManager(this)
         api = GiantBombApi(prefs.apiKey ?: "")
 
         requestNotificationPermissionIfNeeded()
@@ -513,6 +535,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private fun bindVideoMetadata(v: Video) {
         titleView?.text = v.title
 
+        // Keep the TV title overlay in sync when the player swaps episodes in
+        // place (autoplay advance). It's built once with the launch video's
+        // title, so without this it would keep showing the previous episode.
+        if (v.title.isNotBlank()) tvTitleOverlay?.text = v.title
+
         metaView?.let { mv ->
             val parts = mutableListOf<String>()
             if (!v.showTitle.isNullOrEmpty()) parts.add(v.showTitle)
@@ -588,6 +615,23 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         super.onStart()
         initializeCastPlayer()
         connectController()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Stop the chat embed's JS timers + media work when the user isn't
+        // looking; resumed in onResume. pauseTimers is process-wide but only
+        // affects WebView timers, so it's safe to call here.
+        chatWebView?.onPause()
+        chatWebView?.pauseTimers()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        chatWebView?.let {
+            it.resumeTimers()
+            it.onResume()
+        }
     }
 
     private fun requestNotificationPermissionIfNeeded() {
@@ -992,6 +1036,21 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     private fun initializeLivePlayer(hlsUrl: String) {
         val liveTitle = intent.getStringExtra(EXTRA_LIVE_TITLE) ?: "Giant Bomb Live"
+        // Side-by-side chat only makes sense in landscape — on a portrait phone
+        // the 30% panel reduces the player to an unwatchable strip. PlaybackActivity
+        // declares configChanges for orientation in the manifest, so the runtime
+        // Configuration is the *current* orientation, not the one we requested in
+        // buildTvLayout / buildMobileLiveLayout. Use requestedOrientation, which
+        // both code paths set to a landscape variant before initializeLivePlayer
+        // runs.
+        val isLandscape = requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
+            requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE ||
+            requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE ||
+            requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
+        val twitchChannel = intent.getStringExtra(EXTRA_LIVE_TWITCH_CHANNEL)
+            ?.takeIf { prefs.showTwitchChat }
+            ?.takeIf { isLandscape }
+            ?.takeIf { TWITCH_LOGIN_REGEX.matches(it) }
 
         qualityOptions.clear()
         qualityOptions.add(QualityOption("Live", hlsUrl, isHls = true))
@@ -1005,7 +1064,30 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val index = parent.indexOfChild(playerView)
         val lp = playerView.layoutParams
         parent.removeView(playerView)
-        parent.addView(livePlayerView, index, lp)
+
+        if (twitchChannel != null) {
+            // Split the area: player on the left (70%), read-only Twitch chat on the right (30%).
+            val split = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = lp
+                setBackgroundColor(Color.BLACK)
+            }
+            livePlayerView.layoutParams = LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.MATCH_PARENT, 7f
+            )
+            split.addView(livePlayerView)
+            val chat = createTwitchChatWebView(twitchChannel).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.MATCH_PARENT, 3f
+                )
+            }
+            chatWebView = chat
+            split.addView(chat)
+            splitLayout = split
+            parent.addView(split, index)
+        } else {
+            parent.addView(livePlayerView, index, lp)
+        }
         playerView = livePlayerView
 
         playerView.setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
@@ -1051,6 +1133,64 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 }
             }
         })
+    }
+
+    private fun createTwitchChatWebView(channel: String): WebView {
+        require(TWITCH_LOGIN_REGEX.matches(channel)) {
+            "Invalid Twitch channel: $channel"
+        }
+        return WebView(this).apply {
+            setBackgroundColor(0xFF18181B.toInt())
+            contentDescription = "Twitch chat"
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            // Lock down filesystem-adjacent surfaces. The embed only needs HTTP(S);
+            // keep file:// and content:// off so a redirect or document edit can't
+            // pull local files into the WebView's document.
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            // Make focusable so a TV remote can D-pad into the chat panel.
+            isFocusable = true
+            isFocusableInTouchMode = true
+
+            webChromeClient = object : WebChromeClient() {
+                // Embed shouldn't promote to fullscreen in our context; swallow
+                // any attempt rather than letting the WebView surface a custom
+                // view we never reparent or dismiss.
+                override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                    callback?.onCustomViewHidden()
+                }
+            }
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(
+                    view: WebView?,
+                    request: WebResourceRequest?
+                ): Boolean {
+                    val url = request?.url ?: return false
+                    // Let the initial about:blank / data: load through so the
+                    // embed can boot. After that, only allow twitch.tv hosts.
+                    val scheme = url.scheme?.lowercase()
+                    if (scheme == "about" || scheme == "data") return false
+                    val host = url.host?.lowercase() ?: return true
+                    return host != "twitch.tv" && !host.endsWith(".twitch.tv")
+                }
+            }
+
+            val html = """
+                <!DOCTYPE html>
+                <html><head>
+                <meta name="viewport" content="width=device-width,initial-scale=1">
+                <style>
+                  html,body{margin:0;padding:0;background:#18181B;height:100%;overflow:hidden;}
+                  iframe{display:block;border:0;width:100%;height:100%;}
+                </style>
+                </head><body>
+                <iframe src="https://www.twitch.tv/embed/$channel/chat?parent=www.twitch.tv&darkpopout" allowfullscreen></iframe>
+                </body></html>
+            """.trimIndent()
+
+            loadDataWithBaseURL("https://www.twitch.tv", html, "text/html", "UTF-8", null)
+        }
     }
 
     private fun switchQuality(index: Int) {
@@ -1475,6 +1615,22 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // service: it keeps playing (with notification) when the activity dies.
         disconnectController()
         releaseCastPlayer()
+        chatWebView?.let { wv ->
+            wv.stopLoading()
+            // Documented WebView teardown order: drop the current page and its
+            // history before destroy() so any pending JS / network work is
+            // unhooked from the Activity context first.
+            wv.loadUrl("about:blank")
+            wv.clearHistory()
+            (wv.parent as? ViewGroup)?.removeView(wv)
+            wv.destroy()
+        }
+        chatWebView = null
+        splitLayout?.let { sl ->
+            sl.removeAllViews()
+            (sl.parent as? ViewGroup)?.removeView(sl)
+        }
+        splitLayout = null
         super.onDestroy()
         cancel()
     }

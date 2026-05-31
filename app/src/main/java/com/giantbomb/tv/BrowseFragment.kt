@@ -20,6 +20,7 @@ import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
+import com.giantbomb.tv.data.toggleTwitchChatPref
 import com.giantbomb.tv.model.ProgressEntry
 import com.giantbomb.tv.model.SettingsItem
 import com.giantbomb.tv.model.Show
@@ -57,6 +58,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         const val SETTINGS_QUALITY = 4
         const val SETTINGS_PRIVACY = 5
         const val SETTINGS_CUSTOMIZE = 6
+        const val SETTINGS_TWITCH_CHAT = 7
         private const val BACKDROP_DELAY_MS = 300L
         private const val CROSSFADE_DURATION = 600L
         private const val BACKDROP_ALPHA = 0.5f
@@ -350,6 +352,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                         SETTINGS_QUALITY -> cycleQuality()
                         SETTINGS_PRIVACY -> openPrivacyPolicy()
                         SETTINGS_CUSTOMIZE -> launchCustomize()
+                        SETTINGS_TWITCH_CHAT -> toggleTwitchChat()
                     }
                 }
             }
@@ -696,6 +699,16 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         }
     }
 
+    private fun toggleTwitchChat() {
+        val nowShown = prefs.toggleTwitchChatPref()
+        val msg = getString(
+            if (nowShown) R.string.toast_twitch_chat_shown
+            else R.string.toast_twitch_chat_hidden
+        )
+        Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+        loadContent()
+    }
+
     private fun cycleQuality() {
         val options = PrefsManager.QUALITY_OPTIONS
         val current = prefs.preferredQuality
@@ -960,6 +973,15 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             R.drawable.ic_settings_cog
         ))
         utilAdapter.add(SettingsItem(
+            SETTINGS_TWITCH_CHAT,
+            getString(R.string.settings_twitch_chat),
+            getString(
+                if (prefs.showTwitchChat) R.string.settings_twitch_chat_shown
+                else R.string.settings_twitch_chat_hidden
+            ),
+            R.drawable.ic_settings_cog
+        ))
+        utilAdapter.add(SettingsItem(
             SETTINGS_PRIVACY,
             "Privacy Policy",
             "View privacy policy",
@@ -997,6 +1019,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                 val intent = Intent(requireContext(), PlaybackActivity::class.java).apply {
                     putExtra(PlaybackActivity.EXTRA_LIVE_HLS_URL, stream.hlsUrl)
                     putExtra(PlaybackActivity.EXTRA_LIVE_TITLE, liveTitle)
+                    putExtra(PlaybackActivity.EXTRA_LIVE_TWITCH_CHANNEL, PlaybackActivity.DEFAULT_TWITCH_CHANNEL)
                 }
                 startActivity(intent)
             }

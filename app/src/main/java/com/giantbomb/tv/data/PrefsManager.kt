@@ -21,6 +21,11 @@ class PrefsManager(context: Context) {
         get() = prefs.getString("preferred_quality", "auto") ?: "auto"
         set(value) = prefs.edit().putString("preferred_quality", value).apply()
 
+    /** Whether to render the Twitch chat panel alongside live stream playback. */
+    var showTwitchChat: Boolean
+        get() = prefs.getBoolean("show_twitch_chat", true)
+        set(value) = prefs.edit().putBoolean("show_twitch_chat", value).apply()
+
     /**
      * When true, pressing Back in the phone video player enters
      * Picture-in-Picture instead of returning to the previous screen.
