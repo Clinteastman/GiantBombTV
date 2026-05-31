@@ -254,7 +254,12 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             is HeaderContext.Section -> {
                 items += "Move up" to { moveSection(ctx.id, -1) }
                 items += "Move down" to { moveSection(ctx.id, +1) }
-                items += "Hide row" to { hideSection(ctx.id) }
+                // Never offer "Hide row" for Settings: the only entry point to
+                // re-enable hidden rows lives inside the Settings row, so hiding
+                // it would strand the user with no way back to Customize Browse.
+                if (ctx.id != PrefsManager.SECTION_SETTINGS) {
+                    items += "Hide row" to { hideSection(ctx.id) }
+                }
             }
             is HeaderContext.Show -> {
                 items += (if (ctx.pinned) "Unpin" else "Pin to top") to { togglePin(ctx.show) }
