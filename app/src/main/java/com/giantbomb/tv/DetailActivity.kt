@@ -19,12 +19,16 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.ScrollView
 import android.widget.Toast
+import android.app.AlertDialog
 import androidx.activity.enableEdgeToEdge
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
+import com.giantbomb.tv.model.Mp4Source
 import com.giantbomb.tv.model.ProgressEntry
 import com.giantbomb.tv.model.Video
+import com.giantbomb.tv.playback.DownloadStatus
+import com.giantbomb.tv.playback.Downloads
 import com.giantbomb.tv.util.DateFormat
 import com.giantbomb.tv.util.DeviceUtil
 import androidx.fragment.app.FragmentActivity
@@ -386,6 +390,77 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         watchButtonRef = watchButton
         restartButtonRef = restartButton
 
+        // Download (offline) button. Hidden until we know an MP4 source is
+        // available (or the video is already downloaded / in flight). Tapping
+        // toggles: start -> cancel while downloading -> remove once complete.
+        Downloads.ensureLoaded(this)
+        var downloadSource: Mp4Source? = null
+        val downloadButton = createGlassButton(
+            text = "Download",
+            fillColor = 0x1AFFFFFF,
+            focusFillColor = 0x2AFFFFFF,
+            borderColor = 0x18FFFFFF,
+            focusBorderColor = 0x30FFFFFF,
+            textColor = 0xFFCCCCCC.toInt(),
+            bold = false
+        ).apply {
+            contentDescription = "Download for offline viewing"
+            setPadding(24.dp(), 10.dp(), 24.dp(), 10.dp())
+            visibility = View.GONE
+            layoutParams = if (isTv) {
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { marginStart = 10.dp() }
+            } else {
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = 8.dp() }
+            }
+        }
+        buttonLayout.addView(downloadButton)
+
+        fun renderDownloadButton() {
+            val d = Downloads.get(video.id)
+            downloadButton.visibility =
+                if (d != null || downloadSource != null) View.VISIBLE else View.GONE
+            downloadButton.text = when (d?.status) {
+                DownloadStatus.COMPLETED -> "✓ Downloaded"
+                DownloadStatus.DOWNLOADING -> "Downloading ${d.progressPercent}%"
+                DownloadStatus.QUEUED -> "Queued…"
+                DownloadStatus.FAILED -> "Retry Download"
+                else -> "Download"
+            }
+        }
+        renderDownloadButton()
+
+        downloadButton.setOnClickListener {
+            val current = Downloads.get(video.id)
+            when (current?.status) {
+                DownloadStatus.COMPLETED -> confirmDeleteDownload(video) { renderDownloadButton() }
+                DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED ->
+                    Downloads.cancel(this@DetailActivity, video.id)
+                else -> {
+                    val src = downloadSource
+                    if (src == null) {
+                        Toast.makeText(this@DetailActivity,
+                            "Download isn't available for this video", Toast.LENGTH_SHORT).show()
+                    } else {
+                        val label = src.label.ifEmpty { if (src.height > 0) "${src.height}p" else "MP4" }
+                        Downloads.enqueue(this@DetailActivity, video, src.url, label)
+                        Toast.makeText(this@DetailActivity,
+                            "Download started", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        // Stream live download state into the button while the screen is open.
+        launch {
+            Downloads.state.collect { renderDownloadButton() }
+        }
+
         content.addView(buttonLayout)
         animViews.add(buttonLayout)
 
@@ -412,6 +487,9 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             val watchlistDeferred = async { api.getWatchlist() }
 
             val playback = playbackDeferred.await().getOrNull()
+            // Pick the MP4 to offer for offline download and reveal the button.
+            downloadSource = chooseDownloadSource(playback?.mp4s, prefs.preferredQuality)
+            renderDownloadButton()
             val watchlist = watchlistDeferred.await().getOrNull()
             val isOnWatchlist = watchlist?.any { it.id == video.id } == true
 
@@ -561,6 +639,34 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 restart.visibility = View.GONE
             }
         }
+    }
+
+    /**
+     * Picks which MP4 rendition to download: the user's preferred quality if
+     * present, otherwise the highest resolution available. Null when the video
+     * has no progressive MP4 (e.g. HLS-only), in which case download is hidden.
+     */
+    private fun chooseDownloadSource(mp4s: List<Mp4Source>?, preferred: String): Mp4Source? {
+        if (mp4s.isNullOrEmpty()) return null
+        if (preferred != "auto") {
+            mp4s.firstOrNull {
+                "${it.height}p".equals(preferred, ignoreCase = true) ||
+                    it.label.equals(preferred, ignoreCase = true)
+            }?.let { return it }
+        }
+        return mp4s.maxByOrNull { it.height }
+    }
+
+    private fun confirmDeleteDownload(video: Video, onChanged: () -> Unit) {
+        AlertDialog.Builder(this, R.style.GbDialogTheme)
+            .setTitle(video.title)
+            .setMessage("Remove this download from your device?")
+            .setPositiveButton("Remove") { _, _ ->
+                Downloads.delete(this, video.id)
+                onChanged()
+            }
+            .setNegativeButton("Keep", null)
+            .show()
     }
 
     private fun createGlassButton(

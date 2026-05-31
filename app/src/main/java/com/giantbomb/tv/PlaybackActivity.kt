@@ -924,6 +924,38 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
      * video.
      */
     private suspend fun loadVideo(v: Video, initialPositionMs: Long, resumeFromApi: Boolean) {
+        // Offline-first: if a completed download exists on disk, play the local
+        // file and skip the network entirely. Reuses the shared-controller path
+        // via a single synthetic "Downloaded" quality option. Progress still
+        // syncs (mediaId stays vod:<id>) so a later online session is in sync.
+        val downloadedFile = com.giantbomb.tv.playback.DownloadStore.videoFile(this, v.id)
+        if (downloadedFile.exists()) {
+            videoDuration = v.durationSeconds.toDouble()
+            qualityOptions.clear()
+            qualityOptions.add(
+                QualityOption("Downloaded", Uri.fromFile(downloadedFile).toString())
+            )
+            currentQualityIndex = 0
+
+            val p = player ?: return
+            val mediaItem = MediaItem.Builder()
+                .setUri(qualityOptions[0].url)
+                .setMediaId("vod:${v.id}")
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(v.title)
+                        .setArtist(v.showTitle)
+                        .setArtworkUri(v.thumbnailUrl?.let { Uri.parse(it) })
+                        .build()
+                )
+                .build()
+            p.setMediaItem(mediaItem, initialPositionMs)
+            p.prepare()
+            attachPlayerListener(p)
+            p.playWhenReady = true
+            return
+        }
+
         val result = api.getPlayback(v.id)
 
         result.onSuccess { playback ->
