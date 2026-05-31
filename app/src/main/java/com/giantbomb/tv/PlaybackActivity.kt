@@ -104,6 +104,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var mobileContentScroll: ScrollView? = null
     private var playerContainer: FrameLayout? = null
     private var relatedRecycler: RecyclerView? = null
+    // Mobile portrait per-video metadata views, re-bound on autoplay advance.
+    private var titleView: TextView? = null
+    private var metaView: TextView? = null
+    private var descView: TextView? = null
 
     // TV-only title overlay shown alongside the playback controls. Populated
     // once video metadata is known and faded in/out via the controller
@@ -135,16 +139,19 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         requestNotificationPermissionIfNeeded()
 
         // Modern Android (gesture nav) routes back through OnBackPressedDispatcher,
-        // not onKeyDown(KEYCODE_BACK). Wire PiP entry + quality-picker dismissal here
-        // so swipe-back on phones reliably triggers PiP. Falls through to default
-        // (finish the activity) when neither applies.
+        // not onKeyDown(KEYCODE_BACK). Wire quality-picker dismissal here, and —
+        // only when the user has opted in via prefs.backEntersPip — PiP entry, so
+        // swipe-back on phones can trigger PiP. By default Back just finishes the
+        // activity and returns to the previous screen (users read Back→PiP as
+        // "the app closed"). The Home button still triggers PiP via
+        // onUserLeaveHint regardless of this setting.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (isQualityPickerShowing()) {
                     dismissQualityPicker()
                     return
                 }
-                if (!isTv && tryEnterPip()) return
+                if (!isTv && prefs.backEntersPip && tryEnterPip()) return
                 isEnabled = false
                 onBackPressedDispatcher.onBackPressed()
             }
@@ -415,9 +422,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             setPadding(16.dp(), 12.dp(), 16.dp(), 24.dp())
         }
 
-        // Video title
-        val titleView = TextView(this).apply {
-            text = v.title
+        // Video title (text bound in bindVideoMetadata so autoplay can refresh it)
+        titleView = TextView(this).apply {
             textSize = 18f
             setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
@@ -426,30 +432,22 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         contentLayout.addView(titleView)
 
         // Meta line
-        val metaView = TextView(this).apply {
-            val parts = mutableListOf<String>()
-            if (!v.showTitle.isNullOrEmpty()) parts.add(v.showTitle)
-            if (v.publishDate.isNotEmpty()) parts.add(DateFormat.formatPublishDate(v.publishDate))
-            if (!v.author.isNullOrEmpty()) parts.add(v.author)
-            text = parts.joinToString("  \u2022  ")
+        metaView = TextView(this).apply {
             textSize = 13f
             setTextColor(0xFFA0A0A0.toInt())
             setPadding(0, 4.dp(), 0, 0)
         }
         contentLayout.addView(metaView)
 
-        // Description
-        if (!v.description.isNullOrEmpty()) {
-            val descView = TextView(this).apply {
-                text = v.description.replace(Regex("<[^>]*>"), "")
-                textSize = 14f
-                setTextColor(0xFF999999.toInt())
-                setPadding(0, 12.dp(), 0, 0)
-                maxLines = 6
-                setLineSpacing(0f, 1.3f)
-            }
-            contentLayout.addView(descView)
+        // Description (always added; hidden via bindVideoMetadata when empty)
+        descView = TextView(this).apply {
+            textSize = 14f
+            setTextColor(0xFF999999.toInt())
+            setPadding(0, 12.dp(), 0, 0)
+            maxLines = 6
+            setLineSpacing(0f, 1.3f)
         }
+        contentLayout.addView(descView)
 
         // Quality button
         val qualityBtn = TextView(this).apply {
@@ -501,8 +499,40 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // Set initial layout based on current orientation
         updateMobileOrientation(resources.configuration.orientation)
 
-        // Load related videos
-        loadRelatedVideos(v)
+        // Populate title / meta / description + "Up Next" for the current video.
+        bindVideoMetadata(v)
+    }
+
+    /**
+     * Refreshes the mobile portrait metadata UI (title, meta line, description,
+     * and the "Up Next" list) for [v]. Called on initial layout and again when
+     * autoplay advances to the next episode in place — the player swaps media
+     * without recreating the activity, so these views must be re-bound by hand.
+     * No-op on the TV / live layouts, which don't render this metadata.
+     */
+    private fun bindVideoMetadata(v: Video) {
+        titleView?.text = v.title
+
+        metaView?.let { mv ->
+            val parts = mutableListOf<String>()
+            if (!v.showTitle.isNullOrEmpty()) parts.add(v.showTitle)
+            if (v.publishDate.isNotEmpty()) parts.add(DateFormat.formatPublishDate(v.publishDate))
+            if (!v.author.isNullOrEmpty()) parts.add(v.author)
+            mv.text = parts.joinToString("  •  ")
+        }
+
+        descView?.let { dv ->
+            val desc = v.description?.replace(Regex("<[^>]*>"), "")
+            if (desc.isNullOrEmpty()) {
+                dv.visibility = View.GONE
+            } else {
+                dv.text = desc
+                dv.visibility = View.VISIBLE
+            }
+        }
+
+        // Only the mobile layout has an "Up Next" list; skip the fetch otherwise.
+        if (relatedRecycler != null) loadRelatedVideos(v)
     }
 
     private fun loadRelatedVideos(v: Video) {
@@ -827,122 +857,136 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         val v = video ?: return
 
-        launch {
-            val result = api.getPlayback(v.id)
+        val startFromBeginning = intent.getBooleanExtra("start_from_beginning", false)
+        val explicitResumeSec = intent.getDoubleExtra(EXTRA_RESUME_SECONDS, 0.0)
+        val initialPositionMs = if (!startFromBeginning && explicitResumeSec > 0) {
+            (explicitResumeSec * 1000).toLong()
+        } else {
+            0L
+        }
+        // With no explicit resume position, fall back to the server-saved
+        // progress for this video (fetched inside loadVideo).
+        val resumeFromApi = !startFromBeginning && explicitResumeSec <= 0
 
-            result.onSuccess { playback ->
-                videoDuration = playback.duration
+        launch { loadVideo(v, initialPositionMs, resumeFromApi) }
+    }
 
-                // Build quality options list
-                qualityOptions.clear()
-                if (!playback.hlsUrl.isNullOrEmpty()) {
-                    qualityOptions.add(QualityOption("Auto (HLS)", playback.hlsUrl, isHls = true))
-                }
-                playback.mp4s.sortedByDescending { it.height }.forEach { mp4 ->
-                    val label = if (mp4.height > 0) "${mp4.height}p" else mp4.label.ifEmpty { "MP4" }
-                    qualityOptions.add(QualityOption(label, mp4.url))
-                }
+    /**
+     * Loads [v] into the existing shared service player and binds it to the
+     * current PlayerView surface. Used for both the initial video and autoplay
+     * of the next episode. Playing in place reuses the live surface instead of
+     * recreating the activity — recreating it hands the shared service player a
+     * brand-new SurfaceView mid-transition, which renders as audio-only / black
+     * video.
+     */
+    private suspend fun loadVideo(v: Video, initialPositionMs: Long, resumeFromApi: Boolean) {
+        val result = api.getPlayback(v.id)
 
-                // YouTube fallback
-                if (qualityOptions.isEmpty() && !playback.youtubeUrl.isNullOrEmpty()) {
-                    if (BuildConfig.ENABLE_INLINE_YOUTUBE) {
-                        // Inline extraction using internal YouTube API (sideload builds only)
-                        val ytUrl = playback.youtubeUrl
-                        if (ytUrl != null) {
-                            val ytResult = com.giantbomb.tv.data.YouTubeExtractor().extract(ytUrl)
-                            ytResult.onSuccess { yt ->
-                                if (yt.hlsUrl != null) {
-                                    qualityOptions.add(QualityOption("YouTube HLS", yt.hlsUrl, isHls = true))
-                                }
-                                yt.streams
-                                    .filter { !it.isAdaptive && it.hasVideo }
-                                    .sortedByDescending { it.height }
-                                    .forEach { stream ->
-                                        val label = "YT ${stream.qualityLabel ?: "${stream.height}p"}"
-                                        qualityOptions.add(QualityOption(label, stream.url))
-                                    }
-                                if (videoDuration == 0.0 && yt.duration > 0) {
-                                    videoDuration = yt.duration.toDouble()
-                                }
+        result.onSuccess { playback ->
+            videoDuration = playback.duration
+
+            // Build quality options list
+            qualityOptions.clear()
+            if (!playback.hlsUrl.isNullOrEmpty()) {
+                qualityOptions.add(QualityOption("Auto (HLS)", playback.hlsUrl, isHls = true))
+            }
+            playback.mp4s.sortedByDescending { it.height }.forEach { mp4 ->
+                val label = if (mp4.height > 0) "${mp4.height}p" else mp4.label.ifEmpty { "MP4" }
+                qualityOptions.add(QualityOption(label, mp4.url))
+            }
+
+            // YouTube fallback
+            if (qualityOptions.isEmpty() && !playback.youtubeUrl.isNullOrEmpty()) {
+                if (BuildConfig.ENABLE_INLINE_YOUTUBE) {
+                    // Inline extraction using internal YouTube API (sideload builds only)
+                    val ytUrl = playback.youtubeUrl
+                    if (ytUrl != null) {
+                        val ytResult = com.giantbomb.tv.data.YouTubeExtractor().extract(ytUrl)
+                        ytResult.onSuccess { yt ->
+                            if (yt.hlsUrl != null) {
+                                qualityOptions.add(QualityOption("YouTube HLS", yt.hlsUrl, isHls = true))
                             }
-                            ytResult.onFailure { e ->
-                                android.util.Log.w("PlaybackActivity", "YouTube extraction failed: ${e.message}")
+                            yt.streams
+                                .filter { !it.isAdaptive && it.hasVideo }
+                                .sortedByDescending { it.height }
+                                .forEach { stream ->
+                                    val label = "YT ${stream.qualityLabel ?: "${stream.height}p"}"
+                                    qualityOptions.add(QualityOption(label, stream.url))
+                                }
+                            if (videoDuration == 0.0 && yt.duration > 0) {
+                                videoDuration = yt.duration.toDouble()
                             }
                         }
-                    } else {
-                        // Store-compliant: open in YouTube app / browser
-                        val ytIntent = android.content.Intent(
-                            android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse(playback.youtubeUrl)
-                        )
-                        startActivity(ytIntent)
-                        finish()
-                        return@onSuccess
+                        ytResult.onFailure { e ->
+                            android.util.Log.w("PlaybackActivity", "YouTube extraction failed: ${e.message}")
+                        }
                     }
-                }
-
-                if (qualityOptions.isEmpty()) {
-                    Toast.makeText(this@PlaybackActivity, "No playback source available", Toast.LENGTH_LONG).show()
+                } else {
+                    // Store-compliant: open in YouTube app / browser
+                    val ytIntent = android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse(playback.youtubeUrl)
+                    )
+                    startActivity(ytIntent)
                     finish()
                     return@onSuccess
                 }
+            }
 
-                val preferred = PrefsManager(this@PlaybackActivity).preferredQuality
-                currentQualityIndex = if (preferred == "auto") {
-                    0
-                } else {
-                    qualityOptions.indexOfFirst { it.label.equals(preferred, ignoreCase = true) }
-                        .takeIf { it >= 0 } ?: 0
-                }
+            if (qualityOptions.isEmpty()) {
+                Toast.makeText(this@PlaybackActivity, "No playback source available", Toast.LENGTH_LONG).show()
+                finish()
+                return@onSuccess
+            }
 
-                val p = player ?: return@onSuccess
-                val mediaItem = MediaItem.Builder()
-                    .setUri(qualityOptions[currentQualityIndex].url)
-                    .setMediaId("vod:${v.id}")
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle(v.title)
-                            .setArtist(v.showTitle)
-                            .setArtworkUri(v.thumbnailUrl?.let { Uri.parse(it) })
-                            .build()
-                    )
-                    .build()
+            val preferred = PrefsManager(this@PlaybackActivity).preferredQuality
+            currentQualityIndex = if (preferred == "auto") {
+                0
+            } else {
+                qualityOptions.indexOfFirst { it.label.equals(preferred, ignoreCase = true) }
+                    .takeIf { it >= 0 } ?: 0
+            }
 
-                val startFromBeginning = intent.getBooleanExtra("start_from_beginning", false)
-                val explicitResumeSec = intent.getDoubleExtra(EXTRA_RESUME_SECONDS, 0.0)
-                val initialPositionMs = if (!startFromBeginning && explicitResumeSec > 0) {
-                    (explicitResumeSec * 1000).toLong()
-                } else {
-                    0L
-                }
-                // setMediaItem(item, position) is used (instead of a separate
-                // seekTo after prepare) so the player's first ready callback
-                // already reports the resume position — no race with prepare()
-                // resetting back to 0 before our seek lands.
-                p.setMediaItem(mediaItem, initialPositionMs)
-                p.prepare()
+            val p = player ?: return@onSuccess
+            val mediaItem = MediaItem.Builder()
+                .setUri(qualityOptions[currentQualityIndex].url)
+                .setMediaId("vod:${v.id}")
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(v.title)
+                        .setArtist(v.showTitle)
+                        .setArtworkUri(v.thumbnailUrl?.let { Uri.parse(it) })
+                        .build()
+                )
+                .build()
 
-                // If the caller didn't pass an explicit resume position, fall
-                // back to fetching it from the API. The seek issued here is
-                // applied as soon as the player has buffered enough to seek.
-                if (!startFromBeginning && explicitResumeSec <= 0) {
-                    val progressResult = api.getProgress()
-                    progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
-                        if (progress.percentComplete < 95 && progress.currentTime > 0) {
-                            p.seekTo((progress.currentTime * 1000).toLong())
-                        }
+            // setMediaItem(item, position) is used (instead of a separate
+            // seekTo after prepare) so the player's first ready callback
+            // already reports the resume position — no race with prepare()
+            // resetting back to 0 before our seek lands.
+            p.setMediaItem(mediaItem, initialPositionMs)
+            p.prepare()
+
+            // If the caller asked us to, fall back to the server-saved
+            // resume position. The seek issued here is applied as soon as
+            // the player has buffered enough to seek.
+            if (resumeFromApi) {
+                val progressResult = api.getProgress()
+                progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
+                    if (progress.percentComplete < 95 && progress.currentTime > 0) {
+                        p.seekTo((progress.currentTime * 1000).toLong())
                     }
                 }
-
-                attachPlayerListener(p)
-                p.playWhenReady = true
             }
 
-            result.onFailure { e ->
-                Toast.makeText(this@PlaybackActivity,
-                    GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
-                finish()
-            }
+            attachPlayerListener(p)
+            p.playWhenReady = true
+        }
+
+        result.onFailure { e ->
+            Toast.makeText(this@PlaybackActivity,
+                GiantBombApi.friendlyErrorMessage(e), Toast.LENGTH_LONG).show()
+            finish()
         }
     }
 
@@ -1226,19 +1270,36 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         val result = api.getVideos(limit = 50, showId = showId)
         val videos = result.getOrNull()
-        if (videos != null && videos.size > 1) {
+        val nextVideo = if (videos != null && videos.size > 1) {
             val currentIndex = videos.indexOfFirst { it.id == current.id }
-            val nextVideo = if (currentIndex > 0) videos[currentIndex - 1] else null
-            if (nextVideo != null) {
-                val intent = Intent(this@PlaybackActivity, PlaybackActivity::class.java).apply {
-                    putExtra(EXTRA_VIDEO, nextVideo)
-                }
-                startActivity(intent)
-                finish()
-                return
-            }
+            if (currentIndex > 0) videos[currentIndex - 1] else null
+        } else {
+            null
         }
-        finish()
+
+        if (nextVideo == null) {
+            finish()
+            return
+        }
+
+        // Play the next episode in place on the existing player and surface.
+        // Recreating the activity hands the shared service player a freshly
+        // created SurfaceView mid-transition, which lands as audio-only with a
+        // black video frame.
+        video = nextVideo
+        // Keep the intent in sync so an activity recreation (config change, PiP,
+        // process restart) re-opens the episode we're actually on. Drop the
+        // launch-time resume extras: they belonged to the originally launched
+        // video, and leaving them would seek this episode to that stale
+        // position on recreation. Cleared, it resumes from its own saved
+        // progress instead.
+        intent.putExtra(EXTRA_VIDEO, nextVideo)
+        intent.removeExtra(EXTRA_RESUME_SECONDS)
+        intent.removeExtra("start_from_beginning")
+        // The player swaps media without recreating the activity, so refresh the
+        // activity-owned per-video UI (title, meta, description, "Up Next").
+        bindVideoMetadata(nextVideo)
+        loadVideo(nextVideo, initialPositionMs = 0L, resumeFromApi = false)
     }
 
     private fun disconnectController() {
