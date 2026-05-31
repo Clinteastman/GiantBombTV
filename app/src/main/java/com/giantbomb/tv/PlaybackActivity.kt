@@ -105,6 +105,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var playerContainer: FrameLayout? = null
     private var relatedRecycler: RecyclerView? = null
 
+    // TV-only title overlay shown alongside the playback controls. Populated
+    // once video metadata is known and faded in/out via the controller
+    // visibility listener.
+    private var tvTitleOverlay: TextView? = null
+
     // Quality selection
     private data class QualityOption(val label: String, val url: String, val isHls: Boolean = false)
     private var qualityOptions = mutableListOf<QualityOption>()
@@ -200,12 +205,78 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                         showQualityPicker()
                     }
                     enhanceControlFocus(this)
+                    fadeTitleOverlay(visible = true)
+                } else {
+                    fadeTitleOverlay(visible = false)
                 }
             })
         }
 
         rootLayout.addView(playerView)
+
+        // Title overlay sits above the controller's progress strip so the viewer
+        // can see what they're watching whenever the controls are visible.
+        // Skip entirely if neither a Video nor a live title is available, so we
+        // don't animate a blank string in/out alongside the controls. Match the
+        // fallback that initializeLivePlayer uses so a live launch with no
+        // EXTRA_LIVE_TITLE still gets the same default label on the overlay.
+        val isLive = intent.getStringExtra(EXTRA_LIVE_HLS_URL) != null
+        val overlayText = video?.title
+            ?: intent.getStringExtra(EXTRA_LIVE_TITLE)
+            ?: "Giant Bomb Live".takeIf { isLive }
+        if (!overlayText.isNullOrBlank()) {
+            tvTitleOverlay = TextView(this).apply {
+                text = overlayText
+                textSize = 18f
+                setTextColor(Color.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                // Soft drop shadow so the text stays readable against any frame.
+                setShadowLayer(6f, 0f, 2f, 0x99000000.toInt())
+                alpha = 0f
+                visibility = View.INVISIBLE
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM or Gravity.START
+                ).apply {
+                    setMargins(40.dp(), 0, 40.dp(), 90.dp())
+                }
+            }
+            rootLayout.addView(tvTitleOverlay)
+        }
         setContentView(rootLayout)
+    }
+
+    // Matches Media3 PlayerView's default controller fade so the title rides
+    // alongside the controls instead of popping in/out.
+    private fun fadeTitleOverlay(visible: Boolean) {
+        val overlay = tvTitleOverlay ?: return
+        overlay.animate().cancel()
+        if (visible) {
+            overlay.visibility = View.VISIBLE
+            overlay.animate()
+                .alpha(1f)
+                .setDuration(250L)
+                .setListener(null)
+                .start()
+        } else {
+            // AnimatorListenerAdapter rather than withEndAction: the latter
+            // fires on cancel too, so a hide→show toggle could land with the
+            // overlay still INVISIBLE behind a freshly-animated alpha=1. The
+            // listener checks the current alpha so it only hides when the
+            // fade-out actually finished.
+            overlay.animate()
+                .alpha(0f)
+                .setDuration(250L)
+                .setListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        if (overlay.alpha == 0f) overlay.visibility = View.INVISIBLE
+                    }
+                })
+                .start()
+        }
     }
 
     private fun buildMobileLiveLayout() {
@@ -899,6 +970,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     showQualityPicker()
                 }
                 enhanceControlFocus(playerView)
+                fadeTitleOverlay(visible = true)
+            } else {
+                fadeTitleOverlay(visible = false)
             }
         })
 
