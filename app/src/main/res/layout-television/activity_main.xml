@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android TV variant of activity_main. Identical to the phone layout EXCEPT it
+  omits the Material BottomNavigationView.
+
+  Why a separate TV layout: on TV the active theme is Theme.Leanback (see
+  values-television/styles.xml), which is NOT a Material theme. LayoutInflater
+  instantiates every view in a layout regardless of android:visibility, and
+  com.google.android.material.bottomnavigation.BottomNavigationView throws
+  IllegalArgumentException ("requires your app theme to be
+  Theme.MaterialComponents (or a descendant)") in its constructor when inflated
+  under a non-Material theme. That crashed every TV launch. The bottom nav is
+  mobile-only anyway (wireMobileBottomNav runs only when !isTv), so dropping it
+  here keeps TV off the Material code path entirely. The phone layout
+  (res/layout/activity_main.xml) is unchanged.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/gb_background">
+
+    <!-- Dual blurred backdrop images for crossfade transitions -->
+    <ImageView
+        android:id="@+id/backdrop_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:alpha="0.5" />
+
+    <ImageView
+        android:id="@+id/backdrop_image_next"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:alpha="0.0" />
+
+    <!-- Darkening overlay so glass cards are readable -->
+    <View
+        android:id="@+id/backdrop_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#60000000" />
+
+    <FrameLayout
+        android:id="@+id/main_fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Loading spinner -->
+    <ProgressBar
+        android:id="@+id/loading_spinner"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:indeterminateTint="@color/gb_red"
+        android:visibility="gone" />
+</FrameLayout>
