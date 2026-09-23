@@ -2,8 +2,12 @@ package com.giantbomb.tv.mobile
 
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.RenderEffect
+import android.graphics.Shader
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
 
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -37,6 +41,7 @@ import com.giantbomb.tv.model.Show
 import com.giantbomb.tv.model.UpcomingStream
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.ui.UpcomingCardView
+import com.giantbomb.tv.ui.GlassSurface
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
 import androidx.mediarouter.app.MediaRouteButton
@@ -50,7 +55,12 @@ class MobileBrowseFragment : Fragment() {
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var swipeRefresh: SwipeRefreshLayout
+    private lateinit var loadingSkeleton: View
     private var miniPlayerContainer: FrameLayout? = null
+    private var backdropImageView: ImageView? = null
+    private var backdropNextView: ImageView? = null
+    private var currentBackdropUrl: String? = null
+    private var backdropRunnable: Runnable? = null
 
     private val browseItems = mutableListOf<BrowseItem>()
     private lateinit var browseAdapter: BrowseAdapter
@@ -101,9 +111,15 @@ class MobileBrowseFragment : Fragment() {
         private const val SETTINGS_CUSTOMIZE = 6
         private const val SETTINGS_PIP_BACK = 7
         private const val SETTINGS_TWITCH_CHAT = 8
+        private const val SETTINGS_VISUAL_THEME = 9
+        private const val SETTINGS_NEON_PARTICLES = 10
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
         private const val RECENT_VERTICAL_COUNT = 5
+        private const val BACKDROP_DELAY_MS = 160L
+        private const val BACKDROP_CROSSFADE_MS = 600L
+        private const val MOBILE_BACKDROP_ALPHA = 0.48f
+        private const val PREMIUM_GLASS_TINT = 0xFFFFB436.toInt()
         // Polling /upcoming_json every 60s pushed us into the endpoint's
         // hard rate limit (it applies to everyone, not just our UA). 180s is
         // still snappy enough for "stream went live" to surface within a few
@@ -143,7 +159,9 @@ class MobileBrowseFragment : Fragment() {
 
         recyclerView = view.findViewById(R.id.browse_recycler)
         swipeRefresh = view.findViewById(R.id.swipe_refresh)
+        loadingSkeleton = view.findViewById(R.id.browse_loading_skeleton)
         miniPlayerContainer = view.findViewById(R.id.mini_player_container)
+        setupMobileBackdrop()
 
         // Apply system bar insets to toolbar - status bar top + consistent horizontal padding
         val toolbar = view.findViewById<FrameLayout>(R.id.toolbar_container)
@@ -184,6 +202,13 @@ class MobileBrowseFragment : Fragment() {
         recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 updateActiveChip()
+                scheduleBackdropFromVisibleCard()
+            }
+
+            override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
+                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                    scheduleBackdropFromVisibleCard(immediate = true)
+                }
             }
         })
         recyclerView.addItemDecoration(SectionGapDecoration())
@@ -338,6 +363,7 @@ class MobileBrowseFragment : Fragment() {
         if (isLoading) return
         isLoading = true
         swipeRefresh.isRefreshing = browseItems.isEmpty() || forceRefresh
+        loadingSkeleton.visibility = if (browseItems.isEmpty()) View.VISIBLE else View.GONE
 
         val key = prefs.apiKey ?: ""
         val repo = GiantBombRepository.get(key)
@@ -441,14 +467,109 @@ class MobileBrowseFragment : Fragment() {
 
                 browseAdapter.submit(items)
                 updateChipBar()
+                recyclerView.post { scheduleBackdropFromVisibleCard(immediate = true) }
 
             } finally {
                 isLoading = false
                 if (isAdded) {
                     swipeRefresh.isRefreshing = false
+                    loadingSkeleton.visibility = View.GONE
                 }
             }
         }
+    }
+
+    private fun setupMobileBackdrop() {
+        backdropImageView = requireActivity().findViewById(R.id.backdrop_image)
+        backdropNextView = requireActivity().findViewById(R.id.backdrop_image_next)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val blur = RenderEffect.createBlurEffect(4f, 4f, Shader.TileMode.CLAMP)
+            backdropImageView?.setRenderEffect(blur)
+            backdropNextView?.setRenderEffect(blur)
+        }
+    }
+
+    private fun scheduleBackdropFromVisibleCard(immediate: Boolean = false) {
+        backdropRunnable?.let { refreshHandler.removeCallbacks(it) }
+        backdropRunnable = Runnable {
+            if (!isAdded || browseItems.isEmpty()) return@Runnable
+            val targetY = recyclerView.height * 0.38f
+            var bestUrl: String? = null
+            var bestDistance = Float.MAX_VALUE
+            for (childIndex in 0 until recyclerView.childCount) {
+                val child = recyclerView.getChildAt(childIndex)
+                val adapterPosition = recyclerView.getChildAdapterPosition(child)
+                val url = browseItems.getOrNull(adapterPosition)?.backdropUrl() ?: continue
+                val distance = kotlin.math.abs((child.top + child.bottom) * 0.5f - targetY)
+                if (distance < bestDistance) {
+                    bestDistance = distance
+                    bestUrl = url
+                }
+            }
+            updateMobileBackdrop(bestUrl)
+        }
+        refreshHandler.postDelayed(backdropRunnable!!, if (immediate) 0L else BACKDROP_DELAY_MS)
+    }
+
+    private fun BrowseItem.backdropUrl(): String? = when (this) {
+        is BrowseItem.VerticalVideo -> video.thumbnailUrl ?: video.posterUrl
+        is BrowseItem.HorizontalVideoRow -> videos.firstNotNullOfOrNull {
+            it.thumbnailUrl ?: it.posterUrl
+        }
+        is BrowseItem.HorizontalShowRow -> shows.firstNotNullOfOrNull {
+            it.posterUrl ?: it.logoUrl
+        }
+        is BrowseItem.UpcomingRow -> liveNow?.image ?: streams.firstNotNullOfOrNull { it.image }
+        is BrowseItem.LazyShowRow -> videos?.firstNotNullOfOrNull {
+            it.thumbnailUrl ?: it.posterUrl
+        } ?: show.posterUrl ?: show.logoUrl
+        is BrowseItem.ShowSectionHeader -> show.posterUrl ?: show.logoUrl
+        else -> null
+    }
+
+    private fun updateMobileBackdrop(imageUrl: String?) {
+        if (imageUrl.isNullOrEmpty() || imageUrl == currentBackdropUrl) return
+        val current = backdropImageView ?: return
+        val next = backdropNextView ?: return
+        currentBackdropUrl = imageUrl
+
+        Glide.with(this)
+            .load(imageUrl)
+            .override(720, 1280)
+            .centerCrop()
+            .into(object : com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
+                override fun onResourceReady(
+                    resource: android.graphics.drawable.Drawable,
+                    transition: com.bumptech.glide.request.transition.Transition<in android.graphics.drawable.Drawable>?
+                ) {
+                    if (!isAdded || currentBackdropUrl != imageUrl) return
+                    (resource as? BitmapDrawable)?.bitmap?.let { bitmap ->
+                        GlassSurface.updateBackdrop(
+                            bitmap,
+                            requireActivity().window.decorView.width,
+                            requireActivity().window.decorView.height
+                        )
+                    }
+                    current.animate().cancel()
+                    next.animate().cancel()
+                    next.setImageDrawable(resource)
+                    next.animate().alpha(MOBILE_BACKDROP_ALPHA)
+                        .setDuration(BACKDROP_CROSSFADE_MS).start()
+                    current.animate().alpha(0f)
+                        .setDuration(BACKDROP_CROSSFADE_MS)
+                        .withEndAction {
+                            current.setImageDrawable(resource)
+                            current.alpha = MOBILE_BACKDROP_ALPHA
+                            next.alpha = 0f
+                            next.setImageDrawable(null)
+                        }
+                        .start()
+                }
+
+                override fun onLoadCleared(placeholder: android.graphics.drawable.Drawable?) {
+                    next.setImageDrawable(null)
+                }
+            })
     }
 
     // ----------------------------------------------------------------------
@@ -607,6 +728,18 @@ class MobileBrowseFragment : Fragment() {
             R.drawable.ic_settings_quality
         )))
         items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_VISUAL_THEME,
+            "Visual Theme",
+            PrefsManager.visualThemeLabel(prefs.visualTheme),
+            R.drawable.ic_settings_cog
+        )))
+        items.add(BrowseItem.SettingRow(SettingsItem(
+            SETTINGS_NEON_PARTICLES,
+            "Neon Grid Motion",
+            if (prefs.neonParticlesEnabled) "On - grid reacts to movement" else "Off - static grid",
+            R.drawable.ic_settings_cog
+        )))
+        items.add(BrowseItem.SettingRow(SettingsItem(
             SETTINGS_PIP_BACK,
             "Back Enters Picture-in-Picture",
             backPipSubtitle(prefs.backEntersPip),
@@ -723,6 +856,7 @@ class MobileBrowseFragment : Fragment() {
     override fun onDestroy() {
         super.onDestroy()
         upcomingRefreshRunnable?.let { refreshHandler.removeCallbacks(it) }
+        backdropRunnable?.let { refreshHandler.removeCallbacks(it) }
     }
 
     // -----------------------------------------------------------------------
@@ -857,7 +991,11 @@ class MobileBrowseFragment : Fragment() {
             holder.text.background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = 100f * density
-                if (active) {
+                if (GlassSurface.theme == GlassSurface.Theme.NEON) {
+                    val accent = if (active) 0xFFFF43E6.toInt() else 0xFF42F5FF.toInt()
+                    setColor(if (active) 0xB33A0A47.toInt() else 0xB3071028.toInt())
+                    setStroke(((if (active) 2 else 1) * density).toInt().coerceAtLeast(1), accent)
+                } else if (active) {
                     setColor(ContextCompat.getColor(ctx, R.color.gb_red))
                     setStroke((1 * density).toInt(), ContextCompat.getColor(ctx, R.color.gb_red))
                 } else {
@@ -1187,11 +1325,17 @@ class MobileBrowseFragment : Fragment() {
         init {
             val density = view.resources.displayMetrics.density
 
-            // Premium badge styling
-            premiumBadge.background = GradientDrawable().apply {
-                setColor(0xCCFFD700.toInt())
-                cornerRadius = 4f * density
-            }
+            GlassSurface.applyState(
+                itemView,
+                GlassSurface.Emphasis.CARD,
+                focused = false,
+                cornerRadiusDp = 14f
+            )
+
+            // Premium is expressed by the card's champagne glass tint. The
+            // label is intentionally just an identifier, not a sticker.
+            premiumBadge.background = null
+            premiumBadge.setShadowLayer(4f * density, 0f, 1f * density, 0xE0000000.toInt())
             // Watched badge styling
             watchedBadge.background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -1208,6 +1352,14 @@ class MobileBrowseFragment : Fragment() {
 
         fun bind(item: BrowseItem.VerticalVideo) {
             val video = item.video
+
+            GlassSurface.applyState(
+                itemView,
+                GlassSurface.Emphasis.CARD,
+                focused = false,
+                cornerRadiusDp = 14f,
+                accentColor = if (video.premium) PREMIUM_GLASS_TINT else null
+            )
 
             // Enforce 16:9 on each bind (handles orientation changes & recycling)
             thumbnailContainer.post {
@@ -1308,6 +1460,22 @@ class MobileBrowseFragment : Fragment() {
         private val icon: ImageView = view.findViewById(R.id.setting_icon)
         private val title: TextView = view.findViewById(R.id.setting_title)
         private val description: TextView = view.findViewById(R.id.setting_description)
+        private val chevron: TextView = view.findViewById(R.id.setting_chevron)
+
+        init {
+            GlassSurface.styleInteractive(
+                itemView,
+                GlassSurface.Emphasis.CARD,
+                cornerRadiusDp = 14f,
+                focusedScale = 1.01f
+            )
+            GlassSurface.applyState(
+                icon,
+                GlassSurface.Emphasis.BUTTON,
+                focused = false,
+                shape = GlassSurface.Shape.CIRCLE
+            )
+        }
 
         fun bind(item: BrowseItem.SettingRow) {
             val si = item.item
@@ -1315,6 +1483,7 @@ class MobileBrowseFragment : Fragment() {
             icon.setColorFilter(ContextCompat.getColor(requireContext(), R.color.gb_text_secondary))
             title.text = si.title
             description.text = si.description
+            chevron.visibility = if (si.id >= 0) View.VISIBLE else View.INVISIBLE
 
             itemView.setOnClickListener {
                 when (si.id) {
@@ -1325,8 +1494,35 @@ class MobileBrowseFragment : Fragment() {
                     SETTINGS_CUSTOMIZE -> launchCustomizeBrowse()
                     SETTINGS_PIP_BACK -> toggleBackPip()
                     SETTINGS_TWITCH_CHAT -> toggleTwitchChat()
+                    SETTINGS_VISUAL_THEME -> showVisualThemePicker()
+                    SETTINGS_NEON_PARTICLES -> toggleNeonParticles()
                 }
             }
+        }
+    }
+
+    private fun showVisualThemePicker() {
+        val values = PrefsManager.VISUAL_THEMES
+        val labels = values.map(PrefsManager::visualThemeLabel).toTypedArray()
+        val selected = values.indexOf(prefs.visualTheme).coerceAtLeast(0)
+        android.app.AlertDialog.Builder(requireContext())
+            .setTitle("Visual Theme")
+            .setSingleChoiceItems(labels, selected) { dialog, which ->
+                prefs.visualTheme = values[which]
+                GlassSurface.configure(values[which])
+                dialog.dismiss()
+                requireActivity().recreate()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun toggleNeonParticles() {
+        prefs.neonParticlesEnabled = !prefs.neonParticlesEnabled
+        if (prefs.visualTheme == PrefsManager.THEME_NEON) {
+            requireActivity().recreate()
+        } else {
+            loadContent()
         }
     }
 
@@ -1410,8 +1606,15 @@ class MobileBrowseFragment : Fragment() {
             val progressBar: View = view.findViewById(R.id.small_progress_bar)
             val watched: TextView = view.findViewById(R.id.small_watched)
             val watchlistBtn: TextView = view.findViewById(R.id.small_watchlist_btn)
+            val premiumBadge: TextView = view.findViewById(R.id.small_premium_badge)
 
             init {
+                GlassSurface.applyState(
+                    itemView,
+                    GlassSurface.Emphasis.CARD,
+                    focused = false,
+                    cornerRadiusDp = 10f
+                )
                 watched.background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
                     setColor(0xCC4CAF50.toInt())
@@ -1429,9 +1632,19 @@ class MobileBrowseFragment : Fragment() {
 
         override fun onBindViewHolder(holder: VH, position: Int) {
             val video = videos[position]
+            GlassSurface.applyState(
+                holder.itemView,
+                GlassSurface.Emphasis.CARD,
+                focused = false,
+                cornerRadiusDp = 10f,
+                accentColor = if (video.premium) PREMIUM_GLASS_TINT else null
+            )
             holder.title.text = video.title
             holder.showName.text = video.showTitle ?: ""
-            holder.showName.visibility = if (video.showTitle.isNullOrEmpty()) View.GONE else View.VISIBLE
+            // Keep the metadata line's space even when this video has no show
+            // name so every glass card in the row remains the same height.
+            holder.showName.visibility = if (video.showTitle.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
+            holder.premiumBadge.visibility = if (video.premium) View.VISIBLE else View.GONE
             holder.watched.visibility = if (video.watched) View.VISIBLE else View.GONE
 
             // Progress
@@ -1474,6 +1687,15 @@ class MobileBrowseFragment : Fragment() {
         inner class VH(view: View) : RecyclerView.ViewHolder(view) {
             val poster: ImageView = view.findViewById(R.id.show_poster)
             val title: TextView = view.findViewById(R.id.show_title)
+
+            init {
+                GlassSurface.applyState(
+                    itemView,
+                    GlassSurface.Emphasis.CARD,
+                    focused = false,
+                    cornerRadiusDp = 10f
+                )
+            }
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -1536,10 +1758,12 @@ class MobileBrowseFragment : Fragment() {
                 val density = view.resources.displayMetrics.density
                 val cornerRadius = 12f * density
 
-                cardBg.background = GradientDrawable().apply {
-                    setColor(0x18FFFFFF)
-                    setCornerRadius(cornerRadius)
-                }
+                GlassSurface.applyState(
+                    cardBg,
+                    GlassSurface.Emphasis.CARD,
+                    focused = false,
+                    cornerRadiusDp = 12f
+                )
                 cardBg.outlineProvider = object : android.view.ViewOutlineProvider() {
                     override fun getOutline(view: View, outline: android.graphics.Outline) {
                         outline.setRoundRect(0, 0, view.width, view.height, cornerRadius)
@@ -1552,15 +1776,10 @@ class MobileBrowseFragment : Fragment() {
                     intArrayOf(0x80000000.toInt(), 0x60000000.toInt())
                 )
 
-                view.findViewById<View>(R.id.upcoming_text_area).background = GradientDrawable().apply {
-                    setColor(0x0DFFFFFF)
-                    cornerRadii = floatArrayOf(0f, 0f, 0f, 0f, cornerRadius, cornerRadius, cornerRadius, cornerRadius)
-                }
+                view.findViewById<View>(R.id.upcoming_text_area).background = null
 
-                premiumBadge.background = GradientDrawable().apply {
-                    setColor(0xCCFFD700.toInt())
-                    setCornerRadius(4f * density)
-                }
+                premiumBadge.background = null
+                premiumBadge.setShadowLayer(4f * density, 0f, 1f * density, 0xE0000000.toInt())
 
                 liveBadge.background = GradientDrawable().apply {
                     setColor(0xFFE3192C.toInt())
@@ -1578,6 +1797,13 @@ class MobileBrowseFragment : Fragment() {
 
         override fun onBindViewHolder(holder: VH, position: Int) {
             val stream = streams[position]
+            GlassSurface.applyState(
+                holder.cardBg,
+                GlassSurface.Emphasis.CARD,
+                focused = false,
+                cornerRadiusDp = 12f,
+                accentColor = if (stream.premium) PREMIUM_GLASS_TINT else null
+            )
             holder.title.text = stream.title
             holder.premiumBadge.visibility = if (stream.premium) View.VISIBLE else View.GONE
 

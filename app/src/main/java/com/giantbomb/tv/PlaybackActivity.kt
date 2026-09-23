@@ -64,6 +64,7 @@ import com.giantbomb.tv.playback.DownloadStatus
 import com.giantbomb.tv.playback.Downloads
 import com.giantbomb.tv.util.DateFormat
 import com.giantbomb.tv.util.DeviceUtil
+import com.giantbomb.tv.ui.GlassSurface
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
 import kotlinx.coroutines.*
@@ -401,6 +402,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     Gravity.TOP or Gravity.END
                 ).apply { setMargins(0, 8.dp(), 8.dp(), 0) }
                 CastButtonFactory.setUpMediaRouteButton(applicationContext, this)
+                GlassSurface.styleInteractive(
+                    this,
+                    GlassSurface.Emphasis.PLAYER_CONTROL,
+                    GlassSurface.Shape.CIRCLE
+                )
             }
             rootLayout.addView(castButton)
         }
@@ -472,6 +478,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     Gravity.TOP or Gravity.END
                 ).apply { setMargins(0, 8.dp(), 8.dp(), 0) }
                 CastButtonFactory.setUpMediaRouteButton(applicationContext, this)
+                GlassSurface.styleInteractive(
+                    this,
+                    GlassSurface.Emphasis.PLAYER_CONTROL,
+                    GlassSurface.Shape.CIRCLE
+                )
             }
             playerContainer!!.addView(castButton)
         }
@@ -528,11 +539,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             setPadding(16.dp(), 8.dp(), 16.dp(), 8.dp())
-            val density = resources.displayMetrics.density
-            background = GradientDrawable().apply {
-                setColor(0x33FFFFFF)
-                cornerRadius = 6f * density
-            }
+            GlassSurface.styleInteractive(this, cornerRadiusDp = 8f)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -550,11 +557,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             setPadding(16.dp(), 8.dp(), 16.dp(), 8.dp())
-            val density = resources.displayMetrics.density
-            background = GradientDrawable().apply {
-                setColor(0x33FFFFFF)
-                cornerRadius = 6f * density
-            }
+            GlassSurface.styleInteractive(this, cornerRadiusDp = 8f)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -1707,10 +1710,6 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
      */
     private fun enhanceControlFocus(pv: PlayerView) {
         val red = 0xFFE3192C.toInt()
-        val white = 0xFFFFFFFF.toInt()
-        val density = resources.displayMetrics.density
-        val ringStroke = (2 * density).toInt()
-
         // Walk the controller subtree and apply the halo treatment to every
         // focusable view — covers play/pause, the rewind/ffwd "with amount"
         // FrameLayouts (which aren't ImageButtons), settings, subtitle, prev/
@@ -1719,19 +1718,12 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // list. DefaultTimeBar is excluded — it gets the red-played-colour
         // treatment below instead.
         fun applyHalo(v: View) {
-            v.setOnFocusChangeListener { view, hasFocus ->
-                if (hasFocus) {
-                    view.background = GradientDrawable().apply {
-                        shape = GradientDrawable.OVAL
-                        setColor(0x00000000)
-                        setStroke(ringStroke, white)
-                    }
-                    view.animate().scaleX(1.08f).scaleY(1.08f).setDuration(120).start()
-                } else {
-                    view.background = null
-                    view.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
-                }
-            }
+            GlassSurface.styleInteractive(
+                v,
+                emphasis = GlassSurface.Emphasis.PLAYER_CONTROL,
+                shape = GlassSurface.Shape.CIRCLE,
+                focusedScale = 1.08f
+            )
             // Halo + scale slightly overdraws the view's own bounds; without
             // unclipping ancestors the ring is sliced off by exo_basic_controls
             // and friends. Walk up to the PlayerView root flipping clipping off.

@@ -1,6 +1,5 @@
 package com.giantbomb.tv.ui
 
-import android.graphics.drawable.GradientDrawable
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.core.content.ContextCompat
@@ -12,21 +11,14 @@ import com.giantbomb.tv.model.SettingsItem
 class SettingsCardPresenter : Presenter() {
 
     override fun onCreateViewHolder(parent: ViewGroup): ViewHolder {
-        val density = parent.resources.displayMetrics.density
-        val cornerRadius = 12f * density
-
         val cardView = ImageCardView(parent.context).apply {
             isFocusable = true
             isFocusableInTouchMode = true
             setMainImageDimensions(160, 160)
             setMainImageScaleType(ImageView.ScaleType.CENTER_INSIDE)
 
-            // Glass background — no stroke to avoid dark fringe artifacts
-            background = GradientDrawable().apply {
-                setColor(0x18FFFFFF)
-                setCornerRadius(cornerRadius)
-            }
-            setInfoAreaBackgroundColor(0x0DFFFFFF)
+            GlassSurface.applyState(this, GlassSurface.Emphasis.CARD, focused = false)
+            setInfoAreaBackgroundColor(0x00000000)
         }
 
         // Focus: brighten glass
@@ -34,10 +26,7 @@ class SettingsCardPresenter : Presenter() {
             val scale = if (hasFocus) 1.05f else 1.0f
             v.animate().scaleX(scale).scaleY(scale).setDuration(150).start()
 
-            v.background = GradientDrawable().apply {
-                setColor(if (hasFocus) 0x28FFFFFF else 0x18FFFFFF)
-                setCornerRadius(cornerRadius)
-            }
+            GlassSurface.applyState(v, GlassSurface.Emphasis.CARD, hasFocus)
         }
 
         return ViewHolder(cardView)

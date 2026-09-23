@@ -2,7 +2,11 @@ package com.giantbomb.tv
 
 import android.app.AlertDialog
 import android.content.Intent
+import android.graphics.RenderEffect
+import android.graphics.Shader
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -30,6 +34,7 @@ import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.data.TwitchExtractor
 import com.giantbomb.tv.model.UpcomingStream
 import com.giantbomb.tv.ui.CardPresenter
+import com.giantbomb.tv.ui.GlassSurface
 import com.giantbomb.tv.ui.SettingsCardPresenter
 import com.giantbomb.tv.ui.ShowCardPresenter
 import com.giantbomb.tv.ui.UpcomingCardPresenter
@@ -63,9 +68,11 @@ class BrowseFragment : BrowseSupportFragment() {
         const val SETTINGS_CUSTOMIZE = 6
         const val SETTINGS_TWITCH_CHAT = 7
         const val SETTINGS_DOWNLOADS = 8
+        const val SETTINGS_VISUAL_THEME = 9
+        const val SETTINGS_NEON_PARTICLES = 10
         private const val BACKDROP_DELAY_MS = 300L
         private const val CROSSFADE_DURATION = 600L
-        private const val BACKDROP_ALPHA = 0.5f
+        private const val BACKDROP_ALPHA = 0.36f
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
         private const val LOAD_MORE_THRESHOLD = 15
@@ -151,6 +158,11 @@ class BrowseFragment : BrowseSupportFragment() {
     private fun setupBackdrop() {
         backdropImageView = requireActivity().findViewById(R.id.backdrop_image)
         backdropNextView = requireActivity().findViewById(R.id.backdrop_image_next)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val blur = RenderEffect.createBlurEffect(4f, 4f, Shader.TileMode.CLAMP)
+            backdropImageView?.setRenderEffect(blur)
+            backdropNextView?.setRenderEffect(blur)
+        }
     }
 
     private fun setupUIElements() {
@@ -213,9 +225,44 @@ class BrowseFragment : BrowseSupportFragment() {
 
         private fun applyHint(holder: ViewHolder) {
             val header = holder.view.tag as? HeaderItem ?: return
-            val tv = holder.view as? android.widget.TextView ?: return
+            val tv = (holder.view as? android.widget.TextView)
+                ?: holder.view.findViewById<android.widget.TextView>(
+                    androidx.leanback.R.id.row_header
+                )
+                ?: return
             val name = header.name
-            if (holder.selectLevel > 0.5f) {
+            val selected = holder.selectLevel > 0.5f
+
+            // Leanback's stock header presenter deliberately makes inactive
+            // labels very faint. That works over a plain backdrop, but the
+            // animated glass and Neon grid compete with it. Keep every section
+            // readable, then use weight and glow to preserve a strong focus
+            // distinction instead of relying on low opacity.
+            holder.view.alpha = 1f
+            tv.alpha = 1f
+            tv.setTextColor(
+                when {
+                    selected -> android.graphics.Color.WHITE
+                    GlassSurface.theme == GlassSurface.Theme.NEON -> 0xE8F1F5FF.toInt()
+                    else -> 0xDEFFFFFF.toInt()
+                }
+            )
+            tv.typeface = android.graphics.Typeface.create(
+                "sans-serif-medium",
+                if (selected) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL
+            )
+            if (GlassSurface.theme == GlassSurface.Theme.NEON) {
+                tv.setShadowLayer(
+                    if (selected) 9f else 5f,
+                    0f,
+                    0f,
+                    if (selected) 0xCC35E9FF.toInt() else 0x99000000.toInt()
+                )
+            } else {
+                tv.setShadowLayer(if (selected) 6f else 4f, 0f, 1f, 0xCC000000.toInt())
+            }
+
+            if (selected) {
                 val hint = "  ⋮ Hold OK"
                 val span = android.text.SpannableString("$name$hint")
                 val start = name.length
@@ -365,6 +412,8 @@ class BrowseFragment : BrowseSupportFragment() {
                         SETTINGS_PRIVACY -> openPrivacyPolicy()
                         SETTINGS_CUSTOMIZE -> launchCustomize()
                         SETTINGS_TWITCH_CHAT -> toggleTwitchChat()
+                        SETTINGS_VISUAL_THEME -> showVisualThemePicker()
+                        SETTINGS_NEON_PARTICLES -> toggleNeonParticles()
                         SETTINGS_DOWNLOADS -> startActivity(
                             Intent(requireContext(), DownloadsActivity::class.java)
                         )
@@ -439,22 +488,38 @@ class BrowseFragment : BrowseSupportFragment() {
             currentBackdropUrl = imageUrl
 
             if (imageUrl.isNullOrEmpty()) {
+                GlassSurface.updateBackdrop(
+                    null,
+                    requireActivity().window.decorView.width,
+                    requireActivity().window.decorView.height
+                )
                 current.animate().alpha(0f).setDuration(CROSSFADE_DURATION).start()
                 next.animate().alpha(0f).setDuration(CROSSFADE_DURATION).start()
                 return@Runnable
             }
 
             // Load new image into the hidden "next" layer
-            Glide.with(requireContext())
+            val backdropRequest = Glide.with(requireContext())
                 .load(imageUrl)
-                .override(480, 270)
-                .transform(
+                .override(960, 540)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                backdropRequest.centerCrop()
+            } else {
+                backdropRequest.transform(
                     com.bumptech.glide.load.resource.bitmap.CenterCrop(),
-                    com.giantbomb.tv.ui.BlurTransformation(radius = 10, passes = 2)
+                    com.giantbomb.tv.ui.BlurTransformation(radius = 2, passes = 2)
                 )
-                .into(object : com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
+            }
+            backdropRequest.into(object : com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
                     override fun onResourceReady(resource: android.graphics.drawable.Drawable, transition: com.bumptech.glide.request.transition.Transition<in android.graphics.drawable.Drawable>?) {
                         if (!isAdded) return
+                        (resource as? BitmapDrawable)?.bitmap?.let { bitmap ->
+                            GlassSurface.updateBackdrop(
+                                bitmap,
+                                requireActivity().window.decorView.width,
+                                requireActivity().window.decorView.height
+                            )
+                        }
                         next.setImageDrawable(resource)
                         // Crossfade: fade in next, fade out current
                         next.animate().alpha(BACKDROP_ALPHA).setDuration(CROSSFADE_DURATION).start()
@@ -726,6 +791,31 @@ class BrowseFragment : BrowseSupportFragment() {
         loadContent()
     }
 
+    private fun showVisualThemePicker() {
+        val values = PrefsManager.VISUAL_THEMES
+        val labels = values.map(PrefsManager::visualThemeLabel).toTypedArray()
+        val selected = values.indexOf(prefs.visualTheme).coerceAtLeast(0)
+        android.app.AlertDialog.Builder(requireContext())
+            .setTitle("Visual Theme")
+            .setSingleChoiceItems(labels, selected) { dialog, which ->
+                prefs.visualTheme = values[which]
+                GlassSurface.configure(values[which])
+                dialog.dismiss()
+                requireActivity().recreate()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun toggleNeonParticles() {
+        prefs.neonParticlesEnabled = !prefs.neonParticlesEnabled
+        if (prefs.visualTheme == PrefsManager.THEME_NEON) {
+            requireActivity().recreate()
+        } else {
+            loadContent()
+        }
+    }
+
     private fun cycleQuality() {
         val options = PrefsManager.QUALITY_OPTIONS
         val current = prefs.preferredQuality
@@ -979,6 +1069,18 @@ class BrowseFragment : BrowseSupportFragment() {
             "Stream Quality",
             "Default: ${PrefsManager.qualityLabel(prefs.preferredQuality)}",
             R.drawable.ic_settings_quality
+        ))
+        utilAdapter.add(SettingsItem(
+            SETTINGS_VISUAL_THEME,
+            "Visual Theme",
+            PrefsManager.visualThemeLabel(prefs.visualTheme),
+            R.drawable.ic_settings_cog
+        ))
+        utilAdapter.add(SettingsItem(
+            SETTINGS_NEON_PARTICLES,
+            "Neon Grid Motion",
+            if (prefs.neonParticlesEnabled) "On - grid reacts to movement" else "Off - static grid",
+            R.drawable.ic_settings_cog
         ))
         utilAdapter.add(SettingsItem(
             SETTINGS_DOWNLOADS,

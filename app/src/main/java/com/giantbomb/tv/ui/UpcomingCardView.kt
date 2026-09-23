@@ -51,7 +51,7 @@ class UpcomingCardView(context: Context) : FrameLayout(context) {
         val vPaddingPx = res.getDimensionPixelSize(R.dimen.card_vpadding)
         cardWidthPx = res.getDimensionPixelSize(R.dimen.card_width) + hPadding * 2
         cardHeightPx = res.getDimensionPixelSize(R.dimen.card_height) + vPaddingPx * 2
-        val cornerRadius = 12f * density
+        val cornerRadius = 28f * density
 
         setPadding(hPadding, vPaddingPx, hPadding, vPaddingPx)
         clipChildren = false
@@ -76,11 +76,7 @@ class UpcomingCardView(context: Context) : FrameLayout(context) {
         setBackgroundColor(0x00000000)
         (cardRoot as? FrameLayout)?.setBackgroundColor(0x00000000)
 
-        // Glass background
-        glassBg.background = GradientDrawable().apply {
-            setColor(0x18FFFFFF)
-            setCornerRadius(cornerRadius)
-        }
+        GlassSurface.applyState(glassBg, GlassSurface.Emphasis.CARD, focused = false)
         glassBg.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
                 outline.setRoundRect(0, 0, view.width, view.height, cornerRadius)
@@ -100,12 +96,7 @@ class UpcomingCardView(context: Context) : FrameLayout(context) {
             intArrayOf(0x60000000, 0x00000000)
         )
 
-        // Text area glass tint (same as video card)
-        val textArea = findViewById<View>(R.id.upcoming_text_area)
-        textArea.background = GradientDrawable().apply {
-            setColor(0x0DFFFFFF)
-            cornerRadii = floatArrayOf(0f, 0f, 0f, 0f, cornerRadius, cornerRadius, cornerRadius, cornerRadius)
-        }
+        findViewById<View>(R.id.upcoming_text_area).background = null
 
         // Premium badge
         premiumBadge.background = GradientDrawable().apply {
@@ -126,10 +117,7 @@ class UpcomingCardView(context: Context) : FrameLayout(context) {
         setOnFocusChangeListener { _, hasFocus ->
             val scale = if (hasFocus) 1.05f else 1.0f
             cardRoot.animate().scaleX(scale).scaleY(scale).setDuration(150).start()
-            glassBg.background = GradientDrawable().apply {
-                setColor(if (hasFocus) 0x30FFFFFF else 0x18FFFFFF)
-                setCornerRadius(cornerRadius)
-            }
+            GlassSurface.applyState(glassBg, GlassSurface.Emphasis.CARD, hasFocus)
         }
     }
 

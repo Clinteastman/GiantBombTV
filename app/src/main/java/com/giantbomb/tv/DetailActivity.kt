@@ -36,6 +36,7 @@ import com.giantbomb.tv.playback.DownloadStatus
 import com.giantbomb.tv.playback.Downloads
 import com.giantbomb.tv.util.DateFormat
 import com.giantbomb.tv.util.DeviceUtil
+import com.giantbomb.tv.ui.GlassSurface
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.*
 
@@ -138,7 +139,8 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         if (!imageUrl.isNullOrEmpty()) {
             Glide.with(this)
                 .load(imageUrl)
-                .override(480, 270)
+                .override(1280, 720)
+                .centerCrop()
                 .into(backdrop)
         }
         root.addView(backdrop)
@@ -713,29 +715,15 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             isAllCaps = false
             isFocusable = true
 
-            fun glassDrawable(fill: Int, border: Int): LayerDrawable {
-                val f = GradientDrawable().apply {
-                    setColor(fill)
-                    setCornerRadius(cornerRadius)
-                }
-                val b = GradientDrawable().apply {
-                    setColor(0x00000000)
-                    setStroke((1f * density).toInt(), border)
-                    setCornerRadius(cornerRadius)
-                }
-                return LayerDrawable(arrayOf(f, b))
-            }
-
-            background = glassDrawable(fillColor, borderColor)
-
-            setOnFocusChangeListener { v, hasFocus ->
-                val scale = if (hasFocus) 1.05f else 1.0f
-                v.animate().scaleX(scale).scaleY(scale).setDuration(150).start()
-                v.background = glassDrawable(
-                    if (hasFocus) focusFillColor else fillColor,
-                    if (hasFocus) focusBorderColor else borderColor
-                )
-            }
+            val accent = if ((fillColor and 0x00FFFFFF) == 0x00E3192C) {
+                0xFFE3192C.toInt()
+            } else null
+            GlassSurface.styleInteractive(
+                this,
+                emphasis = GlassSurface.Emphasis.BUTTON,
+                cornerRadiusDp = 8f,
+                accentColor = accent
+            )
         }
     }
 
