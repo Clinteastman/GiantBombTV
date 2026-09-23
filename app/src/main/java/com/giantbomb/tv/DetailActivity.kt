@@ -9,7 +9,6 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.os.Bundle
 import android.view.Gravity
-import android.view.KeyEvent
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import android.widget.Button
@@ -23,6 +22,7 @@ import android.app.AlertDialog
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -93,6 +93,12 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                finish()
+            }
+        })
 
         val isTv = DeviceUtil.isTv(this)
         if (!isTv) {
@@ -730,19 +736,6 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 )
             }
         }
-    }
-
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            finish()
-            return true
-        }
-        return super.onKeyDown(keyCode, event)
-    }
-
-    @Deprecated("Use OnBackPressedDispatcher")
-    override fun onBackPressed() {
-        super.onBackPressed()
     }
 
     override fun onDestroy() {

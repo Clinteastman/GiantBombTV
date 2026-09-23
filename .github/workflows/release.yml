@@ -29,7 +29,22 @@ jobs:
         id: version
         run: |
           TAG="${GITHUB_REF#refs/tags/v}"
-          CODE=$(echo "$TAG" | sed 's/\.//g' | sed 's/^0*//')
+          if [[ ! "$TAG" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Release tag must be vMAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          MAJOR="${BASH_REMATCH[1]}"
+          MINOR="${BASH_REMATCH[2]}"
+          PATCH="${BASH_REMATCH[3]}"
+          if (( 10#$MINOR >= 1000 || 10#$PATCH >= 1000 )); then
+            echo "Minor and patch components must be below 1000" >&2
+            exit 1
+          fi
+          CODE=$((10#$MAJOR * 1000000 + 10#$MINOR * 1000 + 10#$PATCH))
+          if (( CODE <= 0 || CODE > 2100000000 )); then
+            echo "Computed Android version code is outside the valid range" >&2
+            exit 1
+          fi
           echo "name=$TAG" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
 

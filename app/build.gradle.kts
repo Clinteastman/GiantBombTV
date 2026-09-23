@@ -1,16 +1,48 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("androidx.baselineprofile")
+}
+
+val releaseSigningValues = mapOf(
+    "KEYSTORE_FILE" to System.getenv("KEYSTORE_FILE"),
+    "KEYSTORE_PASSWORD" to System.getenv("KEYSTORE_PASSWORD"),
+    "KEY_ALIAS" to System.getenv("KEY_ALIAS"),
+    "KEY_PASSWORD" to System.getenv("KEY_PASSWORD")
+)
+val hasReleaseSigning = releaseSigningValues.values.all { !it.isNullOrBlank() }
+val verifyReleaseSigning = tasks.register("verifyReleaseSigning") {
+    releaseSigningValues.keys.forEach { key ->
+        inputs.property(key, providers.environmentVariable(key).orElse(""))
+    }
+    doLast {
+        val missing = inputs.properties
+            .filterValues { it.toString().isBlank() }
+            .keys
+            .joinToString()
+        if (missing.isNotEmpty()) {
+            throw GradleException("Release signing is required; missing: $missing")
+        }
+    }
+}
+tasks.configureEach {
+    // Guard only the production release variant. The Baseline Profile plugin
+    // creates a separate benchmarkRelease variant that is deliberately
+    // test-signed for connected-device performance runs and is never shipped.
+    val producesReleaseArtifact = name.startsWith("assembleRelease") ||
+        name.startsWith("bundleRelease") ||
+        name.startsWith("packageRelease")
+    if (producesReleaseArtifact) dependsOn(verifyReleaseSigning)
 }
 
 android {
     namespace = "com.giantbomb.tv"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.giantbomb.tv"
-        minSdk = 21
-        targetSdk = 35
+        minSdk = 23
+        targetSdk = 36
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 9999
         versionName = System.getenv("VERSION_NAME") ?: "0.0.0-dev"
 
@@ -25,12 +57,11 @@ android {
 
     signingConfigs {
         create("release") {
-            val ksFile = System.getenv("KEYSTORE_FILE")
-            if (ksFile != null) {
-                storeFile = file(ksFile)
-                storePassword = System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PASSWORD")
+            if (hasReleaseSigning) {
+                storeFile = file(releaseSigningValues.getValue("KEYSTORE_FILE")!!)
+                storePassword = releaseSigningValues.getValue("KEYSTORE_PASSWORD")
+                keyAlias = releaseSigningValues.getValue("KEY_ALIAS")
+                keyPassword = releaseSigningValues.getValue("KEY_PASSWORD")
             }
         }
     }
@@ -40,11 +71,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = if (System.getenv("KEYSTORE_FILE") != null) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -53,12 +80,12 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "11"
     }
 
     testOptions {
@@ -85,12 +112,12 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
 
     // ExoPlayer
-    implementation("androidx.media3:media3-exoplayer:1.5.1")
-    implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
-    implementation("androidx.media3:media3-ui:1.5.1")
-    implementation("androidx.media3:media3-ui-leanback:1.5.1")
-    implementation("androidx.media3:media3-session:1.5.1")
-    implementation("androidx.media3:media3-cast:1.5.1")
+    implementation("androidx.media3:media3-exoplayer:1.10.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.10.1")
+    implementation("androidx.media3:media3-ui:1.10.1")
+    implementation("androidx.media3:media3-ui-leanback:1.10.1")
+    implementation("androidx.media3:media3-session:1.10.1")
+    implementation("androidx.media3:media3-cast:1.10.1")
 
     // Chromecast
     implementation("com.google.android.gms:play-services-cast-framework:22.0.0")
@@ -101,20 +128,25 @@ dependencies {
 
     // Activity (enableEdgeToEdge)
     implementation("androidx.activity:activity-ktx:1.9.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 
     // Image loading
+    // Glide 5.0.9 requires compileSdk 37, beyond AGP 9.0's supported SDK.
+    // Keep the mature v4 line until the Android 17 toolchain is available.
     implementation("com.github.bumptech.glide:glide:4.16.0")
     implementation("com.github.bumptech.glide:okhttp3-integration:4.16.0")
 
     // Networking
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.3.0")
 
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:5.3.0")
     testImplementation("org.json:json:20231013")
+    baselineProfile(project(":benchmark"))
 }

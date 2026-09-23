@@ -20,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -138,6 +139,12 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         setContentView(R.layout.activity_main)
 
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                handleBackNavigation(this)
+            }
+        })
+
         if (savedInstanceState == null) {
             if (isTv) {
                 supportFragmentManager.beginTransaction()
@@ -226,9 +233,7 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
     }
 
-    @Suppress("DEPRECATION", "MissingSuperCall")
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
+    private fun handleBackNavigation(callback: OnBackPressedCallback) {
         // If update overlay is showing, dismiss it
         if (updateOverlay != null) {
             dismissUpdateOverlay()
@@ -269,7 +274,17 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
             }
         }
 
-        super.onBackPressed()
+        // Hand control back to AndroidX for the normal activity/fragment back
+        // stack once none of the app-specific cases above consumed the event.
+        // Re-enable afterwards: if the fallback pops a fragment rather than
+        // finishing the activity, later Back presses must still reach the
+        // overlay and exit-confirmation handling above.
+        callback.isEnabled = false
+        try {
+            onBackPressedDispatcher.onBackPressed()
+        } finally {
+            callback.isEnabled = true
+        }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
