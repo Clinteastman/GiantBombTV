@@ -5,20 +5,22 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.leanback.app.SearchSupportFragment
+import androidx.lifecycle.lifecycleScope
 import androidx.leanback.widget.*
-import com.giantbomb.tv.data.GiantBombApi
+import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.ui.CardPresenter
 import kotlinx.coroutines.*
 
 class GiantBombSearchFragment : SearchSupportFragment(),
-    SearchSupportFragment.SearchResultProvider, CoroutineScope by MainScope() {
+    SearchSupportFragment.SearchResultProvider {
 
     private val rowsAdapter = ArrayObjectAdapter(ListRowPresenter())
     private val handler = Handler(Looper.getMainLooper())
     private var searchRunnable: Runnable? = null
-    private lateinit var api: GiantBombApi
+    private var searchJob: Job? = null
+    private lateinit var repository: GiantBombRepository
 
     companion object {
         private const val SEARCH_DELAY_MS = 400L
@@ -27,7 +29,7 @@ class GiantBombSearchFragment : SearchSupportFragment(),
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = PrefsManager(requireContext())
-        api = GiantBombApi(prefs.apiKey ?: "")
+        repository = GiantBombRepository.get(prefs.apiKey ?: "")
         setSearchResultProvider(this)
 
         setOnItemViewClickedListener { _, item, _, _ ->
@@ -54,6 +56,7 @@ class GiantBombSearchFragment : SearchSupportFragment(),
 
     private fun searchDebounced(query: String) {
         searchRunnable?.let { handler.removeCallbacks(it) }
+        searchJob?.cancel()
         if (query.length < 2) {
             rowsAdapter.clear()
             return
@@ -63,8 +66,8 @@ class GiantBombSearchFragment : SearchSupportFragment(),
     }
 
     private fun performSearch(query: String) {
-        launch {
-            val result = api.getVideos(limit = 30, query = query)
+        searchJob = viewLifecycleOwner.lifecycleScope.launch {
+            val result = repository.searchVideos(query, limit = 30)
             result.onSuccess { videos ->
                 rowsAdapter.clear()
                 if (videos.isNotEmpty()) {
@@ -85,6 +88,6 @@ class GiantBombSearchFragment : SearchSupportFragment(),
     override fun onDestroy() {
         super.onDestroy()
         searchRunnable?.let { handler.removeCallbacks(it) }
-        cancel()
+        searchJob?.cancel()
     }
 }

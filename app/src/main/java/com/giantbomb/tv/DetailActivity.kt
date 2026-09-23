@@ -27,7 +27,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.bumptech.glide.Glide
-import com.giantbomb.tv.data.GiantBombApi
+import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Mp4Source
 import com.giantbomb.tv.model.ProgressEntry
@@ -43,6 +43,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     companion object {
         const val EXTRA_VIDEO = "extra_video"
+        private const val POST_PLAYBACK_REFETCH_DELAY_MS = 1500L
     }
 
     // Requested when the user starts a download so the foreground-service
@@ -72,7 +73,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
     // returning from playback, so the button reflects the new watch time
     // instead of replaying from the stale offset captured at onCreate.
     private var detailVideo: Video? = null
-    private var detailApi: GiantBombApi? = null
+    private var detailRepository: GiantBombRepository? = null
     private var watchButtonRef: Button? = null
     private var restartButtonRef: Button? = null
     // The in-flight progress fetch. onResume cancels and replaces it so a slow
@@ -113,9 +114,9 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         val prefs = PrefsManager(this)
         val apiKey = prefs.apiKey ?: ""
-        val api = GiantBombApi(apiKey)
+        val repository = GiantBombRepository.get(apiKey)
         detailVideo = video
-        detailApi = api
+        detailRepository = repository
 
         val root = FrameLayout(this).apply {
             setBackgroundResource(R.drawable.bg_ambient_gradient)
@@ -353,7 +354,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 launch {
                     val onWatchlist = tag == true
                     if (onWatchlist) {
-                        val result = api.removeFromWatchlist(video.id)
+                        val result = repository.removeFromWatchlist(video.id)
                         result.onSuccess {
                             text = "+ Watchlist"
                             tag = false
@@ -363,7 +364,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                             Toast.makeText(this@DetailActivity, "Failed to remove", Toast.LENGTH_SHORT).show()
                         }
                     } else {
-                        val result = api.addToWatchlist(video.id)
+                        val result = repository.addToWatchlist(video)
                         result.onSuccess {
                             text = "\u2713 Watchlist"
                             tag = true
@@ -402,7 +403,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             setOnClickListener {
                 // Reset progress then play
                 launch {
-                    api.saveProgress(video.id, 0.0, 1.0)
+                    repository.saveProgress(video.id, 0.0, 1.0)
                 }
                 val intent = Intent(this@DetailActivity, PlaybackActivity::class.java).apply {
                     putExtra(PlaybackActivity.EXTRA_VIDEO, video)
@@ -512,8 +513,8 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // coroutine (see refreshProgress below) so onResume can cancel/replace
         // it without affecting the duration/watchlist loads.
         launch {
-            val playbackDeferred = async { api.getPlayback(video.id) }
-            val watchlistDeferred = async { api.getWatchlist() }
+            val playbackDeferred = async { repository.getPlayback(video.id) }
+            val watchlistDeferred = async { repository.getWatchlist() }
 
             val playback = playbackDeferred.await().getOrNull()
             // Pick the MP4 to offer for offline download and reveal the button.
@@ -540,7 +541,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 watchlistButton.tag = true
             }
         }
-        refreshProgress(video, api, watchButton, restartButton, withRetry = false)
+        refreshProgress(video, repository, watchButton, restartButton, force = false)
 
         // Staggered entrance animation
         animViews.forEachIndexed { index, view ->
@@ -578,37 +579,36 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // this, hitting Resume a second time replays from the stale offset that
         // was captured at first open.
         val video = detailVideo ?: return
-        val api = detailApi ?: return
+        val repository = detailRepository ?: return
         val watch = watchButtonRef ?: return
         val restart = restartButtonRef ?: return
-        refreshProgress(video, api, watch, restart, withRetry = true)
+        refreshProgress(video, repository, watch, restart, force = true)
     }
 
     private fun refreshProgress(
         video: Video,
-        api: GiantBombApi,
+        repository: GiantBombRepository,
         watch: Button,
         restart: Button,
-        withRetry: Boolean
+        force: Boolean
     ) {
         // Cancel any earlier load so its result can't land after this one's.
         progressRefreshJob?.cancel()
-        awaitingPostPlaybackRefresh = withRetry
+        awaitingPostPlaybackRefresh = force
         lateinit var thisJob: Job
         thisJob = launch {
             try {
                 // Immediate fetch — correct on cold-open and on returns where
                 // the playback service finished flushing before we resumed.
-                fetchAndApply(video, api, watch, restart)
+                fetchAndApply(video, repository, watch, restart, force)
                 // Only the return-from-playback path needs the second fetch:
-                // PlaybackService's final saveCurrentProgress() runs on its own
-                // scope and may still be in flight as DetailActivity resumes —
-                // Android can resurface this activity before the finishing one
-                // reaches onStop. cold-open never has that race, so skip the
-                // extra API call.
-                if (withRetry) {
-                    delay(1500L)
-                    fetchAndApply(video, api, watch, restart)
+                // PlaybackService's final save runs on its own scope and may
+                // still be in flight as DetailActivity resumes, so the first
+                // forced fetch can read the server's old position. Cold-open
+                // never has that race, so skip the extra API call there.
+                if (force) {
+                    delay(POST_PLAYBACK_REFETCH_DELAY_MS)
+                    fetchAndApply(video, repository, watch, restart, force = true)
                 }
             } finally {
                 // Identity-check before clearing: a cancelled previous job's
@@ -625,13 +625,14 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     private suspend fun fetchAndApply(
         video: Video,
-        api: GiantBombApi,
+        repository: GiantBombRepository,
         watch: Button,
-        restart: Button
+        restart: Button,
+        force: Boolean
     ) {
         // Only repaint on success. A transient network error would otherwise
         // collapse to null and wipe a still-valid Resume label/offset.
-        api.getProgress().onSuccess { entries ->
+        repository.getProgress(force).onSuccess { entries ->
             val progress = entries.find { it.videoId == video.id }
             applyProgressState(progress, watch, restart)
         }

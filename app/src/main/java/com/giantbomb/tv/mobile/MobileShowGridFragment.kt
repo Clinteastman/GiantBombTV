@@ -11,12 +11,14 @@ import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.giantbomb.tv.PlaybackActivity
 import com.giantbomb.tv.R
 import com.giantbomb.tv.ShowActivity
 import com.giantbomb.tv.data.GiantBombApi
+import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Show
 import com.giantbomb.tv.model.Video
@@ -38,7 +40,7 @@ import kotlinx.coroutines.launch
  * Long-pressing any show card toggles its pinned state, which also drives the
  * Home tab's "Pinned Shows" section.
  */
-class MobileShowGridFragment : Fragment(), CoroutineScope by MainScope() {
+class MobileShowGridFragment : Fragment() {
 
     enum class Mode { SHOWS, PODCASTS }
 
@@ -113,11 +115,11 @@ class MobileShowGridFragment : Fragment(), CoroutineScope by MainScope() {
             showEmpty("Sign in with your Giant Bomb API key on the Home tab to load shows.")
             return
         }
-        val api = GiantBombApi(key)
-        loadingView.visibility = View.VISIBLE
+        val repository = GiantBombRepository.get(key)
+        loadingView.visibility = if (adapter.itemCount == 0) View.VISIBLE else View.GONE
         emptyView.visibility = View.GONE
-        launch {
-            val showsResult = api.getShows()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val showsResult = repository.getShows()
             if (!isAdded) return@launch
             val shows = showsResult.getOrNull()
             if (shows == null) {
@@ -132,7 +134,7 @@ class MobileShowGridFragment : Fragment(), CoroutineScope by MainScope() {
 
             val rows = when (mode) {
                 Mode.SHOWS -> buildShowsRows(shows)
-                Mode.PODCASTS -> buildPodcastRows(api, shows)
+                Mode.PODCASTS -> buildPodcastRows(repository, shows)
             }
             if (!isAdded) return@launch
             loadingView.visibility = View.GONE
@@ -157,7 +159,7 @@ class MobileShowGridFragment : Fragment(), CoroutineScope by MainScope() {
     }
 
     private suspend fun buildPodcastRows(
-        api: GiantBombApi,
+        repository: GiantBombRepository,
         all: List<Show>
     ): List<MobileGridAdapter.Row> {
         val podcastShows = all.filter { show ->
@@ -170,7 +172,7 @@ class MobileShowGridFragment : Fragment(), CoroutineScope by MainScope() {
         // ones belonging to a podcast show. Best-effort — if it fails we still
         // render the shows grid below.
         val podcastIds = podcastShows.map { it.id }.toSet()
-        val episodes = api.getVideos(limit = EPISODE_SCAN_LIMIT).getOrNull()
+        val episodes = repository.getRecentVideos(EPISODE_SCAN_LIMIT).getOrNull()
             ?.filter { it.showId in podcastIds }
             ?.take(HERO_PLUS_NEXT)
             ?: emptyList()
@@ -227,7 +229,6 @@ class MobileShowGridFragment : Fragment(), CoroutineScope by MainScope() {
 
     override fun onDestroy() {
         super.onDestroy()
-        cancel()
     }
 
     companion object {

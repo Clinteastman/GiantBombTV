@@ -18,13 +18,16 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.DiffUtil
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.*
 import com.giantbomb.tv.data.GiantBombApi
+import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.ProgressEntry
 import com.giantbomb.tv.model.SettingsItem
@@ -39,10 +42,10 @@ import com.google.android.gms.cast.framework.CastContext
 import androidx.mediarouter.app.MediaRouteButton
 import kotlinx.coroutines.*
 
-class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
+class MobileBrowseFragment : Fragment() {
 
     private lateinit var prefs: PrefsManager
-    private var api: GiantBombApi? = null
+    private var repository: GiantBombRepository? = null
     private var isLoading = false
 
     private lateinit var recyclerView: RecyclerView
@@ -191,7 +194,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         swipeRefresh.setProgressBackgroundColorSchemeColor(
             ContextCompat.getColor(requireContext(), R.color.gb_surface)
         )
-        swipeRefresh.setOnRefreshListener { loadContent() }
+        swipeRefresh.setOnRefreshListener { loadContent(forceRefresh = true) }
 
         if (prefs.apiKey.isNullOrEmpty()) {
             launchSetup()
@@ -264,9 +267,9 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         // Skip if we recently got rate-limited / failed — polling harder makes
         // the throttle stickier, not softer.
         if (System.currentTimeMillis() - lastUpcomingFailureMs < UPCOMING_FAILURE_BACKOFF_MS) return
-        val apiInstance = api ?: GiantBombApi(key)
-        launch {
-            val rawResult = apiInstance.getUpcoming()
+        val repo = repository ?: GiantBombRepository.get(key).also { repository = it }
+        viewLifecycleOwner.lifecycleScope.launch {
+            val rawResult = repo.getUpcoming(force = true)
             val result = rawResult.getOrNull()
             if (result == null) {
                 lastUpcomingFailureMs = System.currentTimeMillis()
@@ -331,24 +334,24 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         }
     }
 
-    fun loadContent() {
+    fun loadContent(forceRefresh: Boolean = false) {
         if (isLoading) return
         isLoading = true
-        swipeRefresh.isRefreshing = true
+        swipeRefresh.isRefreshing = browseItems.isEmpty() || forceRefresh
 
         val key = prefs.apiKey ?: ""
-        api = GiantBombApi(key)
-        val api = api!!
+        val repo = GiantBombRepository.get(key)
+        repository = repo
 
-        launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val items = mutableListOf<BrowseItem>()
 
-                val upcomingDeferred = async { api.getUpcoming() }
-                val watchlistDeferred = async { api.getWatchlist() }
-                val progressDeferred = async { api.getProgress() }
-                val recentDeferred = async { api.getVideos(limit = INITIAL_VIDEO_LIMIT) }
-                val showsDeferred = async { api.getShows() }
+                val upcomingDeferred = async { repo.getUpcoming(forceRefresh) }
+                val watchlistDeferred = async { repo.getWatchlist(forceRefresh) }
+                val progressDeferred = async { repo.getProgress(forceRefresh) }
+                val recentDeferred = async { repo.getRecentVideos(INITIAL_VIDEO_LIMIT, forceRefresh) }
+                val showsDeferred = async { repo.getShows(forceRefresh) }
 
                 // Await shows early for fallback thumbnails
                 val shows = showsDeferred.await().getOrNull()
@@ -436,9 +439,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                     watchlistContentItemIndex = -1
                 }
 
-                browseItems.clear()
-                browseItems.addAll(items)
-                browseAdapter.notifyDataSetChanged()
+                browseAdapter.submit(items)
                 updateChipBar()
 
             } finally {
@@ -685,7 +686,7 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
 
     private fun launchTwitchStream(title: String) {
         Toast.makeText(requireContext(), "Loading live stream...", Toast.LENGTH_SHORT).show()
-        launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val result = TwitchExtractor().extract("giantbomb")
             result.onSuccess { stream ->
                 val liveTitle = stream.title.ifEmpty { title }
@@ -722,7 +723,6 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     override fun onDestroy() {
         super.onDestroy()
         upcomingRefreshRunnable?.let { refreshHandler.removeCallbacks(it) }
-        cancel()
     }
 
     // -----------------------------------------------------------------------
@@ -775,7 +775,8 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
         }
         activeChipIndex = -1
         if (::chipAdapter.isInitialized) chipAdapter.notifyDataSetChanged()
-        chipBar.visibility = if (chipItems.isEmpty()) View.GONE else View.VISIBLE
+        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        chipBar.visibility = if (chipItems.isEmpty() || isLandscape) View.GONE else View.VISIBLE
         // Snap the active chip to whatever's already in view at this point —
         // matters on initial load and after pull-to-refresh.
         updateActiveChip()
@@ -896,6 +897,38 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
     }
 
     private inner class BrowseAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+        fun submit(newItems: List<BrowseItem>) {
+            val oldItems = browseItems.toList()
+            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+                override fun getOldListSize() = oldItems.size
+                override fun getNewListSize() = newItems.size
+                override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean =
+                    itemKey(oldItems[oldPos]) == itemKey(newItems[newPos])
+                override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean {
+                    val old = oldItems[oldPos]
+                    val new = newItems[newPos]
+                    return if (old is BrowseItem.LazyShowRow && new is BrowseItem.LazyShowRow) {
+                        old.show == new.show && old.videos == new.videos && old.isLoading == new.isLoading
+                    } else old == new
+                }
+            })
+            browseItems.clear()
+            browseItems.addAll(newItems)
+            diff.dispatchUpdatesTo(this)
+        }
+
+        private fun itemKey(item: BrowseItem): String = when (item) {
+            is BrowseItem.SectionHeader -> "header:${item.title}"
+            is BrowseItem.ShowSectionHeader -> "show-header:${item.show.id}"
+            is BrowseItem.HorizontalVideoRow -> "video-row:${item.videos.joinToString { it.id.toString() }}"
+            is BrowseItem.HorizontalShowRow -> "show-row:${item.shows.joinToString { it.id.toString() }}"
+            is BrowseItem.VerticalVideo -> "video:${item.video.id}"
+            is BrowseItem.SettingRow -> "setting:${item.item.title}"
+            is BrowseItem.UpcomingRow -> "upcoming"
+            is BrowseItem.LazyShowRow -> "lazy-show:${item.show.id}"
+            is BrowseItem.EmptyStateRow -> "empty:${item.message}"
+        }
 
         val TYPE_SECTION_HEADER = 0
         val TYPE_HORIZONTAL_VIDEO_ROW = 1
@@ -1053,9 +1086,9 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
             }
             bindWatchlistButton(btn, video)
             refreshWatchlistRow()
-            launch {
-                val api = api ?: GiantBombApi(prefs.apiKey ?: "")
-                val result = if (nowOn) api.addToWatchlist(video.id) else api.removeFromWatchlist(video.id)
+            viewLifecycleOwner.lifecycleScope.launch {
+                val repo = repository ?: GiantBombRepository.get(prefs.apiKey ?: "")
+                val result = if (nowOn) repo.addToWatchlist(video) else repo.removeFromWatchlist(video.id)
                 v.isClickable = true
                 result.onSuccess {
                     if (isAdded) {
@@ -1328,23 +1361,37 @@ class MobileBrowseFragment : Fragment(), CoroutineScope by MainScope() {
                 horizontalRecycler.adapter = SmallVideoAdapter(item.videos!!)
                 return
             }
-            if (item.isLoading) return
-            val currentApi = api ?: return
-            item.isLoading = true
+            // A holder may have been recycled from a previously loaded show.
+            // Clear that adapter immediately; the model-level completion below
+            // will rebind whichever holder currently owns this item.
             horizontalRecycler.adapter = null
-            launch {
-                val result = currentApi.getShowVideos(item.show.id, limit = ROW_PAGE_SIZE)
+            if (item.isLoading) return
+            val repo = repository ?: return
+            item.isLoading = true
+            viewLifecycleOwner.lifecycleScope.launch {
+                val result = repo.getShowVideos(item.show.id, limit = ROW_PAGE_SIZE)
                 result.onSuccess { videos ->
                     item.videos = videos
                     item.isLoading = false
-                    if (isAdded) {
-                        horizontalRecycler.adapter = SmallVideoAdapter(videos)
-                    }
+                    notifyLazyRowChangedWhenIdle(item)
                 }
                 result.onFailure {
                     item.isLoading = false
                 }
             }
+        }
+    }
+
+    private fun notifyLazyRowChangedWhenIdle(item: BrowseItem.LazyShowRow) {
+        if (!isAdded || !::recyclerView.isInitialized) return
+        recyclerView.post {
+            if (!isAdded || !::recyclerView.isInitialized) return@post
+            if (recyclerView.isComputingLayout) {
+                notifyLazyRowChangedWhenIdle(item)
+                return@post
+            }
+            val itemIndex = browseItems.indexOfFirst { it === item }
+            if (itemIndex >= 0) browseAdapter.notifyItemChanged(itemIndex)
         }
     }
 

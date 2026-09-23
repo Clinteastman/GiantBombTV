@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.DiffUtil
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.R
 import com.giantbomb.tv.model.Show
@@ -35,9 +36,25 @@ class MobileGridAdapter(
     private val rows = mutableListOf<Row>()
 
     fun submit(newRows: List<Row>) {
+        val oldRows = rows.toList()
+        val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = oldRows.size
+            override fun getNewListSize() = newRows.size
+            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                stableKey(oldRows[oldItemPosition]) == stableKey(newRows[newItemPosition])
+            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                oldRows[oldItemPosition] == newRows[newItemPosition]
+        })
         rows.clear()
         rows.addAll(newRows)
-        notifyDataSetChanged()
+        diff.dispatchUpdatesTo(this)
+    }
+
+    private fun stableKey(row: Row): String = when (row) {
+        is Row.Hero -> "hero:${row.video.id}"
+        is Row.Header -> "header:${row.text}"
+        is Row.Episode -> "episode:${row.video.id}"
+        is Row.ShowCard -> "show:${row.show.id}"
     }
 
     /**

@@ -2,8 +2,10 @@ package com.giantbomb.tv.playback
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -14,9 +16,11 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.giantbomb.tv.MainActivity
 import com.giantbomb.tv.PlaybackActivity
-import com.giantbomb.tv.data.GiantBombApi
+import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.PrefsManager
+import com.giantbomb.tv.model.Video
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,13 +40,14 @@ class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private lateinit var api: GiantBombApi
+    private lateinit var repository: GiantBombRepository
     private var progressJob: Job? = null
     private var playerListener: Player.Listener? = null
+    private var stoppingForExit = false
 
     override fun onCreate() {
         super.onCreate()
-        api = GiantBombApi(PrefsManager(this).apiKey ?: "")
+        repository = GiantBombRepository.get(PrefsManager(this).apiKey ?: "")
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
@@ -79,17 +84,8 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
 
-        val sessionActivityIntent = Intent(this, PlaybackActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        val sessionActivityPi = PendingIntent.getActivity(
-            this,
-            0,
-            sessionActivityIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
         mediaSession = MediaSession.Builder(this, player)
-            .setSessionActivity(sessionActivityPi)
+            .setSessionActivity(buildSessionActivity(null))
             .build()
 
         // Periodic progress save + watched marking live on the service so they
@@ -102,9 +98,13 @@ class PlaybackService : MediaSessionService() {
                     val videoId = currentVodId() ?: return
                     serviceScope.launch {
                         saveCurrentProgress()
-                        api.markWatched(videoId)
+                        repository.markWatched(videoId)
                     }
                 }
+            }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                mediaSession?.setSessionActivity(buildSessionActivity(mediaItem))
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -114,10 +114,95 @@ class PlaybackService : MediaSessionService() {
                     stopProgressSaving()
                     // Flush a final position when playback pauses so resumption
                     // is accurate without waiting for the periodic tick.
-                    serviceScope.launch { saveCurrentProgress() }
+                    if (!stoppingForExit) {
+                        serviceScope.launch { saveCurrentProgress() }
+                    }
                 }
             }
         }.also { player.addListener(it) }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_SAVE_PROGRESS_AND_STOP) {
+            saveProgressAndStop()
+            return START_NOT_STICKY
+        }
+        return super.onStartCommand(intent, flags, startId)
+    }
+
+    private fun saveProgressAndStop() {
+        if (stoppingForExit) return
+        stoppingForExit = true
+        stopProgressSaving()
+
+        val player = mediaSession?.player
+        val videoId = currentVodId()
+        val positionSeconds = player?.currentPosition?.div(1000.0) ?: 0.0
+        val durationSeconds = player?.duration?.div(1000.0) ?: 0.0
+        player?.pause()
+
+        serviceScope.launch {
+            if (videoId != null && positionSeconds > 0 && durationSeconds > 0) {
+                repository.saveProgress(videoId, positionSeconds, durationSeconds)
+            }
+            stopSelf()
+        }
+    }
+
+    private fun buildSessionActivity(mediaItem: MediaItem?): PendingIntent {
+        val metadata = mediaItem?.mediaMetadata?.extras
+        val intent = when {
+            mediaItem?.mediaId?.startsWith("vod:") == true -> {
+                videoFromMetadata(metadata)?.let { video ->
+                    Intent(this, PlaybackActivity::class.java)
+                        .putExtra(PlaybackActivity.EXTRA_VIDEO, video)
+                } ?: Intent(this, MainActivity::class.java)
+            }
+            mediaItem?.mediaId?.startsWith("live:") == true -> {
+                val hlsUrl = metadata?.getString(PlaybackActivity.METADATA_LIVE_HLS_URL)
+                if (hlsUrl.isNullOrBlank()) {
+                    Intent(this, MainActivity::class.java)
+                } else {
+                    Intent(this, PlaybackActivity::class.java)
+                        .putExtra(PlaybackActivity.EXTRA_LIVE_HLS_URL, hlsUrl)
+                        .putExtra(
+                            PlaybackActivity.EXTRA_LIVE_TITLE,
+                            metadata.getString(PlaybackActivity.METADATA_LIVE_TITLE)
+                        )
+                        .putExtra(
+                            PlaybackActivity.EXTRA_LIVE_TWITCH_CHANNEL,
+                            metadata.getString(PlaybackActivity.METADATA_LIVE_CHANNEL)
+                        )
+                }
+            }
+            else -> Intent(this, MainActivity::class.java)
+        }.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+
+        return PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+    }
+
+    private fun videoFromMetadata(extras: Bundle?): Video? {
+        if (extras == null || !extras.containsKey(PlaybackActivity.METADATA_VIDEO_ID)) return null
+        return Video(
+            id = extras.getInt(PlaybackActivity.METADATA_VIDEO_ID),
+            slug = extras.getString(PlaybackActivity.METADATA_VIDEO_SLUG).orEmpty(),
+            title = extras.getString(PlaybackActivity.METADATA_VIDEO_TITLE).orEmpty(),
+            description = extras.getString(PlaybackActivity.METADATA_VIDEO_DESCRIPTION),
+            publishDate = extras.getString(PlaybackActivity.METADATA_VIDEO_PUBLISH_DATE).orEmpty(),
+            posterUrl = extras.getString(PlaybackActivity.METADATA_VIDEO_POSTER_URL),
+            premium = extras.getBoolean(PlaybackActivity.METADATA_VIDEO_PREMIUM),
+            showId = extras.takeIf { it.containsKey(PlaybackActivity.METADATA_VIDEO_SHOW_ID) }
+                ?.getInt(PlaybackActivity.METADATA_VIDEO_SHOW_ID),
+            showTitle = extras.getString(PlaybackActivity.METADATA_VIDEO_SHOW_TITLE),
+            author = extras.getString(PlaybackActivity.METADATA_VIDEO_AUTHOR),
+            thumbnailUrl = extras.getString(PlaybackActivity.METADATA_VIDEO_THUMBNAIL_URL),
+            durationSeconds = extras.getInt(PlaybackActivity.METADATA_VIDEO_DURATION)
+        )
     }
 
     private fun currentVodId(): Int? {
@@ -146,7 +231,7 @@ class PlaybackService : MediaSessionService() {
         val pos = player.currentPosition / 1000.0
         val dur = player.duration / 1000.0
         if (pos > 0 && dur > 0) {
-            api.saveProgress(videoId, pos, dur)
+            repository.saveProgress(videoId, pos, dur)
         }
     }
 
@@ -176,6 +261,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     companion object {
+        const val ACTION_SAVE_PROGRESS_AND_STOP =
+            "com.giantbomb.tv.action.SAVE_PROGRESS_AND_STOP"
         private const val PROGRESS_SAVE_INTERVAL_MS = 30_000L
     }
 }

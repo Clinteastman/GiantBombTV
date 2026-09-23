@@ -407,4 +407,24 @@ class GiantBombApiTest {
         assertNotNull(request.getHeader("User-Agent"))
         assertEquals("application/json", request.getHeader("Accept"))
     }
+
+    @Test
+    fun `redactSecrets removes API key without changing other query parameters`() {
+        val path = "/api/public/videos?api_key=secret-value&limit=20&offset=0"
+
+        assertEquals(
+            "/api/public/videos?api_key=REDACTED&limit=20&offset=0",
+            GiantBombApi.redactSecrets(path)
+        )
+    }
+
+    @Test
+    fun `redactSecrets handles API key after another query parameter`() {
+        val path = "/endpoint?limit=20&API_KEY=secret-value"
+
+        assertEquals(
+            "/endpoint?limit=20&API_KEY=REDACTED",
+            GiantBombApi.redactSecrets(path)
+        )
+    }
 }

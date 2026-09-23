@@ -15,24 +15,28 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.widget.addTextChangedListener
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.DiffUtil
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.PlaybackActivity
 import com.giantbomb.tv.R
 import com.giantbomb.tv.data.GiantBombApi
+import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Video
 import kotlinx.coroutines.*
 
-class MobileSearchFragment : Fragment(), CoroutineScope by MainScope() {
+class MobileSearchFragment : Fragment() {
 
-    private lateinit var api: GiantBombApi
+    private lateinit var repository: GiantBombRepository
     private lateinit var searchInput: EditText
     private lateinit var resultsRecycler: RecyclerView
     private lateinit var emptyView: TextView
     private val handler = Handler(Looper.getMainLooper())
     private var searchRunnable: Runnable? = null
+    private var searchJob: Job? = null
     private val results = mutableListOf<Video>()
     private lateinit var adapter: SearchResultAdapter
 
@@ -44,7 +48,7 @@ class MobileSearchFragment : Fragment(), CoroutineScope by MainScope() {
         super.onViewCreated(view, savedInstanceState)
 
         val prefs = PrefsManager(requireContext())
-        api = GiantBombApi(prefs.apiKey ?: "")
+        repository = GiantBombRepository.get(prefs.apiKey ?: "")
 
         searchInput = view.findViewById(R.id.search_input)
         resultsRecycler = view.findViewById(R.id.search_results)
@@ -85,9 +89,9 @@ class MobileSearchFragment : Fragment(), CoroutineScope by MainScope() {
 
     private fun searchDebounced(query: String) {
         searchRunnable?.let { handler.removeCallbacks(it) }
+        searchJob?.cancel()
         if (query.length < 2) {
-            results.clear()
-            adapter.notifyDataSetChanged()
+            submitResults(emptyList())
             emptyView.text = "Search for Giant Bomb videos"
             emptyView.visibility = View.VISIBLE
             resultsRecycler.visibility = View.GONE
@@ -98,12 +102,10 @@ class MobileSearchFragment : Fragment(), CoroutineScope by MainScope() {
     }
 
     private fun performSearch(query: String) {
-        launch {
-            val result = api.getVideos(limit = 30, query = query)
+        searchJob = viewLifecycleOwner.lifecycleScope.launch {
+            val result = repository.searchVideos(query, limit = 30)
             result.onSuccess { videos ->
-                results.clear()
-                results.addAll(videos)
-                adapter.notifyDataSetChanged()
+                submitResults(videos)
                 if (videos.isEmpty()) {
                     emptyView.text = "No results for \"$query\""
                     emptyView.visibility = View.VISIBLE
@@ -114,8 +116,7 @@ class MobileSearchFragment : Fragment(), CoroutineScope by MainScope() {
                 }
             }
             result.onFailure {
-                results.clear()
-                adapter.notifyDataSetChanged()
+                submitResults(emptyList())
                 emptyView.text = "Search failed"
                 emptyView.visibility = View.VISIBLE
                 resultsRecycler.visibility = View.GONE
@@ -123,10 +124,25 @@ class MobileSearchFragment : Fragment(), CoroutineScope by MainScope() {
         }
     }
 
+    private fun submitResults(newResults: List<Video>) {
+        val oldResults = results.toList()
+        val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = oldResults.size
+            override fun getNewListSize() = newResults.size
+            override fun areItemsTheSame(oldPos: Int, newPos: Int) =
+                oldResults[oldPos].id == newResults[newPos].id
+            override fun areContentsTheSame(oldPos: Int, newPos: Int) =
+                oldResults[oldPos] == newResults[newPos]
+        })
+        results.clear()
+        results.addAll(newResults)
+        diff.dispatchUpdatesTo(adapter)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         searchRunnable?.let { handler.removeCallbacks(it) }
-        cancel()
+        searchJob?.cancel()
     }
 
     private inner class SearchResultAdapter : RecyclerView.Adapter<SearchResultAdapter.VH>() {

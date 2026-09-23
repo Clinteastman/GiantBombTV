@@ -14,11 +14,13 @@ import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.leanback.app.BrowseSupportFragment
+import androidx.lifecycle.lifecycleScope
 import androidx.leanback.widget.*
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import com.giantbomb.tv.data.GiantBombApi
+import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.data.toggleTwitchChatPref
 import com.giantbomb.tv.model.ProgressEntry
@@ -33,7 +35,7 @@ import com.giantbomb.tv.ui.ShowCardPresenter
 import com.giantbomb.tv.ui.UpcomingCardPresenter
 import kotlinx.coroutines.*
 
-class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
+class BrowseFragment : BrowseSupportFragment() {
 
     private lateinit var prefs: PrefsManager
     private var isLoading = false
@@ -51,6 +53,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     private var upcomingRowIndex: Int = -1
     private var upcomingHasLive: Boolean = false
     private var upcomingRefreshRunnable: Runnable? = null
+    private var progressByVideoId: Map<Int, ProgressEntry> = emptyMap()
 
     companion object {
         const val SETTINGS_REFRESH = 2
@@ -71,6 +74,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         // prefetching this many makes the first peek feel populated. Focus then
         // triggers loadMoreForRow to fetch the rest of the page.
         private const val SHOW_ROW_PREFETCH = 3
+        private const val INITIAL_SHOW_ROW_PREFETCH_COUNT = 3
         // How often to re-poll the upcoming/live feed while the screen is foregrounded.
         // Twitch's preview thumbnail also refreshes ~every minute, so this aligns nicely.
         // Match the mobile interval (was 60s). Together with the failure
@@ -186,7 +190,14 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     private class BrowseHeaderPresenter : RowHeaderPresenter() {
         override fun onBindViewHolder(viewHolder: Presenter.ViewHolder, item: Any) {
             super.onBindViewHolder(viewHolder, item)
-            viewHolder.view.tag = item as? HeaderItem
+            // RowHeaderPresenter is bound with the Row, not the HeaderItem
+            // directly. The previous cast always produced null, so all custom
+            // contrast and focus styling silently returned without running.
+            viewHolder.view.tag = when (item) {
+                is Row -> item.headerItem
+                is HeaderItem -> item
+                else -> null
+            }
             applyHint(viewHolder as ViewHolder)
         }
 
@@ -465,14 +476,14 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         handler.postDelayed(backdropRunnable!!, BACKDROP_DELAY_MS)
     }
 
-    fun loadContent() {
+    fun loadContent(forceRefresh: Boolean = false) {
         if (isLoading) return
         isLoading = true
 
         val key = prefs.apiKey ?: ""
-        val api = GiantBombApi(key)
+        val repository = GiantBombRepository.get(key)
 
-        launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
             loadingSpinner?.visibility = View.VISIBLE
             val rowPresenter = ListRowPresenter(androidx.leanback.widget.FocusHighlight.ZOOM_FACTOR_NONE).apply {
@@ -488,11 +499,11 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             upcomingRowIndex = -1
             upcomingHasLive = false
 
-            val upcomingDeferred = async { api.getUpcoming() }
-            val watchlistDeferred = async { api.getWatchlist() }
-            val progressDeferred = async { api.getProgress() }
-            val recentDeferred = async { api.getVideos(limit = INITIAL_VIDEO_LIMIT) }
-            val showsDeferred = async { api.getShows() }
+            val upcomingDeferred = async { repository.getUpcoming(forceRefresh) }
+            val watchlistDeferred = async { repository.getWatchlist(forceRefresh) }
+            val progressDeferred = async { repository.getProgress(forceRefresh) }
+            val recentDeferred = async { repository.getRecentVideos(INITIAL_VIDEO_LIMIT, forceRefresh) }
+            val showsDeferred = async { repository.getShows(forceRefresh) }
 
             // Await shows early so we can use show posters as thumbnail fallback
             val shows = showsDeferred.await().getOrNull()
@@ -521,6 +532,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
                     progressMap = progress.associateBy { it.videoId }
                 }
             }
+            progressByVideoId = progressMap
 
             fun Video.withProgress(): Video {
                 val entry = progressMap[id]
@@ -578,12 +590,13 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
             // We mark each pagination as loading first so the focus listener
             // doesn't race with the prefetch and end up firing a duplicate
             // GET before the prefetch completes.
-            for (pagination in rowPaginationMap.values) {
+            val initialRows = rowPaginationMap.values.take(INITIAL_SHOW_ROW_PREFETCH_COUNT)
+            for (pagination in initialRows) {
                 pagination.isLoading = true
             }
-            for (pagination in rowPaginationMap.values) {
-                launch {
-                    val result = api.getShowVideos(
+            for (pagination in initialRows) {
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val result = repository.getShowVideos(
                         showId = pagination.showId,
                         limit = SHOW_ROW_PREFETCH,
                         offset = 0
@@ -644,9 +657,9 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         // Don't keep hammering /upcoming_json while we're in the bad-state window.
         if (System.currentTimeMillis() - lastUpcomingFailureMs < UPCOMING_FAILURE_BACKOFF_MS) return
         val rowsAdapter = rowsAdapterRef ?: return
-        val api = GiantBombApi(key)
-        launch {
-            val result = api.getUpcoming().getOrNull()
+        val repository = GiantBombRepository.get(key)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = repository.getUpcoming(force = true).getOrNull()
             if (result == null) {
                 lastUpcomingFailureMs = System.currentTimeMillis()
                 return@launch
@@ -727,20 +740,23 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
     private fun loadMoreForRow(pagination: RowPagination) {
         pagination.isLoading = true
         val key = prefs.apiKey ?: ""
-        val api = GiantBombApi(key)
+        val repository = GiantBombRepository.get(key)
 
-        launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val result = api.getShowVideos(pagination.showId, limit = ROW_PAGE_SIZE, offset = pagination.offset)
+                val result = repository.getShowVideos(pagination.showId, limit = ROW_PAGE_SIZE, offset = pagination.offset)
                 result.onSuccess { videos ->
                     if (videos.size < ROW_PAGE_SIZE) pagination.hasMore = false
                     pagination.offset += videos.size
 
-                    val progressResult = api.getProgress().getOrNull()
-                    val progressMap = progressResult?.associateBy { it.videoId } ?: emptyMap()
+                    // Repository progress is cached briefly, so this is usually
+                    // free; it keeps badges current after returning from playback.
+                    repository.getProgress().getOrNull()?.let { entries ->
+                        progressByVideoId = entries.associateBy { it.videoId }
+                    }
 
                     videos.forEach { video ->
-                        val entry = progressMap[video.id]
+                        val entry = progressByVideoId[video.id]
                         val v = when {
                             entry != null && entry.percentComplete >= 95 -> video.copy(watched = true)
                             entry != null && entry.percentComplete in 1..94 -> video.copy(progressPercent = entry.percentComplete)
@@ -1022,7 +1038,7 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
 
     private fun launchTwitchStream(title: String) {
         Toast.makeText(requireContext(), "Loading live stream...", Toast.LENGTH_SHORT).show()
-        launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val result = TwitchExtractor().extract("giantbomb")
             result.onSuccess { stream ->
                 val liveTitle = stream.title.ifEmpty { title }
@@ -1063,6 +1079,5 @@ class BrowseFragment : BrowseSupportFragment(), CoroutineScope by MainScope() {
         super.onDestroy()
         backdropRunnable?.let { handler.removeCallbacks(it) }
         upcomingRefreshRunnable?.let { handler.removeCallbacks(it) }
-        cancel()
     }
 }
