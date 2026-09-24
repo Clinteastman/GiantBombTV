@@ -529,9 +529,25 @@ class MobileBrowseFragment : Fragment() {
     }
 
     private fun updateMobileBackdrop(imageUrl: String?) {
-        if (imageUrl.isNullOrEmpty() || imageUrl == currentBackdropUrl) return
         val current = backdropImageView ?: return
         val next = backdropNextView ?: return
+        if (imageUrl.isNullOrEmpty()) {
+            // Nothing visible has artwork (settings, empty states): fade out
+            // and clear the glass input rather than keep an unrelated image.
+            if (currentBackdropUrl == null) return
+            currentBackdropUrl = null
+            GlassSurface.updateBackdrop(
+                null,
+                requireActivity().window.decorView.width,
+                requireActivity().window.decorView.height
+            )
+            current.animate().cancel()
+            next.animate().cancel()
+            current.animate().alpha(0f).setDuration(BACKDROP_CROSSFADE_MS).start()
+            next.animate().alpha(0f).setDuration(BACKDROP_CROSSFADE_MS).start()
+            return
+        }
+        if (imageUrl == currentBackdropUrl) return
         currentBackdropUrl = imageUrl
 
         Glide.with(this)
