@@ -10,8 +10,9 @@ import androidx.fragment.app.FragmentActivity
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.model.Show
 import com.giantbomb.tv.util.DeviceUtil
+import com.giantbomb.tv.ui.NoBackdropRefraction
 
-class ShowActivity : FragmentActivity() {
+class ShowActivity : FragmentActivity(), NoBackdropRefraction {
 
     companion object {
         const val EXTRA_SHOW = "extra_show"

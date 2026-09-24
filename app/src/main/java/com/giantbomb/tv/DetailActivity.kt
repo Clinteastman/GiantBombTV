@@ -37,10 +37,11 @@ import com.giantbomb.tv.playback.Downloads
 import com.giantbomb.tv.util.DateFormat
 import com.giantbomb.tv.util.DeviceUtil
 import com.giantbomb.tv.ui.GlassSurface
+import com.giantbomb.tv.ui.NoBackdropRefraction
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.*
 
-class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
+class DetailActivity : FragmentActivity(), CoroutineScope by MainScope(), NoBackdropRefraction {
 
     companion object {
         const val EXTRA_VIDEO = "extra_video"
