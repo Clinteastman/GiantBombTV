@@ -86,10 +86,17 @@ class VideoDownloadService : Service() {
 
         try {
             val existingBytes = part.takeIf { it.exists() }?.length() ?: 0L
+            val validator = DownloadStore.readValidator(ctx, id)
+            // Only resume when we can prove the server copy is unchanged.
+            // If-Range makes the server send the whole file (200) otherwise.
+            val canResume = existingBytes > 0L && validator != null
             val requestBuilder = Request.Builder()
                 .url(download.url)
                 .header("User-Agent", "GBTV")
-            if (existingBytes > 0L) requestBuilder.header("Range", "bytes=$existingBytes-")
+            if (canResume) {
+                requestBuilder.header("Range", "bytes=$existingBytes-")
+                requestBuilder.header("If-Range", validator!!)
+            }
 
             val call = client.newCall(requestBuilder.build())
             Downloads.registerCall(id, call)
@@ -102,7 +109,21 @@ class VideoDownloadService : Service() {
                     throw IllegalStateException("HTTP ${response.code}")
                 }
                 val body = response.body ?: throw IllegalStateException("Empty response")
-                val resumed = existingBytes > 0L && response.code == 206
+                val resumed = canResume && response.code == 206
+                if (resumed &&
+                    response.header("Content-Range")?.startsWith("bytes $existingBytes-") != true
+                ) {
+                    // The range doesn't continue our file; restart cleanly next time.
+                    part.delete()
+                    DownloadStore.writeValidator(ctx, id, null)
+                    throw IllegalStateException("Unexpected Content-Range")
+                }
+                if (!resumed) {
+                    // Fresh download: remember what we're fetching. Weak ETags
+                    // can't be used with If-Range, so fall back to Last-Modified.
+                    val etag = response.header("ETag")?.takeUnless { it.startsWith("W/") }
+                    DownloadStore.writeValidator(ctx, id, etag ?: response.header("Last-Modified"))
+                }
                 val startingBytes = if (resumed) existingBytes else 0L
                 val responseLength = body.contentLength()
                 val total = if (responseLength > 0L) startingBytes + responseLength else 0L

@@ -109,6 +109,9 @@ class PlaybackService : MediaSessionService() {
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
+                    // Playback restarted (e.g. the player was reopened) while an
+                    // exit save was in flight: keep the service alive.
+                    cancelPendingExit()
                     startProgressSaving()
                 } else {
                     stopProgressSaving()
@@ -145,8 +148,13 @@ class PlaybackService : MediaSessionService() {
             if (videoId != null && positionSeconds > 0 && durationSeconds > 0) {
                 repository.saveProgress(videoId, positionSeconds, durationSeconds)
             }
-            stopSelf()
+            // Skip the stop if the player was reopened during the save.
+            if (stoppingForExit) stopSelf()
         }
+    }
+
+    private fun cancelPendingExit() {
+        stoppingForExit = false
     }
 
     private fun buildSessionActivity(mediaItem: MediaItem?): PendingIntent {
@@ -235,7 +243,12 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+        // Our own player reconnecting means the user reopened playback, so a
+        // pending exit stop must not tear the new session down.
+        if (controllerInfo.packageName == packageName) cancelPendingExit()
+        return mediaSession
+    }
 
     // Keep the stream going when the user swipes the app from recents; only
     // stop if there is nothing queued / playback is paused.

@@ -185,6 +185,10 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
             GlassSurface.setNeonMotionSink(null)
         }
 
+        // Load persisted downloads now so a download interrupted by process
+        // death resumes on relaunch, not only once a download screen opens.
+        com.giantbomb.tv.playback.Downloads.ensureLoaded(this)
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 handleBackNavigation(this)

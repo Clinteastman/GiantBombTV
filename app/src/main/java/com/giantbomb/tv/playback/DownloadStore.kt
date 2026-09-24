@@ -48,6 +48,20 @@ object DownloadStore {
     fun partFile(context: Context, id: Int): File = File(baseDir(context), "$id.part")
     private fun metaFile(context: Context, id: Int): File = File(baseDir(context), "$id.json")
     private fun pendingFile(context: Context, id: Int): File = File(baseDir(context), "$id.pending.json")
+    private fun validatorFile(context: Context, id: Int): File = File(baseDir(context), "$id.validator")
+
+    /**
+     * ETag or Last-Modified of the server copy the partial file came from.
+     * A resume sends it as If-Range, so a changed file restarts from zero
+     * instead of appending new bytes to an old prefix.
+     */
+    fun readValidator(context: Context, id: Int): String? =
+        validatorFile(context, id).takeIf { it.exists() }?.readText()?.takeIf { it.isNotBlank() }
+
+    fun writeValidator(context: Context, id: Int, validator: String?) {
+        val file = validatorFile(context, id)
+        if (validator.isNullOrBlank()) file.delete() else file.writeText(validator)
+    }
 
     fun isDownloaded(context: Context, id: Int): Boolean =
         videoFile(context, id).exists() && metaFile(context, id).exists()
@@ -56,6 +70,7 @@ object DownloadStore {
         val json = downloadToJson(download)
         metaFile(context, download.videoId).writeText(json.toString())
         pendingFile(context, download.videoId).delete()
+        validatorFile(context, download.videoId).delete()
     }
 
     fun writePending(context: Context, download: Download) {
@@ -136,6 +151,7 @@ object DownloadStore {
         partFile(context, id).delete()
         metaFile(context, id).delete()
         pendingFile(context, id).delete()
+        validatorFile(context, id).delete()
     }
 
     // --- (de)serialisation -------------------------------------------------
