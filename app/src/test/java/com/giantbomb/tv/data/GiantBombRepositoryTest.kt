@@ -1,5 +1,6 @@
 package com.giantbomb.tv.data
 
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
@@ -50,6 +51,26 @@ class GiantBombRepositoryTest {
         assertEquals(1, server.requestCount)
 
         repository.invalidateShowVideos()
+        repository.getShowVideos(showId = 7, limit = 3).getOrThrow()
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun fetchInFlightDuringInvalidationIsNotCached() = runTest {
+        server.enqueue(
+            MockResponse().setBody("{\"results\":[]}")
+                .setHeadersDelay(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+        )
+        server.enqueue(MockResponse().setBody("{\"results\":[]}"))
+        val repository = repository()
+
+        val inFlight = async(start = CoroutineStart.UNDISPATCHED) {
+            repository.getShowVideos(showId = 7, limit = 3)
+        }
+        server.takeRequest()
+        repository.invalidateShowVideos()
+        inFlight.await().getOrThrow()
+
         repository.getShowVideos(showId = 7, limit = 3).getOrThrow()
         assertEquals(2, server.requestCount)
     }
