@@ -272,6 +272,14 @@ the Baseline Profile generator. Run these on a physical Android 7+ device:
 ./gradlew :app:generateReleaseBaselineProfile
 ```
 
+Both need the app signed in on the device (a saved API key); they fail if the
+browse screen never appears. They work on phone and Android TV layouts.
+
+Release builds only ship an app-specific profile once one is committed. CI has
+no device to generate one, so after running `generateReleaseBaselineProfile`,
+commit the output in `app/src/release/generated/baselineProfiles/`. Until then,
+releases still get the profiles bundled with AndroidX libraries.
+
 ## Remote Controls
 
 | Button | Action (Browse) | Action (Playback) |
