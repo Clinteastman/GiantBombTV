@@ -260,7 +260,8 @@ supported by the current Media3 playback stack.
 ## Performance and benchmarks
 
 The `benchmark` module contains cold-start and Home-scroll Macrobenchmarks plus
-the Baseline Profile generator. Run these on a physical Android 7+ device:
+the Baseline Profile generator. Benchmarks run on a physical Android 7+ device;
+generating a Baseline Profile needs Android 9 (API 28) or newer:
 
 ```bash
 ./gradlew :benchmark:connectedBenchmarkReleaseAndroidTest
