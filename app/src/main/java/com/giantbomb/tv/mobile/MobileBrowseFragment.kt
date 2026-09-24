@@ -1487,7 +1487,7 @@ class MobileBrowseFragment : Fragment() {
 
             itemView.setOnClickListener {
                 when (si.id) {
-                    SETTINGS_REFRESH -> loadContent()
+                    SETTINGS_REFRESH -> loadContent(forceRefresh = true)
                     SETTINGS_SETUP -> launchSetup()
                     SETTINGS_QUALITY -> cycleQuality()
                     SETTINGS_PRIVACY -> openPrivacyPolicy()

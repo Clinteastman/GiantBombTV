@@ -148,5 +148,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:5.3.0")
     testImplementation("org.json:json:20231013")
+    // Generated profiles are committed under src/release/generated/ (CI has no
+    // device to generate them); see README "Performance and benchmarks".
     baselineProfile(project(":benchmark"))
 }
