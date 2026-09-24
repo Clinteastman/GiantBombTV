@@ -359,7 +359,7 @@ class BrowseFragment : BrowseSupportFragment() {
                 }
                 is SettingsItem -> {
                     when (item.id) {
-                        SETTINGS_REFRESH -> loadContent()
+                        SETTINGS_REFRESH -> loadContent(forceRefresh = true)
                         SETTINGS_SETUP -> launchSetup()
                         SETTINGS_QUALITY -> cycleQuality()
                         SETTINGS_PRIVACY -> openPrivacyPolicy()
