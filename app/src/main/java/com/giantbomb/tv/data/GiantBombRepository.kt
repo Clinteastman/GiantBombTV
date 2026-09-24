@@ -144,7 +144,8 @@ class GiantBombRepository private constructor(
      * rows don't mix a stale first page with newer later pages.
      */
     fun invalidateShowVideos() {
-        cache.keys.removeIf { it.startsWith("videos:show:") }
+        // Iterate rather than removeIf, which needs API 24 (minSdk is 23).
+        cache.keys.filter { it.startsWith("videos:show:") }.forEach { cache.remove(it) }
     }
 
     fun invalidateUserData() {
