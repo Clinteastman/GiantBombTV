@@ -117,7 +117,7 @@ adb install -r app-release.apk
 - [Android Studio](https://developer.android.com/studio) (Ladybug or later) **or** the Android SDK command-line tools
 - JDK 17+
 - Android SDK with:
-  - Compile SDK 35
+  - Compile SDK 36
   - Build Tools (latest)
   - Android TV system image (optional, for emulator testing)
 - Supports devices running Android 6.0+ (SDK 23)
