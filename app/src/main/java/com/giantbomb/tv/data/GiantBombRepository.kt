@@ -9,6 +9,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * App-wide source of Giant Bomb data.
@@ -26,6 +27,10 @@ class GiantBombRepository private constructor(
     private val cache = ConcurrentHashMap<String, Entry>()
     private val locks = Array(32) { Mutex() }
     private val showRequestSlots = Semaphore(3)
+    // Bumped by every write/invalidation. A fetch that started before a bump
+    // returns its data but must not cache it, or it would overwrite the newer
+    // state (e.g. re-add a stale page after Refresh, or hide a new watchlist item).
+    private val generation = AtomicInteger()
 
     @Suppress("UNCHECKED_CAST")
     private suspend fun <T : Any> cached(
@@ -46,7 +51,10 @@ class GiantBombRepository private constructor(
         if (!force) fresh()?.let { return Result.success(it) }
         return locks[(key.hashCode() and Int.MAX_VALUE) % locks.size].withLock {
             if (!force) fresh()?.let { return@withLock Result.success(it) }
-            fetch().onSuccess { putCache(key, Entry(it, nowMs() + ttlMs)) }
+            val startedAt = generation.get()
+            fetch().onSuccess {
+                if (generation.get() == startedAt) putCache(key, Entry(it, nowMs() + ttlMs))
+            }
         }
     }
 
@@ -95,6 +103,7 @@ class GiantBombRepository private constructor(
 
     suspend fun addToWatchlist(video: Video): Result<Unit> =
         api.addToWatchlist(video.id).onSuccess {
+            generation.incrementAndGet()
             val current = cachedValue<List<Video>>("watchlist")
             if (current != null) {
                 cache["watchlist"] = Entry(
@@ -108,6 +117,7 @@ class GiantBombRepository private constructor(
 
     suspend fun removeFromWatchlist(videoId: Int): Result<Unit> =
         api.removeFromWatchlist(videoId).onSuccess {
+            generation.incrementAndGet()
             cachedValue<List<Video>>("watchlist")?.let { current ->
                 cache["watchlist"] = Entry(
                     current.filterNot { it.id == videoId },
@@ -130,6 +140,7 @@ class GiantBombRepository private constructor(
 
     fun updateProgress(videoId: Int, currentTime: Double, duration: Double) {
         if (duration <= 0.0) return
+        generation.incrementAndGet()
         val current = cachedValue<List<ProgressEntry>>("progress") ?: return
         val percent = ((currentTime / duration) * 100).toInt().coerceIn(0, 100)
         val replacement = ProgressEntry(videoId, currentTime, duration, percent)
@@ -144,11 +155,13 @@ class GiantBombRepository private constructor(
      * rows don't mix a stale first page with newer later pages.
      */
     fun invalidateShowVideos() {
+        generation.incrementAndGet()
         // Iterate rather than removeIf, which needs API 24 (minSdk is 23).
         cache.keys.filter { it.startsWith("videos:show:") }.forEach { cache.remove(it) }
     }
 
     fun invalidateUserData() {
+        generation.incrementAndGet()
         cache.remove("watchlist")
         cache.remove("progress")
     }
