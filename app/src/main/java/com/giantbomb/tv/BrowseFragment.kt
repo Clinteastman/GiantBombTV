@@ -482,6 +482,7 @@ class BrowseFragment : BrowseSupportFragment() {
 
         val key = prefs.apiKey ?: ""
         val repository = GiantBombRepository.get(key)
+        if (forceRefresh) repository.invalidateShowVideos()
 
         viewLifecycleOwner.lifecycleScope.launch {
             try {

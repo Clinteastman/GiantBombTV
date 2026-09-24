@@ -342,6 +342,7 @@ class MobileBrowseFragment : Fragment() {
         val key = prefs.apiKey ?: ""
         val repo = GiantBombRepository.get(key)
         repository = repo
+        if (forceRefresh) repo.invalidateShowVideos()
 
         viewLifecycleOwner.lifecycleScope.launch {
             try {
