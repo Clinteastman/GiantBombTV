@@ -20,12 +20,16 @@ import java.util.regex.Pattern
 
 private const val TARGET_PACKAGE = "com.giantbomb.tv"
 private const val BROWSE_TIMEOUT_MS = 10_000L
-// Match the list only once it has rows, not when the empty container inflates
-// while content is still loading. Phone: browse_recycler. TV: Leanback's rows
-// grid (container_list), whose library id merges into the app package.
+// Match the list only once it holds a real video card, not just the empty
+// container or the Settings rows that are always added. Phone: browse_recycler
+// with a video card title. TV: Leanback's rows grid (container_list, a library
+// id merged into the app package) with a video card title.
+private val VIDEO_CARD_TITLE = By.res(
+    Pattern.compile("${Pattern.quote(TARGET_PACKAGE)}:id/(video_title|small_title|card_title)")
+)
 private val BROWSE_SELECTOR = By.res(
     Pattern.compile("${Pattern.quote(TARGET_PACKAGE)}:id/(browse_recycler|container_list)")
-).hasChild(By.pkg(TARGET_PACKAGE))
+).hasDescendant(VIDEO_CARD_TITLE)
 
 /** The browse screen that was found: phone RecyclerView or Leanback TV frame. */
 private sealed interface BrowseUi {
@@ -49,8 +53,9 @@ private fun MacrobenchmarkScope.awaitBrowse(): BrowseUi {
         }
     }
     error(
-        "Browse screen not shown. Open the app on this device and enter a " +
-            "Giant Bomb API key before running benchmarks or generating a profile."
+        "No video cards on the browse screen. Open the app on this device, " +
+            "enter a Giant Bomb API key and check content loads before running " +
+            "benchmarks or generating a profile."
     )
 }
 
