@@ -139,6 +139,14 @@ class GiantBombRepository private constructor(
         )
     }
 
+    /**
+     * Drops cached per-show pages. Called on an explicit refresh so rebuilt
+     * rows don't mix a stale first page with newer later pages.
+     */
+    fun invalidateShowVideos() {
+        cache.keys.removeIf { it.startsWith("videos:show:") }
+    }
+
     fun invalidateUserData() {
         cache.remove("watchlist")
         cache.remove("progress")

@@ -41,6 +41,20 @@ class GiantBombRepositoryTest {
     }
 
     @Test
+    fun invalidateShowVideosForcesRefetchOfShowPages() = runTest {
+        repeat(2) { server.enqueue(MockResponse().setBody("{\"results\":[]}")) }
+        val repository = repository()
+
+        repository.getShowVideos(showId = 7, limit = 3).getOrThrow()
+        repository.getShowVideos(showId = 7, limit = 3).getOrThrow()
+        assertEquals(1, server.requestCount)
+
+        repository.invalidateShowVideos()
+        repository.getShowVideos(showId = 7, limit = 3).getOrThrow()
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
     fun simultaneousShowsReadsAreCoalesced() = runTest {
         server.enqueue(MockResponse().setBody("{\"results\":[]}"))
         val repository = repository()

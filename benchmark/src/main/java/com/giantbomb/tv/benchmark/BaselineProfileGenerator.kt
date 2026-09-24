@@ -20,9 +20,12 @@ import java.util.regex.Pattern
 
 private const val TARGET_PACKAGE = "com.giantbomb.tv"
 private const val BROWSE_TIMEOUT_MS = 10_000L
+// Match the list only once it has rows, not when the empty container inflates
+// while content is still loading. Phone: browse_recycler. TV: Leanback's rows
+// grid (container_list), whose library id merges into the app package.
 private val BROWSE_SELECTOR = By.res(
-    Pattern.compile("${Pattern.quote(TARGET_PACKAGE)}:id/(browse_recycler|browse_frame)")
-)
+    Pattern.compile("${Pattern.quote(TARGET_PACKAGE)}:id/(browse_recycler|container_list)")
+).hasChild(By.pkg(TARGET_PACKAGE))
 
 /** The browse screen that was found: phone RecyclerView or Leanback TV frame. */
 private sealed interface BrowseUi {
@@ -36,8 +39,7 @@ private sealed interface BrowseUi {
  * profile or benchmark run can never report success without browsing.
  */
 private fun MacrobenchmarkScope.awaitBrowse(): BrowseUi {
-    // Wait for whichever layout this device uses in one poll: the phone list or
-    // Leanback's browse frame (library ids merge into the app package).
+    // Wait for whichever layout this device uses, in one poll.
     val found = device.wait(Until.findObject(BROWSE_SELECTOR), BROWSE_TIMEOUT_MS)
     if (found != null) {
         return if (found.resourceName.endsWith(":id/browse_recycler")) {
