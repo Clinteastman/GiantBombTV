@@ -820,7 +820,9 @@ object GlassSurface {
             // Darkening happens in RGB so alpha remains fully opaque and there
             // is no doubled image beneath the glass.
             float transmission = 0.58 + lens * (0.08 + focused * 0.02);
-            float hasBackdrop = max(hasBackdropFrom, hasBackdropTo);
+            // Fade presence with the crossfade so artwork <-> no-artwork
+            // transitions don't jump between opaque and translucent.
+            float hasBackdrop = mix(hasBackdropFrom, hasBackdropTo, backdropMix);
             float alpha = mix(surfaceAlpha, 1.0, hasBackdrop);
             float3 surfaceLight = tint * light * surfaceAlpha
                 + spectrum * spectralStrength;
