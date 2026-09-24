@@ -16,9 +16,13 @@ import androidx.test.uiautomator.Until
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.regex.Pattern
 
 private const val TARGET_PACKAGE = "com.giantbomb.tv"
 private const val BROWSE_TIMEOUT_MS = 10_000L
+private val BROWSE_SELECTOR = By.res(
+    Pattern.compile("${Pattern.quote(TARGET_PACKAGE)}:id/(browse_recycler|browse_frame)")
+)
 
 /** The browse screen that was found: phone RecyclerView or Leanback TV frame. */
 private sealed interface BrowseUi {
@@ -32,13 +36,16 @@ private sealed interface BrowseUi {
  * profile or benchmark run can never report success without browsing.
  */
 private fun MacrobenchmarkScope.awaitBrowse(): BrowseUi {
-    val phoneList = device.wait(
-        Until.findObject(By.res(TARGET_PACKAGE, "browse_recycler")),
-        BROWSE_TIMEOUT_MS
-    )
-    if (phoneList != null) return BrowseUi.Phone(phoneList)
-    // Leanback's BrowseSupportFragment frame; library ids merge into the app package.
-    if (device.hasObject(By.res(TARGET_PACKAGE, "browse_frame"))) return BrowseUi.Tv
+    // Wait for whichever layout this device uses in one poll: the phone list or
+    // Leanback's browse frame (library ids merge into the app package).
+    val found = device.wait(Until.findObject(BROWSE_SELECTOR), BROWSE_TIMEOUT_MS)
+    if (found != null) {
+        return if (found.resourceName.endsWith(":id/browse_recycler")) {
+            BrowseUi.Phone(found)
+        } else {
+            BrowseUi.Tv
+        }
+    }
     error(
         "Browse screen not shown. Open the app on this device and enter a " +
             "Giant Bomb API key before running benchmarks or generating a profile."
@@ -105,6 +112,8 @@ class StartupAndScrollBenchmark {
         setupBlock = {
             pressHome()
             startActivityAndWait()
+            // Wait for browse here so load time isn't counted as scroll frames.
+            awaitBrowse()
         }
     ) {
         scrollBrowse(awaitBrowse())
