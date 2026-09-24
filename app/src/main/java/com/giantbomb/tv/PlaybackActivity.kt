@@ -65,12 +65,13 @@ import com.giantbomb.tv.playback.Downloads
 import com.giantbomb.tv.util.DateFormat
 import com.giantbomb.tv.util.DeviceUtil
 import com.giantbomb.tv.ui.GlassSurface
+import com.giantbomb.tv.ui.NoBackdropRefraction
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
 import kotlinx.coroutines.*
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
+class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope(), NoBackdropRefraction {
 
     companion object {
         const val EXTRA_VIDEO = "extra_video"

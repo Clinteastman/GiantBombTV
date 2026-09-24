@@ -36,6 +36,12 @@ import kotlin.math.cos
 import kotlin.math.PI
 
 /**
+ * Implemented by screens whose content is not the shared browse backdrop
+ * (e.g. the video player), so glass there must not refract stale artwork.
+ */
+interface NoBackdropRefraction
+
+/**
  * Shared glass treatment for cards and controls.
  *
  * Android 13+ draws the glass surface with AGSL. The shader is installed as the
@@ -64,6 +70,12 @@ object GlassSurface {
     }
 
     private fun Context.dp(value: Float): Float = value * resources.displayMetrics.density
+
+    private tailrec fun Context.findActivity(): android.app.Activity? = when (this) {
+        is android.app.Activity -> this
+        is android.content.ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
 
     private fun transparentInputShader(): Shader = LinearGradient(
         0f,
@@ -151,6 +163,12 @@ object GlassSurface {
             backdropMix = 1f
             backdropTransitionActive = false
             backdropTransitionStartNanos = 0L
+            // Collapse to a single state. Otherwise a fade to "no artwork"
+            // leaves hasBackdropFrom set, and the shader keeps taking the
+            // opaque-backdrop path while sampling a transparent target.
+            backdropFromInput = backdropToInput
+            hasBackdropFrom = hasBackdropTo
+            backdropGeneration++
         }
         return true
     }
@@ -239,7 +257,10 @@ object GlassSurface {
             activeTheme == Theme.NEON -> neonDrawable(context, radius, focused, accentColor)
             activeTheme == Theme.SIMPLE -> fallbackDrawable(radius, emphasis, focused, accentColor, activeTheme)
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
-                RuntimeGlassDrawable(radius, emphasis, focused, accentColor, owner, activeTheme)
+                RuntimeGlassDrawable(
+                    radius, emphasis, focused, accentColor, owner, activeTheme,
+                    refractBackdrop = context.findActivity() !is NoBackdropRefraction
+                )
             }
             else -> fallbackDrawable(radius, emphasis, focused, accentColor, activeTheme)
         }
@@ -360,7 +381,8 @@ object GlassSurface {
         focused: Boolean,
         accentColor: Int?,
         private val owner: View?,
-        activeTheme: Theme
+        activeTheme: Theme,
+        private val refractBackdrop: Boolean = true
     ) : Drawable() {
         private val shader = RuntimeShader(GLASS_SHADER)
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -478,8 +500,9 @@ object GlassSurface {
             if (appliedBackdropGeneration != backdropGeneration) {
                 shader.setInputShader("backdropFrom", backdropFromInput)
                 shader.setInputShader("backdropTo", backdropToInput)
-                shader.setFloatUniform("hasBackdropFrom", if (usesBackdropRefraction && hasBackdropFrom) 1f else 0f)
-                shader.setFloatUniform("hasBackdropTo", if (usesBackdropRefraction && hasBackdropTo) 1f else 0f)
+                val refract = refractBackdrop && usesBackdropRefraction
+                shader.setFloatUniform("hasBackdropFrom", if (refract && hasBackdropFrom) 1f else 0f)
+                shader.setFloatUniform("hasBackdropTo", if (refract && hasBackdropTo) 1f else 0f)
                 appliedBackdropGeneration = backdropGeneration
             }
             shader.setFloatUniform("backdropMix", backdropMix)
