@@ -36,10 +36,12 @@ import kotlin.math.cos
 import kotlin.math.PI
 
 /**
- * Implemented by screens whose content is not the shared browse backdrop
- * (e.g. the video player), so glass there must not refract stale artwork.
+ * Implemented only by the screen that supplies the shared browse backdrop
+ * (MainActivity). Glass refracts that artwork only there; every other screen
+ * (player, detail, search, setup...) gets plain glass instead of showing a
+ * stale thumbnail from Home.
  */
-interface NoBackdropRefraction
+interface BackdropRefractionHost
 
 /**
  * Shared glass treatment for cards and controls.
@@ -259,7 +261,7 @@ object GlassSurface {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
                 RuntimeGlassDrawable(
                     radius, emphasis, focused, accentColor, owner, activeTheme,
-                    refractBackdrop = context.findActivity() !is NoBackdropRefraction
+                    refractBackdrop = context.findActivity() is BackdropRefractionHost
                 )
             }
             else -> fallbackDrawable(radius, emphasis, focused, accentColor, activeTheme)

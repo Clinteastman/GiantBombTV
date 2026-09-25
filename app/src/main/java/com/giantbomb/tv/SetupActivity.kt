@@ -19,11 +19,10 @@ import androidx.activity.enableEdgeToEdge
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.ui.GlassSurface
-import com.giantbomb.tv.ui.NoBackdropRefraction
 import com.giantbomb.tv.util.DeviceUtil
 import kotlinx.coroutines.*
 
-class SetupActivity : ComponentActivity(), CoroutineScope by MainScope(), NoBackdropRefraction {
+class SetupActivity : ComponentActivity(), CoroutineScope by MainScope() {
 
     private lateinit var statusText: TextView
     private val density by lazy { resources.displayMetrics.density }

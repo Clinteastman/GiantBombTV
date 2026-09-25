@@ -34,13 +34,14 @@ import com.giantbomb.tv.data.UpdateChecker
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.mobile.MobileBrowseFragment
 import com.giantbomb.tv.mobile.MobileShowGridFragment
+import com.giantbomb.tv.ui.BackdropRefractionHost
 import com.giantbomb.tv.ui.GlassSurface
 import com.giantbomb.tv.ui.NeonGridView
 import com.giantbomb.tv.util.DeviceUtil
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import kotlinx.coroutines.*
 
-class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
+class MainActivity : FragmentActivity(), CoroutineScope by MainScope(), BackdropRefractionHost {
 
     companion object {
         const val SETUP_REQUEST = 1001
