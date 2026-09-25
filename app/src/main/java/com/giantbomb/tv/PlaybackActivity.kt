@@ -776,6 +776,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // any activity-side timer here.
         if (desiredMediaId != null && c.currentMediaItem?.mediaId == desiredMediaId) {
             if (v != null) attachPlayerListener(c)
+            // Reopened while the previous exit was still saving: that exit
+            // paused this same item, so carry on playing it.
+            if (c.sessionExtras.getBoolean(PlaybackService.EXTRA_PAUSED_FOR_EXIT)) c.play()
             return
         }
         if (liveHlsUrl != null) initializeLivePlayer(liveHlsUrl)

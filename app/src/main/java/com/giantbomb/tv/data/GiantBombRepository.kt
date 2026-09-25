@@ -34,6 +34,7 @@ class GiantBombRepository private constructor(
     private val locks = Array(32) { Mutex() }
     private val showRequestSlots = Semaphore(3)
     private val showPageExpiry = ConcurrentHashMap<Int, Long>()
+    private val showGeneration = ConcurrentHashMap<Int, Int>()
     // Bumped by every write/invalidation. A fetch that started before a bump
     // returns its data but must not cache it, or it would overwrite the newer
     // state (e.g. re-add a stale page after Refresh, or hide a new watchlist item).
@@ -44,6 +45,7 @@ class GiantBombRepository private constructor(
         key: String,
         ttlMs: Long,
         force: Boolean = false,
+        stillValid: () -> Boolean = { true },
         fetch: suspend () -> Result<T>
     ): Result<T> {
         fun fresh(): T? {
@@ -60,7 +62,9 @@ class GiantBombRepository private constructor(
             if (!force) fresh()?.let { return@withLock Result.success(it) }
             val startedAt = generation.get()
             fetch().onSuccess {
-                if (generation.get() == startedAt) putCache(key, Entry(it, nowMs() + ttlMs))
+                if (generation.get() == startedAt && stillValid()) {
+                    putCache(key, Entry(it, nowMs() + ttlMs))
+                }
             }
         }
     }
@@ -103,7 +107,13 @@ class GiantBombRepository private constructor(
         // episode shifts the ordering, duplicating or dropping one at the seam.
         val now = nowMs()
         val expiresAt = showPagesExpiry(showId, now, force)
-        return cached(key, (expiresAt - now).coerceAtLeast(1L), force) {
+        val snapshot = showGeneration[showId] ?: 0
+        return cached(
+            key,
+            (expiresAt - now).coerceAtLeast(1L),
+            force,
+            stillValid = { (showGeneration[showId] ?: 0) == snapshot }
+        ) {
             showRequestSlots.withPermit { api.getShowVideos(showId, limit, offset) }
         }
     }
@@ -178,6 +188,9 @@ class GiantBombRepository private constructor(
     private fun showPagesExpiry(showId: Int, now: Long, force: Boolean): Long {
         val old = showPageExpiry[showId]
         if (!force && old != null && old > now) return old
+        // New snapshot: this show's requests started before it must not cache
+        // old pages. Per show, so other shows' in-flight fetches still cache.
+        showGeneration[showId] = (showGeneration[showId] ?: 0) + 1
         dropShowPages(showId)
         return (now + SHOW_VIDEOS_TTL_MS).also { showPageExpiry[showId] = it }
     }

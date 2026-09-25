@@ -109,6 +109,7 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (pausedForExit) setPausedForExit(false)
                 mediaSession?.setSessionActivity(buildSessionActivity(mediaItem))
             }
 
@@ -117,6 +118,7 @@ class PlaybackService : MediaSessionService() {
                     // Playback restarted (e.g. the player was reopened) while an
                     // exit save was in flight: keep the service alive.
                     cancelPendingExit()
+                    if (pausedForExit) setPausedForExit(false)
                     startProgressSaving()
                 } else {
                     stopProgressSaving()
@@ -148,7 +150,7 @@ class PlaybackService : MediaSessionService() {
         val videoId = currentVodId()
         val positionSeconds = player?.currentPosition?.div(1000.0) ?: 0.0
         val durationSeconds = player?.duration?.div(1000.0) ?: 0.0
-        pausedForExit = player?.isPlaying == true || player?.playWhenReady == true
+        setPausedForExit(player?.isPlaying == true || player?.playWhenReady == true)
         player?.pause()
 
         serviceScope.launch {
@@ -164,9 +166,14 @@ class PlaybackService : MediaSessionService() {
         if (!stoppingForExit) return
         stoppingForExit = false
         exitGeneration++
-        // The exit paused playback; a reopened player expects it to continue.
-        if (pausedForExit) mediaSession?.player?.play()
-        pausedForExit = false
+        // Don't resume here: the reconnecting player may want a different
+        // video. PlaybackActivity resumes only when it reattaches to this same
+        // item and sees EXTRA_PAUSED_FOR_EXIT in the session extras.
+    }
+
+    private fun setPausedForExit(paused: Boolean) {
+        pausedForExit = paused
+        mediaSession?.setSessionExtras(Bundle().apply { putBoolean(EXTRA_PAUSED_FOR_EXIT, paused) })
     }
 
     private fun buildSessionActivity(mediaItem: MediaItem?): PendingIntent {
@@ -286,6 +293,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     companion object {
+        /** Session extra: playback was paused only because the player closed. */
+        const val EXTRA_PAUSED_FOR_EXIT = "gb.pausedForExit"
         const val ACTION_SAVE_PROGRESS_AND_STOP =
             "com.giantbomb.tv.action.SAVE_PROGRESS_AND_STOP"
         private const val PROGRESS_SAVE_INTERVAL_MS = 30_000L
