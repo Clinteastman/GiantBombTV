@@ -124,6 +124,11 @@ object DownloadStore {
             .sortedByDescending { File(it.filePath ?: "").lastModified() }
     }
 
+    fun deletePending(context: Context, id: Int) {
+        pendingFile(context, id).delete()
+        validatorFile(context, id).delete()
+    }
+
     fun listPending(context: Context): List<Download> =
         baseDir(context).listFiles { file -> file.name.endsWith(".pending.json") }
             ?.mapNotNull { file ->
