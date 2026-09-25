@@ -48,6 +48,7 @@ class PlaybackService : MediaSessionService() {
     // its own attempt is still current, so an older save finishing late can't
     // stop the service before a newer exit's save has landed.
     private var exitGeneration = 0
+    private var pausedForExit = false
 
     override fun onCreate() {
         super.onCreate()
@@ -147,6 +148,7 @@ class PlaybackService : MediaSessionService() {
         val videoId = currentVodId()
         val positionSeconds = player?.currentPosition?.div(1000.0) ?: 0.0
         val durationSeconds = player?.duration?.div(1000.0) ?: 0.0
+        pausedForExit = player?.isPlaying == true || player?.playWhenReady == true
         player?.pause()
 
         serviceScope.launch {
@@ -159,8 +161,12 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun cancelPendingExit() {
+        if (!stoppingForExit) return
         stoppingForExit = false
         exitGeneration++
+        // The exit paused playback; a reopened player expects it to continue.
+        if (pausedForExit) mediaSession?.player?.play()
+        pausedForExit = false
     }
 
     private fun buildSessionActivity(mediaItem: MediaItem?): PendingIntent {

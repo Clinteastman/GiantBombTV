@@ -124,6 +124,18 @@ object DownloadStore {
             .sortedByDescending { File(it.filePath ?: "").lastModified() }
     }
 
+    /**
+     * The final .mp4 exists but its metadata doesn't (process died between
+     * the rename and writeMeta). Finish the job from the pending record
+     * instead of downloading the whole video again.
+     */
+    fun finalizeIfComplete(context: Context, pending: Download): Download? {
+        val mp4 = videoFile(context, pending.videoId)
+        if (!mp4.exists() || metaFile(context, pending.videoId).exists()) return null
+        writeMeta(context, pending.copy(status = DownloadStatus.COMPLETED, filePath = mp4.absolutePath))
+        return readMeta(context, pending.videoId)
+    }
+
     fun deletePending(context: Context, id: Int) {
         pendingFile(context, id).delete()
         validatorFile(context, id).delete()

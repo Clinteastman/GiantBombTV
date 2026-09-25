@@ -48,14 +48,24 @@ object Downloads {
         // A completed download is authoritative. A pending record left beside
         // it (process died between writing the metadata and removing the
         // pending file) is stale: delete it rather than re-download.
-        val pending = DownloadStore.listPending(context.applicationContext)
+        val app = context.applicationContext
+        val recovered = mutableMapOf<Int, Download>()
+        val pending = DownloadStore.listPending(app)
             .associateBy { it.videoId }
-            .filterKeys { id ->
-                val stale = id in completed
-                if (stale) DownloadStore.deletePending(context.applicationContext, id)
-                !stale
+            .filter { (id, record) ->
+                when {
+                    id in completed -> {
+                        DownloadStore.deletePending(app, id)
+                        false
+                    }
+                    else -> {
+                        val done = DownloadStore.finalizeIfComplete(app, record)
+                        if (done != null) recovered[id] = done
+                        done == null
+                    }
+                }
             }
-        _state.value = completed + pending
+        _state.value = completed + recovered + pending
         pending.values.firstOrNull { it.status == DownloadStatus.QUEUED }
             ?.let { VideoDownloadService.start(context, it.videoId) }
     }

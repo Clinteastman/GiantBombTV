@@ -52,6 +52,7 @@ class MobileBrowseFragment : Fragment() {
     private lateinit var prefs: PrefsManager
     private var repository: GiantBombRepository? = null
     private var isLoading = false
+    private var pendingForcedRefresh = false
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var swipeRefresh: SwipeRefreshLayout
@@ -380,7 +381,12 @@ class MobileBrowseFragment : Fragment() {
     }
 
     fun loadContent(forceRefresh: Boolean = false) {
-        if (isLoading) return
+        if (isLoading) {
+            // An explicit refresh mustn't be lost behind a normal load:
+            // run it once the current one finishes.
+            if (forceRefresh) pendingForcedRefresh = true
+            return
+        }
         isLoading = true
         swipeRefresh.isRefreshing = browseItems.isEmpty() || forceRefresh
         loadingSkeleton.visibility = if (browseItems.isEmpty()) View.VISIBLE else View.GONE
@@ -495,6 +501,10 @@ class MobileBrowseFragment : Fragment() {
                 if (isAdded) {
                     swipeRefresh.isRefreshing = false
                     loadingSkeleton.visibility = View.GONE
+                }
+                if (pendingForcedRefresh) {
+                    pendingForcedRefresh = false
+                    if (isAdded && view != null) loadContent(forceRefresh = true)
                 }
             }
         }

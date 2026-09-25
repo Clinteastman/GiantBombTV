@@ -44,6 +44,7 @@ class BrowseFragment : BrowseSupportFragment() {
 
     private lateinit var prefs: PrefsManager
     private var isLoading = false
+    private var pendingForcedRefresh = false
     private val handler = Handler(Looper.getMainLooper())
     private var backdropRunnable: Runnable? = null
     private var backdropImageView: ImageView? = null
@@ -542,7 +543,12 @@ class BrowseFragment : BrowseSupportFragment() {
     }
 
     fun loadContent(forceRefresh: Boolean = false) {
-        if (isLoading) return
+        if (isLoading) {
+            // An explicit refresh mustn't be lost behind a normal load:
+            // run it once the current one finishes.
+            if (forceRefresh) pendingForcedRefresh = true
+            return
+        }
         isLoading = true
 
         val key = prefs.apiKey ?: ""
@@ -679,6 +685,10 @@ class BrowseFragment : BrowseSupportFragment() {
             } finally {
                 loadingSpinner?.visibility = View.GONE
                 isLoading = false
+                if (pendingForcedRefresh) {
+                    pendingForcedRefresh = false
+                    if (isAdded && view != null) loadContent(forceRefresh = true)
+                }
             }
         }
     }
