@@ -59,7 +59,10 @@ class MobileBrowseFragment : Fragment() {
     private var miniPlayerContainer: FrameLayout? = null
     private var backdropImageView: ImageView? = null
     private var backdropNextView: ImageView? = null
+    // Shown artwork vs. the one still loading. Only a successful load becomes
+    // current, so a failed or cleared request can be retried later.
     private var currentBackdropUrl: String? = null
+    private var requestedBackdropUrl: String? = null
     private var backdropRunnable: Runnable? = null
 
     private val browseItems = mutableListOf<BrowseItem>()
@@ -252,6 +255,13 @@ class MobileBrowseFragment : Fragment() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         setupLayoutManager()
+        // MainActivity handles rotation itself, so the backdrop's crop and the
+        // glass shader's screen mapping must be rebuilt for the new size.
+        currentBackdropUrl = null
+        requestedBackdropUrl = null
+        if (::recyclerView.isInitialized) {
+            recyclerView.post { scheduleBackdropFromVisibleCard(immediate = true) }
+        }
     }
 
     override fun onPause() {
@@ -534,6 +544,7 @@ class MobileBrowseFragment : Fragment() {
         if (imageUrl.isNullOrEmpty()) {
             // Nothing visible has artwork (settings, empty states): fade out
             // and clear the glass input rather than keep an unrelated image.
+            requestedBackdropUrl = null
             if (currentBackdropUrl == null) return
             currentBackdropUrl = null
             GlassSurface.updateBackdrop(
@@ -547,19 +558,25 @@ class MobileBrowseFragment : Fragment() {
             next.animate().alpha(0f).setDuration(BACKDROP_CROSSFADE_MS).start()
             return
         }
-        if (imageUrl == currentBackdropUrl) return
-        currentBackdropUrl = imageUrl
+        if (imageUrl == currentBackdropUrl || imageUrl == requestedBackdropUrl) return
+        requestedBackdropUrl = imageUrl
 
+        // Match the current viewport's shape (half resolution; it's blurred).
+        val decor = requireActivity().window.decorView
+        val targetWidth = (decor.width / 2).takeIf { it > 0 } ?: 720
+        val targetHeight = (decor.height / 2).takeIf { it > 0 } ?: 1280
         Glide.with(this)
             .load(imageUrl)
-            .override(720, 1280)
+            .override(targetWidth, targetHeight)
             .centerCrop()
             .into(object : com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
                 override fun onResourceReady(
                     resource: android.graphics.drawable.Drawable,
                     transition: com.bumptech.glide.request.transition.Transition<in android.graphics.drawable.Drawable>?
                 ) {
-                    if (!isAdded || currentBackdropUrl != imageUrl) return
+                    if (!isAdded || requestedBackdropUrl != imageUrl) return
+                    requestedBackdropUrl = null
+                    currentBackdropUrl = imageUrl
                     (resource as? BitmapDrawable)?.bitmap?.let { bitmap ->
                         GlassSurface.updateBackdrop(
                             bitmap,
@@ -583,7 +600,12 @@ class MobileBrowseFragment : Fragment() {
                         .start()
                 }
 
+                override fun onLoadFailed(errorDrawable: android.graphics.drawable.Drawable?) {
+                    if (requestedBackdropUrl == imageUrl) requestedBackdropUrl = null
+                }
+
                 override fun onLoadCleared(placeholder: android.graphics.drawable.Drawable?) {
+                    if (requestedBackdropUrl == imageUrl) requestedBackdropUrl = null
                     next.setImageDrawable(null)
                 }
             })
