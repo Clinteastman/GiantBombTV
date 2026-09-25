@@ -76,6 +76,24 @@ class GiantBombRepositoryTest {
     }
 
     @Test
+    fun showPagesExpireTogether() = runTest {
+        repeat(4) { server.enqueue(MockResponse().setBody("{\"results\":[]}")) }
+        val repository = repository()
+
+        repository.getShowVideos(showId = 7, limit = 3, offset = 0).getOrThrow()
+        clockMs += 5 * 60_000L
+        repository.getShowVideos(showId = 7, limit = 3, offset = 3).getOrThrow()
+        assertEquals(2, server.requestCount)
+
+        // Past the first page's expiry: both pages must be refetched, even
+        // though the second page on its own would still have been fresh.
+        clockMs += 6 * 60_000L
+        repository.getShowVideos(showId = 7, limit = 3, offset = 0).getOrThrow()
+        repository.getShowVideos(showId = 7, limit = 3, offset = 3).getOrThrow()
+        assertEquals(4, server.requestCount)
+    }
+
+    @Test
     fun simultaneousShowsReadsAreCoalesced() = runTest {
         server.enqueue(MockResponse().setBody("{\"results\":[]}"))
         val repository = repository()

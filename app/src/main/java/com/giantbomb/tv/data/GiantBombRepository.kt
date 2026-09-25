@@ -22,11 +22,18 @@ class GiantBombRepository private constructor(
     private val api: GiantBombApi,
     private val nowMs: () -> Long = System::currentTimeMillis
 ) {
-    private data class Entry(val value: Any, val expiresAtMs: Long)
+    // seq orders entries by insertion so eviction drops the oldest one, even
+    // when several share an expiry (all pages of a show expire together).
+    private data class Entry(
+        val value: Any,
+        val expiresAtMs: Long,
+        val seq: Long = insertSeq.incrementAndGet()
+    )
 
     private val cache = ConcurrentHashMap<String, Entry>()
     private val locks = Array(32) { Mutex() }
     private val showRequestSlots = Semaphore(3)
+    private val showPageExpiry = ConcurrentHashMap<Int, Long>()
     // Bumped by every write/invalidation. A fetch that started before a bump
     // returns its data but must not cache it, or it would overwrite the newer
     // state (e.g. re-add a stale page after Refresh, or hide a new watchlist item).
@@ -63,7 +70,7 @@ class GiantBombRepository private constructor(
         val now = nowMs()
         cache.entries.forEach { if (it.value.expiresAtMs <= now) cache.remove(it.key, it.value) }
         while (cache.size >= 128 && !cache.containsKey(key)) {
-            val oldest = cache.entries.minByOrNull { it.value.expiresAtMs } ?: break
+            val oldest = cache.entries.minByOrNull { it.value.seq } ?: break
             cache.remove(oldest.key, oldest.value)
         }
         cache[key] = entry
@@ -91,7 +98,12 @@ class GiantBombRepository private constructor(
         force: Boolean = false
     ): Result<List<Video>> {
         val key = "videos:show:$showId:$limit:$offset"
-        return cached(key, SHOW_VIDEOS_TTL_MS, force) {
+        // All cached pages of one show expire together. Independent expiries
+        // could pair a fresh first page with an older later page after a new
+        // episode shifts the ordering, duplicating or dropping one at the seam.
+        val now = nowMs()
+        val expiresAt = showPagesExpiry(showId, now, force)
+        return cached(key, (expiresAt - now).coerceAtLeast(1L), force) {
             showRequestSlots.withPermit { api.getShowVideos(showId, limit, offset) }
         }
     }
@@ -156,8 +168,23 @@ class GiantBombRepository private constructor(
      */
     fun invalidateShowVideos() {
         generation.incrementAndGet()
+        showPageExpiry.clear()
         // Iterate rather than removeIf, which needs API 24 (minSdk is 23).
         cache.keys.filter { it.startsWith("videos:show:") }.forEach { cache.remove(it) }
+    }
+
+    // Synchronized rather than ConcurrentHashMap.compute, which needs API 24.
+    @Synchronized
+    private fun showPagesExpiry(showId: Int, now: Long, force: Boolean): Long {
+        val old = showPageExpiry[showId]
+        if (!force && old != null && old > now) return old
+        dropShowPages(showId)
+        return (now + SHOW_VIDEOS_TTL_MS).also { showPageExpiry[showId] = it }
+    }
+
+    private fun dropShowPages(showId: Int) {
+        val prefix = "videos:show:$showId:"
+        cache.keys.filter { it.startsWith(prefix) }.forEach { cache.remove(it) }
     }
 
     fun invalidateUserData() {
@@ -174,6 +201,7 @@ class GiantBombRepository private constructor(
     }
 
     companion object {
+        private val insertSeq = java.util.concurrent.atomic.AtomicLong()
         private const val UPCOMING_TTL_MS = 60_000L
         private const val USER_DATA_TTL_MS = 30_000L
         private const val RECENT_TTL_MS = 3 * 60_000L
