@@ -263,6 +263,21 @@ class MobileBrowseFragment : Fragment() {
         recyclerView.layoutManager = glm
     }
 
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (hidden) {
+            // Other tabs don't supply artwork, so don't leave Home's behind
+            // (and inside) their glass cards.
+            updateMobileBackdrop(null)
+        } else {
+            currentBackdropUrl = null
+            requestedBackdropUrl = null
+            if (::recyclerView.isInitialized) {
+                recyclerView.post { scheduleBackdropFromVisibleCard(immediate = true) }
+            }
+        }
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         setupLayoutManager()
@@ -531,7 +546,7 @@ class MobileBrowseFragment : Fragment() {
     private fun scheduleBackdropFromVisibleCard(immediate: Boolean = false) {
         backdropRunnable?.let { refreshHandler.removeCallbacks(it) }
         backdropRunnable = Runnable {
-            if (!isAdded || browseItems.isEmpty()) return@Runnable
+            if (!isAdded || isHidden || browseItems.isEmpty()) return@Runnable
             val targetY = recyclerView.height * 0.38f
             var bestUrl: String? = null
             var bestDistance = Float.MAX_VALUE
