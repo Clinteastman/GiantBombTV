@@ -28,6 +28,8 @@ import com.giantbomb.tv.playback.DownloadStatus
 import com.giantbomb.tv.playback.Downloads
 import com.giantbomb.tv.util.DeviceUtil
 import kotlinx.coroutines.CoroutineScope
+import com.giantbomb.tv.ui.BackdropRefractionHost
+import com.giantbomb.tv.ui.GlassSurface
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -58,7 +60,12 @@ class DownloadsFragment : Fragment() {
         val isTv = DeviceUtil.isTv(ctx)
 
         val root = FrameLayout(ctx).apply {
-            setBackgroundResource(R.drawable.bg_ambient_gradient)
+            // As a phone tab inside MainActivity, let the activity's themed
+            // background (incl. the Neon grid) show through like the other
+            // tabs. The standalone DownloadsActivity keeps its own gradient.
+            if (requireActivity() !is BackdropRefractionHost) {
+                setBackgroundResource(R.drawable.bg_ambient_gradient)
+            }
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -246,7 +253,13 @@ class DownloadsFragment : Fragment() {
             setPadding(12.dp(), 10.dp(), 12.dp(), 10.dp())
             isFocusable = true
             isFocusableInTouchMode = false
-            background = focusableRowBackground()
+            GlassSurface.styleInteractive(
+                this,
+                GlassSurface.Emphasis.CARD,
+                cornerRadiusDp = 10f,
+                // Full-width rows: growing on focus would clip the ring's sides.
+                focusedScale = 1f
+            )
             layoutParams = RecyclerView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -308,11 +321,6 @@ class DownloadsFragment : Fragment() {
         row.addView(remove)
 
         return row
-    }
-
-    private fun focusableRowBackground(): GradientDrawable = GradientDrawable().apply {
-        setColor(0x10FFFFFF)
-        cornerRadius = 10f * resources.displayMetrics.density
     }
 
     companion object {
