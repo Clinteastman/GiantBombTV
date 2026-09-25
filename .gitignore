@@ -5,6 +5,7 @@
 .DS_Store
 /build
 /app/build
+/benchmark/build
 /captures
 .externalNativeBuild
 .cxx
@@ -18,4 +19,5 @@ cloudflare_403_diagnostics.txt
 .claude/
 tmp_*.png
 tmp_*.json
+__pycache__/
 screenshots/phone_test.png

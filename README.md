@@ -2,7 +2,7 @@
 
 [![Build & Test](https://img.shields.io/github/actions/workflow/status/Clinteastman/GiantBombTV/build.yml?branch=master&label=build%20%26%20test)](https://github.com/Clinteastman/GiantBombTV/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/Clinteastman/GiantBombTV?label=release&color=blue&cacheSeconds=3600)](https://github.com/Clinteastman/GiantBombTV/releases/latest)
-[![Android 5.0+](https://img.shields.io/badge/min%20SDK-21-3DDC84?logo=android&logoColor=white)](https://developer.android.com/about/versions/lollipop)
+[![Android 6.0+](https://img.shields.io/badge/min%20SDK-23-3DDC84?logo=android&logoColor=white)](https://developer.android.com/about/versions/marshmallow)
 [![Google Play](https://img.shields.io/badge/Google%20Play-Available-414141?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.giantbomb.tv)
 [![Amazon Appstore](https://img.shields.io/badge/Amazon%20Appstore-Available-FF9900?logo=amazon&logoColor=white)](https://www.amazon.co.uk/dp/B0H1DSRF54)
 
@@ -117,10 +117,10 @@ adb install -r app-release.apk
 - [Android Studio](https://developer.android.com/studio) (Ladybug or later) **or** the Android SDK command-line tools
 - JDK 17+
 - Android SDK with:
-  - Compile SDK 35
+  - Compile SDK 36
   - Build Tools (latest)
   - Android TV system image (optional, for emulator testing)
-- Supports devices running Android 5.0+ (SDK 21)
+- Supports devices running Android 6.0+ (SDK 23)
 
 ### Build & Install
 
@@ -141,6 +141,21 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 # Launch
 adb shell am start -n com.giantbomb.tv/.MainActivity
 ```
+
+### Fast builds with WSL2
+
+For WSL2, keep both the repository and Gradle caches in the Linux filesystem.
+Building a checkout under `/mnt/c` adds cross-filesystem overhead and is often
+slower than the native Windows build.
+
+1. Install JDK 17 and the Linux Android command-line tools in WSL2.
+2. Set `ANDROID_SDK_ROOT` to that Linux SDK and install platform `android-36`.
+3. Clone the repository somewhere such as `~/src/GiantBombTV`.
+4. Run `bash scripts/wsl-build.sh`.
+
+The helper runs unit tests, lint, and a debug build by default. It also accepts
+specific Gradle tasks, for example `bash scripts/wsl-build.sh assembleDebug`.
+Gradle's configuration cache and build cache are enabled for fast repeat runs.
 
 ### Build Configuration
 
@@ -238,6 +253,28 @@ scripts/
 - **Twitch GQL API** for live stream extraction
 - **JUnit + MockWebServer** for unit testing
 - **GitHub Actions** for CI/CD
+
+The current app requires Android 6.0 (API 23) or newer. This is the minimum
+supported by the current Media3 playback stack.
+
+## Performance and benchmarks
+
+The `benchmark` module contains cold-start and Home-scroll Macrobenchmarks plus
+the Baseline Profile generator. Benchmarks run on a physical Android 7+ device;
+generating a Baseline Profile needs Android 9 (API 28) or newer:
+
+```bash
+./gradlew :benchmark:connectedBenchmarkReleaseAndroidTest
+./gradlew :app:generateReleaseBaselineProfile
+```
+
+Both need the app signed in on the device (a saved API key); they fail if the
+browse screen never appears. They work on phone and Android TV layouts.
+
+Release builds only ship an app-specific profile once one is committed. CI has
+no device to generate one, so after running `generateReleaseBaselineProfile`,
+commit the output in `app/src/release/generated/baselineProfiles/`. Until then,
+releases still get the profiles bundled with AndroidX libraries.
 
 ## Remote Controls
 

@@ -18,3 +18,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "GiantBombTV"
 include(":app")
+include(":benchmark")
