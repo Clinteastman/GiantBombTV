@@ -20,16 +20,16 @@ import java.util.regex.Pattern
 
 private const val TARGET_PACKAGE = "com.giantbomb.tv"
 private const val BROWSE_TIMEOUT_MS = 10_000L
-// Match the list only once it holds a real video card, not just the empty
-// container or the Settings rows that are always added. Phone: browse_recycler
-// with a video card title. TV: Leanback's rows grid (container_list, a library
-// id merged into the app package) with a video card title.
+// Phone: browse_recycler. TV: Leanback's rows grid (container_list, a library
+// id merged into the app package).
+private val BROWSE_LIST = By.res(
+    Pattern.compile("${Pattern.quote(TARGET_PACKAGE)}:id/(browse_recycler|container_list)")
+)
+// A real video card. Settings rows are always added, so any child of the list
+// is not proof that content loaded.
 private val VIDEO_CARD_TITLE = By.res(
     Pattern.compile("${Pattern.quote(TARGET_PACKAGE)}:id/(video_title|small_title|card_title)")
 )
-private val BROWSE_SELECTOR = By.res(
-    Pattern.compile("${Pattern.quote(TARGET_PACKAGE)}:id/(browse_recycler|container_list)")
-).hasDescendant(VIDEO_CARD_TITLE)
 
 /** The browse screen that was found: phone RecyclerView or Leanback TV frame. */
 private sealed interface BrowseUi {
@@ -43,21 +43,36 @@ private sealed interface BrowseUi {
  * profile or benchmark run can never report success without browsing.
  */
 private fun MacrobenchmarkScope.awaitBrowse(): BrowseUi {
-    // Wait for whichever layout this device uses, in one poll.
-    val found = device.wait(Until.findObject(BROWSE_SELECTOR), BROWSE_TIMEOUT_MS)
-    if (found != null) {
-        return if (found.resourceName.endsWith(":id/browse_recycler")) {
-            BrowseUi.Phone(found)
-        } else {
-            BrowseUi.Tv
+    val list = device.wait(Until.findObject(BROWSE_LIST), BROWSE_TIMEOUT_MS)
+        ?: failNoContent()
+    val isPhone = list.resourceName.endsWith(":id/browse_recycler")
+    // Video rows may sit below other sections (the order is user-customisable),
+    // so move through the list while waiting instead of only checking what's
+    // attached on screen.
+    val deadline = System.currentTimeMillis() + BROWSE_TIMEOUT_MS
+    while (System.currentTimeMillis() < deadline) {
+        if (device.hasObject(VIDEO_CARD_TITLE)) {
+            return if (isPhone) {
+                BrowseUi.Phone(device.findObject(BROWSE_LIST) ?: list)
+            } else {
+                BrowseUi.Tv
+            }
         }
+        if (isPhone) {
+            device.findObject(BROWSE_LIST)?.scroll(Direction.DOWN, 0.6f)
+        } else {
+            device.pressDPadDown()
+        }
+        device.waitForIdle()
     }
-    error(
-        "No video cards on the browse screen. Open the app on this device, " +
-            "enter a Giant Bomb API key and check content loads before running " +
-            "benchmarks or generating a profile."
-    )
+    failNoContent()
 }
+
+private fun failNoContent(): Nothing = error(
+    "No video cards on the browse screen. Open the app on this device, " +
+        "enter a Giant Bomb API key and check content loads before running " +
+        "benchmarks or generating a profile."
+)
 
 private fun MacrobenchmarkScope.scrollBrowse(ui: BrowseUi) {
     when (ui) {
