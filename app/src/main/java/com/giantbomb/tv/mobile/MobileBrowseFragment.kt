@@ -214,6 +214,16 @@ class MobileBrowseFragment : Fragment() {
                 }
             }
         })
+        // Horizontal carousels scroll on their own, so follow them too.
+        recyclerView.addOnChildAttachStateChangeListener(object : RecyclerView.OnChildAttachStateChangeListener {
+            override fun onChildViewAttachedToWindow(view: View) {
+                view.findViewById<RecyclerView>(R.id.horizontal_recycler)?.let { nested ->
+                    nested.removeOnScrollListener(carouselBackdropListener)
+                    nested.addOnScrollListener(carouselBackdropListener)
+                }
+            }
+            override fun onChildViewDetachedFromWindow(view: View) = Unit
+        })
         recyclerView.addItemDecoration(SectionGapDecoration())
 
         swipeRefresh.setColorSchemeColors(
@@ -500,6 +510,14 @@ class MobileBrowseFragment : Fragment() {
         }
     }
 
+    private val carouselBackdropListener = object : RecyclerView.OnScrollListener() {
+        override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
+            if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                scheduleBackdropFromVisibleCard(immediate = true)
+            }
+        }
+    }
+
     private fun scheduleBackdropFromVisibleCard(immediate: Boolean = false) {
         backdropRunnable?.let { refreshHandler.removeCallbacks(it) }
         backdropRunnable = Runnable {
@@ -510,7 +528,11 @@ class MobileBrowseFragment : Fragment() {
             for (childIndex in 0 until recyclerView.childCount) {
                 val child = recyclerView.getChildAt(childIndex)
                 val adapterPosition = recyclerView.getChildAdapterPosition(child)
-                val url = browseItems.getOrNull(adapterPosition)?.backdropUrl() ?: continue
+                // For carousels, start from the first card actually on screen.
+                val firstVisible = (child.findViewById<RecyclerView>(R.id.horizontal_recycler)
+                    ?.layoutManager as? LinearLayoutManager)
+                    ?.findFirstVisibleItemPosition()?.coerceAtLeast(0) ?: 0
+                val url = browseItems.getOrNull(adapterPosition)?.backdropUrl(firstVisible) ?: continue
                 val distance = kotlin.math.abs((child.top + child.bottom) * 0.5f - targetY)
                 if (distance < bestDistance) {
                     bestDistance = distance
@@ -522,16 +544,18 @@ class MobileBrowseFragment : Fragment() {
         refreshHandler.postDelayed(backdropRunnable!!, if (immediate) 0L else BACKDROP_DELAY_MS)
     }
 
-    private fun BrowseItem.backdropUrl(): String? = when (this) {
+    /** Artwork for a row, starting at [firstVisible] for horizontal carousels. */
+    private fun BrowseItem.backdropUrl(firstVisible: Int = 0): String? = when (this) {
         is BrowseItem.VerticalVideo -> video.thumbnailUrl ?: video.posterUrl
-        is BrowseItem.HorizontalVideoRow -> videos.firstNotNullOfOrNull {
+        is BrowseItem.HorizontalVideoRow -> videos.drop(firstVisible).firstNotNullOfOrNull {
             it.thumbnailUrl ?: it.posterUrl
         }
-        is BrowseItem.HorizontalShowRow -> shows.firstNotNullOfOrNull {
+        is BrowseItem.HorizontalShowRow -> shows.drop(firstVisible).firstNotNullOfOrNull {
             it.posterUrl ?: it.logoUrl
         }
-        is BrowseItem.UpcomingRow -> liveNow?.image ?: streams.firstNotNullOfOrNull { it.image }
-        is BrowseItem.LazyShowRow -> videos?.firstNotNullOfOrNull {
+        is BrowseItem.UpcomingRow -> (listOfNotNull(liveNow) + streams)
+            .drop(firstVisible).firstNotNullOfOrNull { it.image }
+        is BrowseItem.LazyShowRow -> videos?.drop(firstVisible)?.firstNotNullOfOrNull {
             it.thumbnailUrl ?: it.posterUrl
         } ?: show.posterUrl ?: show.logoUrl
         is BrowseItem.ShowSectionHeader -> show.posterUrl ?: show.logoUrl
