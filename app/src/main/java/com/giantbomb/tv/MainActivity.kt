@@ -139,6 +139,10 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         setContentView(R.layout.activity_main)
 
+        // Load persisted downloads now so a download interrupted by process
+        // death resumes on relaunch, not only once a download screen opens.
+        com.giantbomb.tv.playback.Downloads.ensureLoaded(this)
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 handleBackNavigation(this)
@@ -171,15 +175,6 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         val home = MobileBrowseFragment()
         tx.add(R.id.main_fragment_container, home, TAG_HOME)
-
-        val shows = MobileShowGridFragment.newInstance(MobileShowGridFragment.Mode.SHOWS)
-        tx.add(R.id.main_fragment_container, shows, TAG_SHOWS).hide(shows)
-
-        val podcasts = MobileShowGridFragment.newInstance(MobileShowGridFragment.Mode.PODCASTS)
-        tx.add(R.id.main_fragment_container, podcasts, TAG_PODCASTS).hide(podcasts)
-
-        val downloads = DownloadsFragment()
-        tx.add(R.id.main_fragment_container, downloads, TAG_DOWNLOADS).hide(downloads)
 
         tx.commit()
 
@@ -218,8 +213,19 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
         val fm = supportFragmentManager
         val tx = fm.beginTransaction()
         listOf(TAG_HOME, TAG_SHOWS, TAG_PODCASTS, TAG_DOWNLOADS).forEach { tag ->
-            val frag = fm.findFragmentByTag(tag) ?: return@forEach
-            if (tag == activeTag) tx.show(frag) else tx.hide(frag)
+            fm.findFragmentByTag(tag)?.let { tx.hide(it) }
+        }
+        val active = fm.findFragmentByTag(activeTag)
+        if (active != null) {
+            tx.show(active)
+        } else {
+            val fragment = when (activeTag) {
+                TAG_SHOWS -> MobileShowGridFragment.newInstance(MobileShowGridFragment.Mode.SHOWS)
+                TAG_PODCASTS -> MobileShowGridFragment.newInstance(MobileShowGridFragment.Mode.PODCASTS)
+                TAG_DOWNLOADS -> DownloadsFragment()
+                else -> MobileBrowseFragment()
+            }
+            tx.add(R.id.main_fragment_container, fragment, activeTag)
         }
         tx.commit()
     }

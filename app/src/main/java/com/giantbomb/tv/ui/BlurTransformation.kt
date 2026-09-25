@@ -35,13 +35,17 @@ class BlurTransformation(private val radius: Int = 25, private val passes: Int =
 
     private fun boxBlurHorizontal(pixels: IntArray, w: Int, h: Int, r: Int) {
         val rr = r.coerceAtMost(w / 2)
+        // Read from an immutable pass source. Reading the pixels already written
+        // earlier in the row feeds the blur back into itself and creates the
+        // large vertical colour columns that were visible behind clear cards.
+        val source = pixels.copyOf()
         for (y in 0 until h) {
             var rSum = 0; var gSum = 0; var bSum = 0
             val row = y * w
             // Init window
             for (x in -rr..rr) {
                 val idx = row + x.coerceIn(0, w - 1)
-                val p = pixels[idx]
+                val p = source[idx]
                 rSum += (p shr 16) and 0xFF
                 gSum += (p shr 8) and 0xFF
                 bSum += p and 0xFF
@@ -53,8 +57,8 @@ class BlurTransformation(private val radius: Int = 25, private val passes: Int =
                 // Slide window
                 val addIdx = (x + rr + 1).coerceAtMost(w - 1)
                 val remIdx = (x - rr).coerceAtLeast(0)
-                val addP = pixels[row + addIdx]
-                val remP = pixels[row + remIdx]
+                val addP = source[row + addIdx]
+                val remP = source[row + remIdx]
                 rSum += ((addP shr 16) and 0xFF) - ((remP shr 16) and 0xFF)
                 gSum += ((addP shr 8) and 0xFF) - ((remP shr 8) and 0xFF)
                 bSum += (addP and 0xFF) - (remP and 0xFF)
@@ -93,6 +97,8 @@ class BlurTransformation(private val radius: Int = 25, private val passes: Int =
         messageDigest.update("blur_${radius}_$passes".toByteArray())
     }
 
-    override fun equals(other: Any?) = other is BlurTransformation && other.radius == radius
-    override fun hashCode() = radius
+    override fun equals(other: Any?) =
+        other is BlurTransformation && other.radius == radius && other.passes == passes
+
+    override fun hashCode() = 31 * radius + passes
 }

@@ -1,0 +1,134 @@
+package com.giantbomb.tv.data
+
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runTest
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Before
+import org.junit.Test
+
+class GiantBombRepositoryTest {
+    private lateinit var server: MockWebServer
+    private var clockMs = 1_000L
+
+    @Before
+    fun setUp() {
+        server = MockWebServer()
+        server.start()
+    }
+
+    @After
+    fun tearDown() {
+        server.shutdown()
+    }
+
+    private fun repository(): GiantBombRepository = GiantBombRepository.createForTest(
+        api = GiantBombApi("secret", server.url("/").toString().removeSuffix("/")),
+        nowMs = { clockMs }
+    )
+
+    @Test
+    fun repeatedShowsReadUsesCache() = runTest {
+        server.enqueue(MockResponse().setBody("{\"results\":[]}"))
+        val repository = repository()
+
+        repository.getShows().getOrThrow()
+        repository.getShows().getOrThrow()
+
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun invalidateShowVideosForcesRefetchOfShowPages() = runTest {
+        repeat(2) { server.enqueue(MockResponse().setBody("{\"results\":[]}")) }
+        val repository = repository()
+
+        repository.getShowVideos(showId = 7, limit = 3).getOrThrow()
+        repository.getShowVideos(showId = 7, limit = 3).getOrThrow()
+        assertEquals(1, server.requestCount)
+
+        repository.invalidateShowVideos()
+        repository.getShowVideos(showId = 7, limit = 3).getOrThrow()
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun fetchInFlightDuringInvalidationIsNotCached() = runTest {
+        server.enqueue(
+            MockResponse().setBody("{\"results\":[]}")
+                .setHeadersDelay(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+        )
+        server.enqueue(MockResponse().setBody("{\"results\":[]}"))
+        val repository = repository()
+
+        val inFlight = async(start = CoroutineStart.UNDISPATCHED) {
+            repository.getShowVideos(showId = 7, limit = 3)
+        }
+        server.takeRequest()
+        repository.invalidateShowVideos()
+        inFlight.await().getOrThrow()
+
+        repository.getShowVideos(showId = 7, limit = 3).getOrThrow()
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun showPagesExpireTogether() = runTest {
+        repeat(4) { server.enqueue(MockResponse().setBody("{\"results\":[]}")) }
+        val repository = repository()
+
+        repository.getShowVideos(showId = 7, limit = 3, offset = 0).getOrThrow()
+        clockMs += 5 * 60_000L
+        repository.getShowVideos(showId = 7, limit = 3, offset = 3).getOrThrow()
+        assertEquals(2, server.requestCount)
+
+        // Past the first page's expiry: both pages must be refetched, even
+        // though the second page on its own would still have been fresh.
+        clockMs += 6 * 60_000L
+        repository.getShowVideos(showId = 7, limit = 3, offset = 0).getOrThrow()
+        repository.getShowVideos(showId = 7, limit = 3, offset = 3).getOrThrow()
+        assertEquals(4, server.requestCount)
+    }
+
+    @Test
+    fun simultaneousShowsReadsAreCoalesced() = runTest {
+        server.enqueue(MockResponse().setBody("{\"results\":[]}"))
+        val repository = repository()
+
+        val first = async { repository.getShows().getOrThrow() }
+        val second = async { repository.getShows().getOrThrow() }
+        first.await()
+        second.await()
+
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun oldestPageIsEvictedButRecentPageIsReused() = runTest {
+        repeat(130) { server.enqueue(MockResponse().setBody("{\"results\":[]}")) }
+        val repository = repository()
+        repeat(129) { page ->
+            clockMs++
+            repository.getShowVideos(1, 10, page * 10).getOrThrow()
+        }
+        repository.getShowVideos(1, 10, 1280).getOrThrow()
+        assertEquals(129, server.requestCount)
+        repository.getShowVideos(1, 10, 0).getOrThrow()
+        assertEquals(130, server.requestCount)
+    }
+
+    @Test
+    fun forcedRefreshBypassesFreshCache() = runTest {
+        server.enqueue(MockResponse().setBody("{\"results\":[]}"))
+        server.enqueue(MockResponse().setBody("{\"results\":[]}"))
+        val repository = repository()
+
+        repository.getShows().getOrThrow()
+        repository.getShows(force = true).getOrThrow()
+
+        assertEquals(2, server.requestCount)
+    }
+}

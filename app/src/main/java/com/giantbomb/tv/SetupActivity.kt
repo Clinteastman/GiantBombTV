@@ -3,6 +3,7 @@ package com.giantbomb.tv
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
+import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
 import android.view.inputmethod.EditorInfo
@@ -298,6 +299,18 @@ class SetupActivity : ComponentActivity(), CoroutineScope by MainScope() {
                 statusText.text = if (isPremium) "Premium account linked!" else "Free account linked."
                 statusText.setTextColor(0xFF4CAF50.toInt())
                 setResult(RESULT_OK)
+                // Setup can also be the root of a task when opened from its
+                // deep link or directly after installation. In that case
+                // finish() would expose the launcher, which looks like a crash.
+                // Hand off explicitly; the normal for-result path still lets
+                // the existing MainActivity resume and refresh itself.
+                if (isTaskRoot) {
+                    startActivity(
+                        Intent(this@SetupActivity, MainActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        }
+                    )
+                }
                 finish()
             }
 

@@ -47,18 +47,48 @@ object DownloadStore {
     fun videoFile(context: Context, id: Int): File = File(baseDir(context), "$id.mp4")
     fun partFile(context: Context, id: Int): File = File(baseDir(context), "$id.part")
     private fun metaFile(context: Context, id: Int): File = File(baseDir(context), "$id.json")
+    private fun pendingFile(context: Context, id: Int): File = File(baseDir(context), "$id.pending.json")
+    private fun validatorFile(context: Context, id: Int): File = File(baseDir(context), "$id.validator")
+
+    /**
+     * ETag or Last-Modified of the server copy the partial file came from.
+     * A resume sends it as If-Range, so a changed file restarts from zero
+     * instead of appending new bytes to an old prefix.
+     */
+    fun readValidator(context: Context, id: Int): String? =
+        validatorFile(context, id).takeIf { it.exists() }?.readText()?.takeIf { it.isNotBlank() }
+
+    fun writeValidator(context: Context, id: Int, validator: String?) {
+        val file = validatorFile(context, id)
+        if (validator.isNullOrBlank()) file.delete() else file.writeText(validator)
+    }
 
     fun isDownloaded(context: Context, id: Int): Boolean =
         videoFile(context, id).exists() && metaFile(context, id).exists()
 
     fun writeMeta(context: Context, download: Download) {
-        val json = JSONObject().apply {
+        val json = downloadToJson(download)
+        metaFile(context, download.videoId).writeText(json.toString())
+        pendingFile(context, download.videoId).delete()
+        validatorFile(context, download.videoId).delete()
+    }
+
+    fun writePending(context: Context, download: Download) {
+        val json = downloadToJson(download)
+        // Remember failures so a relaunch shows them as failed (retry is the
+        // user's choice) instead of silently re-queueing them every time.
+        if (download.status == DownloadStatus.FAILED) {
+            json.put("failed", true)
+            json.put("error", download.error ?: "Download failed")
+        }
+        pendingFile(context, download.videoId).writeText(json.toString())
+    }
+
+    private fun downloadToJson(download: Download): JSONObject = JSONObject().apply {
             put("video", videoToJson(download.video))
             put("url", download.url)
             put("qualityLabel", download.qualityLabel)
             put("totalBytes", download.totalBytes)
-        }
-        metaFile(context, download.videoId).writeText(json.toString())
     }
 
     /** Rebuilds a COMPLETED [Download] from its on-disk metadata, or null. */
@@ -94,10 +124,51 @@ object DownloadStore {
             .sortedByDescending { File(it.filePath ?: "").lastModified() }
     }
 
+    /**
+     * The final .mp4 exists but its metadata doesn't (process died between
+     * the rename and writeMeta). Finish the job from the pending record
+     * instead of downloading the whole video again.
+     */
+    fun finalizeIfComplete(context: Context, pending: Download): Download? {
+        val mp4 = videoFile(context, pending.videoId)
+        if (!mp4.exists() || metaFile(context, pending.videoId).exists()) return null
+        writeMeta(context, pending.copy(status = DownloadStatus.COMPLETED, filePath = mp4.absolutePath))
+        return readMeta(context, pending.videoId)
+    }
+
+    fun deletePending(context: Context, id: Int) {
+        pendingFile(context, id).delete()
+        validatorFile(context, id).delete()
+    }
+
+    fun listPending(context: Context): List<Download> =
+        baseDir(context).listFiles { file -> file.name.endsWith(".pending.json") }
+            ?.mapNotNull { file ->
+                runCatching {
+                    val json = JSONObject(file.readText())
+                    val failed = json.optBoolean("failed", false)
+                    Download(
+                        video = videoFromJson(json.getJSONObject("video")),
+                        url = json.getString("url"),
+                        qualityLabel = json.optString("qualityLabel"),
+                        status = if (failed) DownloadStatus.FAILED else DownloadStatus.QUEUED,
+                        error = if (failed) json.optString("error", "Download failed") else null,
+                        bytesDownloaded = partFile(
+                            context,
+                            json.getJSONObject("video").getInt("id")
+                        ).length(),
+                        totalBytes = json.optLong("totalBytes", 0L)
+                    )
+                }.getOrNull()
+            }
+            ?: emptyList()
+
     fun delete(context: Context, id: Int) {
         videoFile(context, id).delete()
         partFile(context, id).delete()
         metaFile(context, id).delete()
+        pendingFile(context, id).delete()
+        validatorFile(context, id).delete()
     }
 
     // --- (de)serialisation -------------------------------------------------

@@ -7,14 +7,20 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
 import java.net.URI
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 class ApiException(
     val httpCode: Int,
@@ -59,6 +65,9 @@ class GiantBombApi(
                 else -> "Something went wrong: $msg"
             }
         }
+
+        internal fun redactSecrets(value: String): String =
+            value.replace(Regex("([?&]api_key=)[^&]*", RegexOption.IGNORE_CASE), "$1REDACTED")
     }
 
     suspend fun validateKey(): Result<Boolean> = withContext(Dispatchers.IO) {
@@ -408,7 +417,26 @@ class GiantBombApi(
         Log.w(TAG, "--- END DIAGNOSTIC ---")
     }
 
-    private fun get(path: String): JSONObject {
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private suspend fun execute(request: Request): Response = suspendCancellableCoroutine { continuation ->
+        val call = client.newCall(request)
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (continuation.isActive) continuation.resumeWithException(e)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (continuation.isActive) {
+                    continuation.resume(response) { _, value, _ -> value.close() }
+                } else {
+                    response.close()
+                }
+            }
+        })
+    }
+
+    private suspend fun get(path: String): JSONObject {
         val request = Request.Builder()
             .url("$baseUrl$path")
             .header("User-Agent", USER_AGENT)
@@ -416,13 +444,14 @@ class GiantBombApi(
             .get()
             .build()
 
-        val response = client.newCall(request).execute()
+        val response = execute(request)
         val code = response.code
         val text = response.body?.string() ?: ""
-        Log.d(TAG, "GET $path -> $code")
+        val safePath = redactSecrets(path)
+        Log.d(TAG, "GET $safePath -> $code")
 
         if (code != 200) {
-            Log.e(TAG, "GET $path error ($code): ${text.take(500)}")
+            Log.e(TAG, "GET $safePath error ($code): ${text.take(500)}")
             logDiagnostics("GET", path, request, response, text)
             val endpoint = path.substringBefore("?").substringBefore("api_key")
             val isCloudflare = text.contains("cloudflare", ignoreCase = true) ||
@@ -453,7 +482,7 @@ class GiantBombApi(
         return JSONObject(text)
     }
 
-    private fun post(path: String, body: JSONObject): JSONObject {
+    private suspend fun post(path: String, body: JSONObject): JSONObject {
         val jsonType = "application/json".toMediaType()
         val request = Request.Builder()
             .url("$baseUrl$path")
@@ -462,7 +491,7 @@ class GiantBombApi(
             .post(body.toString().toRequestBody(jsonType))
             .build()
 
-        val response = client.newCall(request).execute()
+        val response = execute(request)
         val code = response.code
         val text = response.body?.string() ?: ""
 
@@ -476,7 +505,7 @@ class GiantBombApi(
         return JSONObject(text)
     }
 
-    private fun delete(path: String): JSONObject {
+    private suspend fun delete(path: String): JSONObject {
         val request = Request.Builder()
             .url("$baseUrl$path")
             .header("User-Agent", USER_AGENT)
@@ -484,7 +513,7 @@ class GiantBombApi(
             .delete()
             .build()
 
-        val response = client.newCall(request).execute()
+        val response = execute(request)
         val code = response.code
         val text = response.body?.string() ?: ""
 

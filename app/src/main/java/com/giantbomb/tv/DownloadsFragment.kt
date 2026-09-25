@@ -16,8 +16,12 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.DiffUtil
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.playback.Download
 import com.giantbomb.tv.playback.DownloadStatus
@@ -35,7 +39,7 @@ import kotlinx.coroutines.launch
  * row. State is observed from [Downloads] so progress updates stream in while
  * the screen is open.
  */
-class DownloadsFragment : Fragment(), CoroutineScope by MainScope() {
+class DownloadsFragment : Fragment() {
 
     private lateinit var adapter: DownloadAdapter
     private lateinit var emptyView: TextView
@@ -106,17 +110,32 @@ class DownloadsFragment : Fragment(), CoroutineScope by MainScope() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        launch {
-            Downloads.state.collect { map ->
-                val sorted = map.values.sortedWith(
-                    compareBy({ it.status.sortRank() }, { -(it.video.id) })
-                )
-                items.clear()
-                items.addAll(sorted)
-                adapter.notifyDataSetChanged()
-                emptyView.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                Downloads.state.collect { map ->
+                    val sorted = map.values.sortedWith(
+                        compareBy({ it.status.sortRank() }, { -(it.video.id) })
+                    )
+                    submitDownloads(sorted)
+                    emptyView.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
+                }
             }
         }
+    }
+
+    private fun submitDownloads(newItems: List<Download>) {
+        val oldItems = items.toList()
+        val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = oldItems.size
+            override fun getNewListSize() = newItems.size
+            override fun areItemsTheSame(oldPos: Int, newPos: Int) =
+                oldItems[oldPos].videoId == newItems[newPos].videoId
+            override fun areContentsTheSame(oldPos: Int, newPos: Int) =
+                oldItems[oldPos] == newItems[newPos]
+        })
+        items.clear()
+        items.addAll(newItems)
+        diff.dispatchUpdatesTo(adapter)
     }
 
     private fun DownloadStatus.sortRank(): Int = when (this) {
@@ -149,7 +168,6 @@ class DownloadsFragment : Fragment(), CoroutineScope by MainScope() {
 
     override fun onDestroy() {
         super.onDestroy()
-        cancel()
     }
 
     private inner class DownloadAdapter : RecyclerView.Adapter<DownloadAdapter.VH>() {

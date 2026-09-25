@@ -2,8 +2,10 @@ package com.giantbomb.tv.playback
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -14,9 +16,11 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.giantbomb.tv.MainActivity
 import com.giantbomb.tv.PlaybackActivity
-import com.giantbomb.tv.data.GiantBombApi
+import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.PrefsManager
+import com.giantbomb.tv.model.Video
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,13 +40,19 @@ class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private lateinit var api: GiantBombApi
+    private lateinit var repository: GiantBombRepository
     private var progressJob: Job? = null
     private var playerListener: Player.Listener? = null
+    private var stoppingForExit = false
+    // Identifies the current exit attempt. Each deferred stop only fires if
+    // its own attempt is still current, so an older save finishing late can't
+    // stop the service before a newer exit's save has landed.
+    private var exitGeneration = 0
+    private var pausedForExit = false
 
     override fun onCreate() {
         super.onCreate()
-        api = GiantBombApi(PrefsManager(this).apiKey ?: "")
+        repository = GiantBombRepository.get(PrefsManager(this).apiKey ?: "")
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
@@ -79,17 +89,8 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
 
-        val sessionActivityIntent = Intent(this, PlaybackActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        val sessionActivityPi = PendingIntent.getActivity(
-            this,
-            0,
-            sessionActivityIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
         mediaSession = MediaSession.Builder(this, player)
-            .setSessionActivity(sessionActivityPi)
+            .setSessionActivity(buildSessionActivity(null))
             .build()
 
         // Periodic progress save + watched marking live on the service so they
@@ -102,22 +103,142 @@ class PlaybackService : MediaSessionService() {
                     val videoId = currentVodId() ?: return
                     serviceScope.launch {
                         saveCurrentProgress()
-                        api.markWatched(videoId)
+                        repository.markWatched(videoId)
                     }
                 }
             }
 
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (pausedForExit) setPausedForExit(false)
+                mediaSession?.setSessionActivity(buildSessionActivity(mediaItem))
+            }
+
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
+                    // Playback restarted (e.g. the player was reopened) while an
+                    // exit save was in flight: keep the service alive.
+                    cancelPendingExit()
+                    if (pausedForExit) setPausedForExit(false)
                     startProgressSaving()
                 } else {
                     stopProgressSaving()
                     // Flush a final position when playback pauses so resumption
                     // is accurate without waiting for the periodic tick.
-                    serviceScope.launch { saveCurrentProgress() }
+                    if (!stoppingForExit) {
+                        serviceScope.launch { saveCurrentProgress() }
+                    }
                 }
             }
         }.also { player.addListener(it) }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_SAVE_PROGRESS_AND_STOP) {
+            saveProgressAndStop()
+            return START_NOT_STICKY
+        }
+        return super.onStartCommand(intent, flags, startId)
+    }
+
+    private fun saveProgressAndStop() {
+        if (stoppingForExit) return
+        stoppingForExit = true
+        val token = ++exitGeneration
+        stopProgressSaving()
+
+        val player = mediaSession?.player
+        val videoId = currentVodId()
+        val positionSeconds = player?.currentPosition?.div(1000.0) ?: 0.0
+        val durationSeconds = player?.duration?.div(1000.0) ?: 0.0
+        setPausedForExit(player?.isPlaying == true || player?.playWhenReady == true)
+        player?.pause()
+
+        serviceScope.launch {
+            if (videoId != null && positionSeconds > 0 && durationSeconds > 0) {
+                repository.saveProgress(videoId, positionSeconds, durationSeconds)
+            }
+            // Skip the stop if the player was reopened during the save.
+            if (stoppingForExit && exitGeneration == token) {
+                // Clear the player first. stopSelf() alone leaves the service
+                // (and its paused notification) alive while any system media
+                // controller is still bound, which Google TV does.
+                mediaSession?.player?.run {
+                    stop()
+                    clearMediaItems()
+                }
+                stopSelf()
+            }
+        }
+    }
+
+    private fun cancelPendingExit() {
+        if (!stoppingForExit) return
+        stoppingForExit = false
+        exitGeneration++
+        // Don't resume here: the reconnecting player may want a different
+        // video. PlaybackActivity resumes only when it reattaches to this same
+        // item and sees EXTRA_PAUSED_FOR_EXIT in the session extras.
+    }
+
+    private fun setPausedForExit(paused: Boolean) {
+        pausedForExit = paused
+        mediaSession?.setSessionExtras(Bundle().apply { putBoolean(EXTRA_PAUSED_FOR_EXIT, paused) })
+    }
+
+    private fun buildSessionActivity(mediaItem: MediaItem?): PendingIntent {
+        val metadata = mediaItem?.mediaMetadata?.extras
+        val intent = when {
+            mediaItem?.mediaId?.startsWith("vod:") == true -> {
+                videoFromMetadata(metadata)?.let { video ->
+                    Intent(this, PlaybackActivity::class.java)
+                        .putExtra(PlaybackActivity.EXTRA_VIDEO, video)
+                } ?: Intent(this, MainActivity::class.java)
+            }
+            mediaItem?.mediaId?.startsWith("live:") == true -> {
+                val hlsUrl = metadata?.getString(PlaybackActivity.METADATA_LIVE_HLS_URL)
+                if (hlsUrl.isNullOrBlank()) {
+                    Intent(this, MainActivity::class.java)
+                } else {
+                    Intent(this, PlaybackActivity::class.java)
+                        .putExtra(PlaybackActivity.EXTRA_LIVE_HLS_URL, hlsUrl)
+                        .putExtra(
+                            PlaybackActivity.EXTRA_LIVE_TITLE,
+                            metadata.getString(PlaybackActivity.METADATA_LIVE_TITLE)
+                        )
+                        .putExtra(
+                            PlaybackActivity.EXTRA_LIVE_TWITCH_CHANNEL,
+                            metadata.getString(PlaybackActivity.METADATA_LIVE_CHANNEL)
+                        )
+                }
+            }
+            else -> Intent(this, MainActivity::class.java)
+        }.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+
+        return PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+    }
+
+    private fun videoFromMetadata(extras: Bundle?): Video? {
+        if (extras == null || !extras.containsKey(PlaybackActivity.METADATA_VIDEO_ID)) return null
+        return Video(
+            id = extras.getInt(PlaybackActivity.METADATA_VIDEO_ID),
+            slug = extras.getString(PlaybackActivity.METADATA_VIDEO_SLUG).orEmpty(),
+            title = extras.getString(PlaybackActivity.METADATA_VIDEO_TITLE).orEmpty(),
+            description = extras.getString(PlaybackActivity.METADATA_VIDEO_DESCRIPTION),
+            publishDate = extras.getString(PlaybackActivity.METADATA_VIDEO_PUBLISH_DATE).orEmpty(),
+            posterUrl = extras.getString(PlaybackActivity.METADATA_VIDEO_POSTER_URL),
+            premium = extras.getBoolean(PlaybackActivity.METADATA_VIDEO_PREMIUM),
+            showId = extras.takeIf { it.containsKey(PlaybackActivity.METADATA_VIDEO_SHOW_ID) }
+                ?.getInt(PlaybackActivity.METADATA_VIDEO_SHOW_ID),
+            showTitle = extras.getString(PlaybackActivity.METADATA_VIDEO_SHOW_TITLE),
+            author = extras.getString(PlaybackActivity.METADATA_VIDEO_AUTHOR),
+            thumbnailUrl = extras.getString(PlaybackActivity.METADATA_VIDEO_THUMBNAIL_URL),
+            durationSeconds = extras.getInt(PlaybackActivity.METADATA_VIDEO_DURATION)
+        )
     }
 
     private fun currentVodId(): Int? {
@@ -146,11 +267,23 @@ class PlaybackService : MediaSessionService() {
         val pos = player.currentPosition / 1000.0
         val dur = player.duration / 1000.0
         if (pos > 0 && dur > 0) {
-            api.saveProgress(videoId, pos, dur)
+            repository.saveProgress(videoId, pos, dur)
         }
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+        // Our own player reconnecting means the user reopened playback, so a
+        // pending exit stop must not tear the new session down. Media3's own
+        // notification controller also connects from our package; it is not a
+        // reopen and must not cancel the exit.
+        val session = mediaSession
+        if (controllerInfo.packageName == packageName &&
+            session?.isMediaNotificationController(controllerInfo) != true
+        ) {
+            cancelPendingExit()
+        }
+        return session
+    }
 
     // Keep the stream going when the user swipes the app from recents; only
     // stop if there is nothing queued / playback is paused.
@@ -176,6 +309,10 @@ class PlaybackService : MediaSessionService() {
     }
 
     companion object {
+        /** Session extra: playback was paused only because the player closed. */
+        const val EXTRA_PAUSED_FOR_EXIT = "gb.pausedForExit"
+        const val ACTION_SAVE_PROGRESS_AND_STOP =
+            "com.giantbomb.tv.action.SAVE_PROGRESS_AND_STOP"
         private const val PROGRESS_SAVE_INTERVAL_MS = 30_000L
     }
 }

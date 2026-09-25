@@ -25,6 +25,16 @@ object Downloads {
     // between chunks and aborts. Synchronised because it's touched from the
     // download IO thread and the main thread.
     private val cancelled: MutableSet<Int> = Collections.synchronizedSet(mutableSetOf())
+    private val calls = java.util.concurrent.ConcurrentHashMap<Int, okhttp3.Call>()
+
+    internal fun registerCall(id: Int, call: okhttp3.Call) {
+        calls[id] = call
+        if (isCancelled(id)) call.cancel()
+    }
+
+    internal fun unregisterCall(id: Int) { calls.remove(id) }
+
+    internal fun cancelCalls() { calls.values.forEach { it.cancel() } }
 
     @Volatile private var loaded = false
 
@@ -35,7 +45,29 @@ object Downloads {
         loaded = true
         val completed = DownloadStore.listCompleted(context.applicationContext)
             .associateBy { it.videoId }
-        _state.value = completed
+        // A completed download is authoritative. A pending record left beside
+        // it (process died between writing the metadata and removing the
+        // pending file) is stale: delete it rather than re-download.
+        val app = context.applicationContext
+        val recovered = mutableMapOf<Int, Download>()
+        val pending = DownloadStore.listPending(app)
+            .associateBy { it.videoId }
+            .filter { (id, record) ->
+                when {
+                    id in completed -> {
+                        DownloadStore.deletePending(app, id)
+                        false
+                    }
+                    else -> {
+                        val done = DownloadStore.finalizeIfComplete(app, record)
+                        if (done != null) recovered[id] = done
+                        done == null
+                    }
+                }
+            }
+        _state.value = completed + recovered + pending
+        pending.values.firstOrNull { it.status == DownloadStatus.QUEUED }
+            ?.let { VideoDownloadService.start(context, it.videoId) }
     }
 
     fun get(videoId: Int): Download? = _state.value[videoId]
@@ -58,20 +90,24 @@ object Downloads {
                 existing.status == DownloadStatus.QUEUED)
         ) return
         cancelled.remove(video.id)
-        put(Download(video, url, qualityLabel, DownloadStatus.QUEUED))
+        val queued = Download(video, url, qualityLabel, DownloadStatus.QUEUED)
+        DownloadStore.writePending(context.applicationContext, queued)
+        put(queued)
         VideoDownloadService.start(context, video.id)
     }
 
     /** Cancel an in-flight or queued download and drop its partial file. */
     fun cancel(context: Context, videoId: Int) {
         cancelled.add(videoId)
+        calls[videoId]?.cancel()
         remove(videoId)
-        DownloadStore.partFile(context.applicationContext, videoId).delete()
+        DownloadStore.delete(context.applicationContext, videoId)
     }
 
     /** Remove a finished download (file + metadata) and forget it. */
     fun delete(context: Context, videoId: Int) {
         cancelled.add(videoId)
+        calls[videoId]?.cancel()
         DownloadStore.delete(context.applicationContext, videoId)
         remove(videoId)
     }
@@ -87,10 +123,12 @@ object Downloads {
     internal fun nextQueued(): Download? =
         _state.value.values.firstOrNull { it.status == DownloadStatus.QUEUED }
 
+    @Synchronized
     internal fun put(download: Download) {
         _state.value = _state.value + (download.videoId to download)
     }
 
+    @Synchronized
     internal fun remove(videoId: Int) {
         _state.value = _state.value - videoId
     }

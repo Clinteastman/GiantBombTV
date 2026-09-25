@@ -55,6 +55,7 @@ import androidx.mediarouter.app.MediaRouteButton
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Mp4Source
@@ -67,6 +68,7 @@ import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
 import kotlinx.coroutines.*
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     companion object {
@@ -86,6 +88,22 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // PlaybackActivity doesn't have to re-fetch progress (which can race
         // with playback start or fail through Cloudflare).
         const val EXTRA_RESUME_SECONDS = "extra_resume_seconds"
+
+        internal const val METADATA_VIDEO_ID = "gb.video.id"
+        internal const val METADATA_VIDEO_SLUG = "gb.video.slug"
+        internal const val METADATA_VIDEO_TITLE = "gb.video.title"
+        internal const val METADATA_VIDEO_DESCRIPTION = "gb.video.description"
+        internal const val METADATA_VIDEO_PUBLISH_DATE = "gb.video.publishDate"
+        internal const val METADATA_VIDEO_POSTER_URL = "gb.video.posterUrl"
+        internal const val METADATA_VIDEO_PREMIUM = "gb.video.premium"
+        internal const val METADATA_VIDEO_SHOW_ID = "gb.video.showId"
+        internal const val METADATA_VIDEO_SHOW_TITLE = "gb.video.showTitle"
+        internal const val METADATA_VIDEO_AUTHOR = "gb.video.author"
+        internal const val METADATA_VIDEO_THUMBNAIL_URL = "gb.video.thumbnailUrl"
+        internal const val METADATA_VIDEO_DURATION = "gb.video.duration"
+        internal const val METADATA_LIVE_HLS_URL = "gb.live.hlsUrl"
+        internal const val METADATA_LIVE_TITLE = "gb.live.title"
+        internal const val METADATA_LIVE_CHANNEL = "gb.live.channel"
     }
 
     private lateinit var prefs: PrefsManager
@@ -96,7 +114,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var playbackListener: Player.Listener? = null
     private lateinit var playerView: PlayerView
     private lateinit var rootLayout: FrameLayout
-    private lateinit var api: GiantBombApi
+    private lateinit var repository: GiantBombRepository
     private var video: Video? = null
     private var videoDuration: Double = 0.0
     private var isTv = false
@@ -154,6 +172,29 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
 
+    private fun videoMediaMetadata(v: Video): MediaMetadata {
+        val extras = Bundle().apply {
+            putInt(METADATA_VIDEO_ID, v.id)
+            putString(METADATA_VIDEO_SLUG, v.slug)
+            putString(METADATA_VIDEO_TITLE, v.title)
+            putString(METADATA_VIDEO_DESCRIPTION, v.description)
+            putString(METADATA_VIDEO_PUBLISH_DATE, v.publishDate)
+            putString(METADATA_VIDEO_POSTER_URL, v.posterUrl)
+            putBoolean(METADATA_VIDEO_PREMIUM, v.premium)
+            v.showId?.let { putInt(METADATA_VIDEO_SHOW_ID, it) }
+            putString(METADATA_VIDEO_SHOW_TITLE, v.showTitle)
+            putString(METADATA_VIDEO_AUTHOR, v.author)
+            putString(METADATA_VIDEO_THUMBNAIL_URL, v.thumbnailUrl)
+            putInt(METADATA_VIDEO_DURATION, v.durationSeconds)
+        }
+        return MediaMetadata.Builder()
+            .setTitle(v.title)
+            .setArtist(v.showTitle)
+            .setArtworkUri(v.thumbnailUrl?.let { Uri.parse(it) })
+            .setExtras(extras)
+            .build()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -165,7 +206,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
 
         prefs = PrefsManager(this)
-        api = GiantBombApi(prefs.apiKey ?: "")
+        repository = GiantBombRepository.get(prefs.apiKey ?: "")
 
         requestNotificationPermissionIfNeeded()
 
@@ -602,7 +643,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private fun loadRelatedVideos(v: Video) {
         val showId = v.showId ?: return
         launch {
-            val result = api.getVideos(limit = 20, showId = showId)
+            val result = repository.getShowVideos(showId, limit = 20)
             result.onSuccess { videos ->
                 val related = videos.filter { it.id != v.id }
                 relatedRecycler?.adapter = RelatedVideoAdapter(related)
@@ -735,6 +776,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // any activity-side timer here.
         if (desiredMediaId != null && c.currentMediaItem?.mediaId == desiredMediaId) {
             if (v != null) attachPlayerListener(c)
+            // Reopened while the previous exit was still saving: that exit
+            // paused this same item, so carry on playing it.
+            if (c.sessionExtras.getBoolean(PlaybackService.EXTRA_PAUSED_FOR_EXIT)) c.play()
             return
         }
         if (liveHlsUrl != null) initializeLivePlayer(liveHlsUrl)
@@ -815,7 +859,16 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     }
 
     private fun stopPlaybackService() {
-        stopService(Intent(this, PlaybackService::class.java))
+        val saveAndStop = Intent(this, PlaybackService::class.java)
+            .setAction(PlaybackService.ACTION_SAVE_PROGRESS_AND_STOP)
+        try {
+            startService(saveAndStop)
+        } catch (e: IllegalStateException) {
+            // Android 8+ refuses startService once the app is fully in the
+            // background. Fall back to a plain stop so audio never keeps
+            // playing; the periodic save has already stored recent progress.
+            stopService(Intent(this, PlaybackService::class.java))
+        }
     }
 
     private fun initializeCastPlayer() {
@@ -882,7 +935,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         // Save current position from local player
         val position = exo?.currentPosition ?: 0L
-        val wasPlaying = exo?.isPlaying ?: true
+        val wasPlaying = exo?.playWhenReady ?: true
 
         // Pause and detach local player only after we know we can cast
         exo?.pause()
@@ -978,13 +1031,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             val mediaItem = MediaItem.Builder()
                 .setUri(qualityOptions[0].url)
                 .setMediaId("vod:${v.id}")
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(v.title)
-                        .setArtist(v.showTitle)
-                        .setArtworkUri(v.thumbnailUrl?.let { Uri.parse(it) })
-                        .build()
-                )
+                .setMediaMetadata(videoMediaMetadata(v))
                 .build()
             p.setMediaItem(mediaItem, initialPositionMs)
             p.prepare()
@@ -993,7 +1040,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             return
         }
 
-        val result = api.getPlayback(v.id)
+        val result = repository.getPlayback(v.id)
 
         result.onSuccess { playback ->
             videoDuration = playback.duration
@@ -1068,13 +1115,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             val mediaItem = MediaItem.Builder()
                 .setUri(qualityOptions[currentQualityIndex].url)
                 .setMediaId("vod:${v.id}")
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(v.title)
-                        .setArtist(v.showTitle)
-                        .setArtworkUri(v.thumbnailUrl?.let { Uri.parse(it) })
-                        .build()
-                )
+                .setMediaMetadata(videoMediaMetadata(v))
                 .build()
 
             // setMediaItem(item, position) is used (instead of a separate
@@ -1088,7 +1129,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             // resume position. The seek issued here is applied as soon as
             // the player has buffered enough to seek.
             if (resumeFromApi) {
-                val progressResult = api.getProgress()
+                val progressResult = repository.getProgress()
                 progressResult.getOrNull()?.find { it.videoId == v.id }?.let { progress ->
                     if (progress.percentComplete < 95 && progress.currentTime > 0) {
                         p.seekTo((progress.currentTime * 1000).toLong())
@@ -1098,6 +1139,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
             attachPlayerListener(p)
             p.playWhenReady = true
+            if (castPlayer?.isCastSessionAvailable == true) {
+                switchToCast()
+            }
         }
 
         result.onFailure { e ->
@@ -1149,13 +1193,50 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 0, ViewGroup.LayoutParams.MATCH_PARENT, 7f
             )
             split.addView(livePlayerView)
-            val chat = createTwitchChatWebView(twitchChannel).apply {
+            val chatPanel = FrameLayout(this).apply {
                 layoutParams = LinearLayout.LayoutParams(
                     0, ViewGroup.LayoutParams.MATCH_PARENT, 3f
                 )
             }
+            val chat = createTwitchChatWebView(twitchChannel).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            }
             chatWebView = chat
-            split.addView(chat)
+            chatPanel.addView(chat)
+            val closeChat = TextView(this).apply {
+                text = getString(R.string.hide_chat)
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                setBackgroundColor(0xCC18181B.toInt())
+                contentDescription = getString(R.string.hide_chat_for_stream)
+                isFocusable = true
+                isClickable = true
+                setOnFocusChangeListener { view, hasFocus ->
+                    view.setBackgroundColor(
+                        if (hasFocus) 0xFFE3192C.toInt() else 0xCC18181B.toInt()
+                    )
+                }
+                setPadding(12.dp(), 0, 12.dp(), 0)
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    44.dp(),
+                    Gravity.TOP or Gravity.END
+                )
+                setOnClickListener {
+                    destroyChatWebView()
+                    chatPanel.visibility = View.GONE
+                    livePlayerView.layoutParams = LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.MATCH_PARENT, 1f
+                    )
+                    livePlayerView.requestFocus()
+                }
+            }
+            chatPanel.addView(closeChat)
+            split.addView(chatPanel)
             splitLayout = split
             parent.addView(split, index)
         } else {
@@ -1192,6 +1273,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(liveTitle)
+                    .setExtras(Bundle().apply {
+                        putString(METADATA_LIVE_HLS_URL, hlsUrl)
+                        putString(METADATA_LIVE_TITLE, liveTitle)
+                        putString(METADATA_LIVE_CHANNEL, twitchChannel)
+                    })
                     .build()
             )
             .build()
@@ -1545,7 +1631,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             return
         }
 
-        val result = api.getVideos(limit = 50, showId = showId)
+        val result = repository.getShowVideos(showId, limit = 50)
         val videos = result.getOrNull()
         val nextVideo = if (videos != null && videos.size > 1) {
             val currentIndex = videos.indexOfFirst { it.id == current.id }
@@ -1661,12 +1747,16 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
         fun walk(v: View) {
             if (v is androidx.media3.ui.DefaultTimeBar) return
-            if (v !== pv && v.isFocusable) applyHalo(v)
+            if (v.isFocusable) applyHalo(v)
             if (v is android.view.ViewGroup) {
                 for (i in 0 until v.childCount) walk(v.getChildAt(i))
             }
         }
-        walk(pv)
+        // Only decorate Media3's controller subtree. Walking PlayerView itself
+        // also reaches the video surface/content frame; on some TV renderers a
+        // focus transform there scales the decoded frame from its top-left.
+        val controllerRoot = pv.findViewById<View>(androidx.media3.ui.R.id.exo_controller)
+        if (controllerRoot != null) walk(controllerRoot)
 
         // Time bar: always red so the played position reads as the YouTube /
         // standard media-app cue. Scrubber thumb stays default; the colour
@@ -1752,17 +1842,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // service: it keeps playing (with notification) when the activity dies.
         disconnectController()
         releaseCastPlayer()
-        chatWebView?.let { wv ->
-            wv.stopLoading()
-            // Documented WebView teardown order: drop the current page and its
-            // history before destroy() so any pending JS / network work is
-            // unhooked from the Activity context first.
-            wv.loadUrl("about:blank")
-            wv.clearHistory()
-            (wv.parent as? ViewGroup)?.removeView(wv)
-            wv.destroy()
-        }
-        chatWebView = null
+        destroyChatWebView()
         splitLayout?.let { sl ->
             sl.removeAllViews()
             (sl.parent as? ViewGroup)?.removeView(sl)
@@ -1770,6 +1850,19 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         splitLayout = null
         super.onDestroy()
         cancel()
+    }
+
+    private fun destroyChatWebView() {
+        chatWebView?.let { wv ->
+            wv.stopLoading()
+            // Drop the current page and its history before destroy() so pending
+            // JavaScript and network work are detached from the Activity.
+            wv.loadUrl("about:blank")
+            wv.clearHistory()
+            (wv.parent as? ViewGroup)?.removeView(wv)
+            wv.destroy()
+        }
+        chatWebView = null
     }
 
     // -----------------------------------------------------------------------
@@ -1802,7 +1895,12 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 Glide.with(holder.thumbnail)
                     .load(video.thumbnailUrl)
                     .centerCrop()
+                    .placeholder(R.drawable.default_card)
+                    .error(R.drawable.default_card)
                     .into(holder.thumbnail)
+            } else {
+                Glide.with(holder.thumbnail).clear(holder.thumbnail)
+                holder.thumbnail.setImageResource(R.drawable.default_card)
             }
 
             holder.itemView.setOnClickListener {

@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 
 /**
@@ -41,8 +42,8 @@ class VideoDownloadService : Service() {
     private val client by lazy {
         OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
-            // Downloads are long-lived; don't let a read timeout kill them.
-            .readTimeout(0, TimeUnit.SECONDS)
+            // Limit a stalled read, not the duration of the whole download.
+            .readTimeout(30, TimeUnit.SECONDS)
             .followRedirects(true)
             .build()
     }
@@ -84,22 +85,59 @@ class VideoDownloadService : Service() {
         val target = DownloadStore.videoFile(ctx, id)
 
         try {
-            val request = Request.Builder()
+            val existingBytes = part.takeIf { it.exists() }?.length() ?: 0L
+            val validator = DownloadStore.readValidator(ctx, id)
+            // Only resume when we can prove the server copy is unchanged.
+            // If-Range makes the server send the whole file (200) otherwise.
+            val canResume = existingBytes > 0L && validator != null
+            val requestBuilder = Request.Builder()
                 .url(download.url)
                 .header("User-Agent", "GBTV")
-                .build()
+            if (canResume) {
+                requestBuilder.header("Range", "bytes=$existingBytes-")
+                requestBuilder.header("If-Range", validator!!)
+            }
 
-            client.newCall(request).execute().use { response ->
+            val call = client.newCall(requestBuilder.build())
+            Downloads.registerCall(id, call)
+            call.execute().use { response ->
                 if (!response.isSuccessful) {
+                    // 416: the saved partial file no longer matches the
+                    // server copy (or is already complete). Drop it so the
+                    // next retry starts cleanly instead of failing forever.
+                    if (response.code == 416 && existingBytes > 0L) part.delete()
                     throw IllegalStateException("HTTP ${response.code}")
                 }
                 val body = response.body ?: throw IllegalStateException("Empty response")
-                val total = body.contentLength()
+                val resumed = canResume && response.code == 206
+                if (resumed &&
+                    response.header("Content-Range")?.startsWith("bytes $existingBytes-") != true
+                ) {
+                    // The range doesn't continue our file; restart cleanly next time.
+                    part.delete()
+                    DownloadStore.writeValidator(ctx, id, null)
+                    throw IllegalStateException("Unexpected Content-Range")
+                }
+                // Fresh download: drop the old validator before the partial is
+                // truncated, and save the new one only once it has been. A crash
+                // in between then leaves no validator, which restarts from zero,
+                // never a new validator next to the old file's bytes.
+                // Weak ETags can't be used with If-Range, so fall back to
+                // Last-Modified.
+                val newValidator = if (resumed) null else {
+                    DownloadStore.writeValidator(ctx, id, null)
+                    response.header("ETag")?.takeUnless { it.startsWith("W/") }
+                        ?: response.header("Last-Modified")
+                }
+                val startingBytes = if (resumed) existingBytes else 0L
+                val responseLength = body.contentLength()
+                val total = if (responseLength > 0L) startingBytes + responseLength else 0L
 
                 body.byteStream().use { input ->
-                    part.outputStream().use { output ->
+                    FileOutputStream(part, resumed).use { output ->
+                        if (!resumed) DownloadStore.writeValidator(ctx, id, newValidator)
                         val buffer = ByteArray(64 * 1024)
-                        var downloaded = 0L
+                        var downloaded = startingBytes
                         var lastPercent = -1
                         var lastNotifyMs = 0L
                         while (true) {
@@ -161,23 +199,27 @@ class VideoDownloadService : Service() {
             Downloads.clearCancelled(id)
             Downloads.remove(id)
         } catch (e: Exception) {
-            part.delete()
             if (Downloads.isCancelled(id)) {
+                part.delete()
                 Downloads.clearCancelled(id)
                 Downloads.remove(id)
             } else {
-                Downloads.put(
-                    download.copy(
+                val failed = download.copy(
                         status = DownloadStatus.FAILED,
+                        bytesDownloaded = part.length(),
                         error = e.message ?: "Download failed"
                     )
-                )
+                DownloadStore.writePending(ctx, failed)
+                Downloads.put(failed)
                 notifyFailed(id, download.video.title)
             }
+        } finally {
+            Downloads.unregisterCall(id)
         }
     }
 
     override fun onDestroy() {
+        Downloads.cancelCalls()
         worker?.cancel()
         scope.cancel()
         super.onDestroy()

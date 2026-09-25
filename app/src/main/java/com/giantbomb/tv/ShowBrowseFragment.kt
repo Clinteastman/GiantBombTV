@@ -4,8 +4,10 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.leanback.app.VerticalGridSupportFragment
+import androidx.lifecycle.lifecycleScope
 import androidx.leanback.widget.*
 import com.giantbomb.tv.data.GiantBombApi
+import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.ProgressEntry
 import com.giantbomb.tv.model.Show
@@ -21,9 +23,9 @@ import kotlinx.coroutines.*
  * page. The column count is derived from the screen width so the fixed-size
  * cards always fit without clipping.
  */
-class ShowBrowseFragment : VerticalGridSupportFragment(), CoroutineScope by MainScope() {
+class ShowBrowseFragment : VerticalGridSupportFragment() {
 
-    private lateinit var api: GiantBombApi
+    private lateinit var repository: GiantBombRepository
     private var show: Show? = null
     private var isLoading = false
     private var currentOffset = 0
@@ -42,7 +44,7 @@ class ShowBrowseFragment : VerticalGridSupportFragment(), CoroutineScope by Main
         super.onCreate(savedInstanceState)
 
         val prefs = PrefsManager(requireContext())
-        api = GiantBombApi(prefs.apiKey ?: "")
+        repository = GiantBombRepository.get(prefs.apiKey ?: "")
 
         @Suppress("DEPRECATION")
         show = requireActivity().intent.getSerializableExtra(ShowActivity.EXTRA_SHOW) as? Show
@@ -108,9 +110,9 @@ class ShowBrowseFragment : VerticalGridSupportFragment(), CoroutineScope by Main
         isLoading = true
         val s = show ?: return
 
-        launch {
+        lifecycleScope.launch {
             // Load progress for watched/progress badges
-            val progress = api.getProgress().getOrNull()
+            val progress = repository.getProgress().getOrNull()
             if (progress != null) {
                 progressMap = progress.associateBy { it.videoId }
             }
@@ -123,11 +125,11 @@ class ShowBrowseFragment : VerticalGridSupportFragment(), CoroutineScope by Main
     private fun loadMore() {
         val s = show ?: return
         isLoading = true
-        launch { loadPage(s) }
+        lifecycleScope.launch { loadPage(s) }
     }
 
     private suspend fun loadPage(s: Show) {
-        val result = api.getShowVideos(s.id, limit = PAGE_SIZE, offset = currentOffset)
+        val result = repository.getShowVideos(s.id, limit = PAGE_SIZE, offset = currentOffset)
 
         result.onSuccess { videos ->
             if (videos.size < PAGE_SIZE) hasMore = false
@@ -155,6 +157,5 @@ class ShowBrowseFragment : VerticalGridSupportFragment(), CoroutineScope by Main
 
     override fun onDestroy() {
         super.onDestroy()
-        cancel()
     }
 }
