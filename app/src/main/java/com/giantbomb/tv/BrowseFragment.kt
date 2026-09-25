@@ -513,7 +513,9 @@ class BrowseFragment : BrowseSupportFragment() {
             }
             backdropRequest.into(object : com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
                     override fun onResourceReady(resource: android.graphics.drawable.Drawable, transition: com.bumptech.glide.request.transition.Transition<in android.graphics.drawable.Drawable>?) {
-                        if (!isAdded) return
+                        // Focus may have moved on while this loaded; a late
+                        // older image must not replace the newer backdrop.
+                        if (!isAdded || currentBackdropUrl != imageUrl) return
                         (resource as? BitmapDrawable)?.bitmap?.let { bitmap ->
                             GlassSurface.updateBackdrop(
                                 bitmap,
