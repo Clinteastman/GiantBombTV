@@ -3,18 +3,22 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:layout_marginStart="12dp"
+    android:layout_marginEnd="12dp"
+    android:layout_marginBottom="10dp"
     android:orientation="horizontal"
-    android:paddingStart="16dp"
-    android:paddingEnd="16dp"
-    android:paddingTop="14dp"
-    android:paddingBottom="14dp"
+    android:paddingStart="14dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp"
     android:gravity="center_vertical"
-    android:background="?android:attr/selectableItemBackground">
+    android:minHeight="72dp">
 
     <ImageView
         android:id="@+id/setting_icon"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:padding="10dp"
         android:scaleType="centerInside"
         tools:src="@drawable/ic_settings_refresh" />
 
@@ -23,24 +27,45 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:orientation="vertical"
-        android:layout_marginStart="16dp">
+        android:layout_marginStart="14dp">
 
         <TextView
             android:id="@+id/setting_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="@color/gb_white"
-            android:textSize="15sp"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:shadowColor="#E6000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="4"
             tools:text="Refresh" />
 
         <TextView
             android:id="@+id/setting_description"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/gb_text_secondary"
+            android:layout_marginTop="2dp"
+            android:textColor="#E8FFFFFF"
             android:textSize="13sp"
+            android:shadowColor="#E6000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="4"
             tools:text="Reload the video feed" />
 
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/setting_chevron"
+        android:layout_width="32dp"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="›"
+        android:textColor="#D9FFFFFF"
+        android:textSize="30sp"
+        android:textStyle="bold"
+        tools:ignore="HardcodedText" />
 
 </LinearLayout>

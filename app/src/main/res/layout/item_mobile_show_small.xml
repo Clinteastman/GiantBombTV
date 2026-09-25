@@ -3,13 +3,13 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="140dp"
     android:layout_height="wrap_content"
+    android:minHeight="184dp"
+    android:layout_marginEnd="12dp"
     android:orientation="vertical"
-    android:paddingStart="6dp"
-    android:paddingEnd="6dp"
     android:paddingBottom="4dp"
     android:background="?android:attr/selectableItemBackground">
 
-    <ImageView
+    <com.giantbomb.tv.ui.EmbeddedGlassImageView
         android:id="@+id/show_poster"
         android:layout_width="match_parent"
         android:layout_height="140dp"
@@ -20,11 +20,17 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
         android:ellipsize="end"
         android:maxLines="2"
         android:textColor="@color/gb_white"
         android:textSize="13sp"
         android:textStyle="bold"
+        android:shadowColor="#F0000000"
+        android:shadowDx="0"
+        android:shadowDy="1"
+        android:shadowRadius="4"
         tools:text="Show Name" />
 
 </LinearLayout>

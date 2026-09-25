@@ -20,7 +20,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="centerCrop"
-        android:alpha="0.5" />
+        android:alpha="0.36" />
 
     <ImageView
         android:id="@+id/backdrop_image_next"
@@ -35,6 +35,12 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="#60000000" />
+
+    <com.giantbomb.tv.ui.NeonGridView
+        android:id="@+id/neon_grid"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -51,7 +57,12 @@
             android:id="@+id/bottom_nav"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/gb_surface_elevated"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="8dp"
+            android:background="@android:color/transparent"
+            android:paddingStart="12dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="12dp"
             android:visibility="gone"
             app:itemIconTint="@color/bottom_nav_item_color"
             app:itemTextColor="@color/bottom_nav_item_color"

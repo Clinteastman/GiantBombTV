@@ -1,6 +1,5 @@
 package com.giantbomb.tv.ui
 
-import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -23,20 +22,14 @@ class ShowCardPresenter(
 ) : Presenter() {
 
     override fun onCreateViewHolder(parent: ViewGroup): ViewHolder {
-        val density = parent.resources.displayMetrics.density
-        val cornerRadius = 12f * density
-
         val cardView = ImageCardView(parent.context).apply {
             isFocusable = true
             isFocusableInTouchMode = true
             setMainImageDimensions(240, 240)
             setMainImageScaleType(ImageView.ScaleType.FIT_CENTER)
 
-            background = GradientDrawable().apply {
-                setColor(0x18FFFFFF)
-                setCornerRadius(cornerRadius)
-            }
-            setInfoAreaBackgroundColor(0x0DFFFFFF)
+            GlassSurface.applyState(this, GlassSurface.Emphasis.CARD, focused = false)
+            setInfoAreaBackgroundColor(0x00000000)
         }
 
         // Shows without artwork are identifiable only by their title, but
@@ -52,10 +45,7 @@ class ShowCardPresenter(
         cardView.setOnFocusChangeListener { v, hasFocus ->
             val scale = if (hasFocus) 1.05f else 1.0f
             v.animate().scaleX(scale).scaleY(scale).setDuration(150).start()
-            v.background = GradientDrawable().apply {
-                setColor(if (hasFocus) 0x28FFFFFF else 0x18FFFFFF)
-                setCornerRadius(cornerRadius)
-            }
+            GlassSurface.applyState(v, GlassSurface.Emphasis.CARD, hasFocus)
             // Marquee only animates while the view is "selected"; tie that to
             // focus so the focused card scrolls its full title.
             titleView?.isSelected = hasFocus

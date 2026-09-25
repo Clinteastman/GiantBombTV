@@ -37,11 +37,11 @@ class ShowActivity : FragmentActivity() {
         val backdrop = findViewById<ImageView>(R.id.show_backdrop)
         val imageUrl = show.posterUrl ?: show.logoUrl
         if (!imageUrl.isNullOrEmpty()) {
-            Glide.with(this).load(imageUrl).override(480, 270).centerCrop().into(backdrop)
+            Glide.with(this).load(imageUrl).override(960, 540).centerCrop().into(backdrop)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             backdrop.setRenderEffect(
-                RenderEffect.createBlurEffect(50f, 50f, Shader.TileMode.CLAMP)
+                RenderEffect.createBlurEffect(4f, 4f, Shader.TileMode.CLAMP)
             )
         }
 

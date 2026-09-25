@@ -33,7 +33,7 @@ class VideoCardView(context: Context) : FrameLayout(context) {
         val vPaddingPx = res.getDimensionPixelSize(R.dimen.card_vpadding)
         cardWidthPx = res.getDimensionPixelSize(R.dimen.card_width) + hPadding * 2
         cardHeightPx = res.getDimensionPixelSize(R.dimen.card_height) + vPaddingPx * 2
-        val cornerRadius = 12f * density
+        val cornerRadius = 28f * density
 
         setPadding(hPadding, vPaddingPx, hPadding, vPaddingPx)
         clipChildren = false
@@ -54,11 +54,7 @@ class VideoCardView(context: Context) : FrameLayout(context) {
         setBackgroundColor(0x00000000)
         (cardRoot as? FrameLayout)?.setBackgroundColor(0x00000000)
 
-        // Glass background: fill only, no stroke (stroke causes dark fringe with clipToOutline)
-        glassBg.background = GradientDrawable().apply {
-            setColor(0x18FFFFFF)
-            setCornerRadius(cornerRadius)
-        }
+        GlassSurface.applyState(glassBg, GlassSurface.Emphasis.CARD, focused = false)
 
         // Clip the glass container to rounded corners
         glassBg.outlineProvider = object : ViewOutlineProvider() {
@@ -75,13 +71,9 @@ class VideoCardView(context: Context) : FrameLayout(context) {
             intArrayOf(0x60000000, 0x00000000)
         )
 
-        // Text area subtle glass tint
-        val textArea = findViewById<View>(R.id.card_text_area)
-        val textBg = GradientDrawable().apply {
-            setColor(0x0DFFFFFF)
-            cornerRadii = floatArrayOf(0f, 0f, 0f, 0f, cornerRadius, cornerRadius, cornerRadius, cornerRadius)
-        }
-        textArea.background = textBg
+        // One glass layer per card. A second translucent text-area background
+        // creates visible rectangular seams inside the rounded surface.
+        findViewById<View>(R.id.card_text_area).background = null
 
         // Premium badge -- frosted gold pill
         val badgeBg = GradientDrawable().apply {
@@ -102,14 +94,11 @@ class VideoCardView(context: Context) : FrameLayout(context) {
         isFocusable = true
         isFocusableInTouchMode = true
 
-        // Focus animation: scale up + brighten glass
+        // Focus animation: lift the card and brighten its glass edge.
         setOnFocusChangeListener { _, hasFocus ->
             val scale = if (hasFocus) 1.05f else 1.0f
             cardRoot.animate().scaleX(scale).scaleY(scale).setDuration(150).start()
-            glassBg.background = GradientDrawable().apply {
-                setColor(if (hasFocus) 0x30FFFFFF else 0x18FFFFFF)
-                setCornerRadius(cornerRadius)
-            }
+            GlassSurface.applyState(glassBg, GlassSurface.Emphasis.CARD, hasFocus)
         }
     }
 

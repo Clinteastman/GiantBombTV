@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.DiffUtil
 import com.bumptech.glide.Glide
 import com.giantbomb.tv.R
 import com.giantbomb.tv.model.Show
+import com.giantbomb.tv.ui.GlassSurface
 import com.giantbomb.tv.model.Video
 
 /**
@@ -117,6 +118,9 @@ class MobileGridAdapter(
     inner class EpisodeVH(view: View) : RecyclerView.ViewHolder(view) {
         private val thumb: ImageView = view.findViewById(R.id.episode_thumb)
         private val title: TextView = view.findViewById(R.id.episode_title)
+        init {
+            GlassSurface.applyState(itemView, GlassSurface.Emphasis.CARD, focused = false, cornerRadiusDp = 10f)
+        }
         fun bind(video: Video) {
             title.text = video.title
             thumb.setImageDrawable(null)
@@ -130,6 +134,9 @@ class MobileGridAdapter(
         private val poster: ImageView = view.findViewById(R.id.show_poster)
         private val title: TextView = view.findViewById(R.id.show_title)
         private val pinBadge: ImageView = view.findViewById(R.id.show_pin_badge)
+        init {
+            GlassSurface.applyState(itemView, GlassSurface.Emphasis.CARD, focused = false, cornerRadiusDp = 10f)
+        }
         fun bind(show: Show, pinned: Boolean) {
             title.text = show.title
             pinBadge.visibility = if (pinned) View.VISIBLE else View.GONE

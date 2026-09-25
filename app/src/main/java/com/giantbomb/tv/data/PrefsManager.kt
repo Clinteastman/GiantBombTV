@@ -26,6 +26,18 @@ class PrefsManager(context: Context) {
         get() = prefs.getBoolean("show_twitch_chat", true)
         set(value) = prefs.edit().putBoolean("show_twitch_chat", value).apply()
 
+    /** Visual treatment shared by phone and TV surfaces. */
+    var visualTheme: String
+        get() = prefs.getString("visual_theme", THEME_FROSTED) ?: THEME_FROSTED
+        set(value) = prefs.edit()
+            .putString("visual_theme", value.takeIf { it in VISUAL_THEMES } ?: THEME_FROSTED)
+            .apply()
+
+    /** Optional animated grid/particle layer used only by the Neon theme. */
+    var neonParticlesEnabled: Boolean
+        get() = prefs.getBoolean("neon_particles_enabled", true)
+        set(value) = prefs.edit().putBoolean("neon_particles_enabled", value).apply()
+
     /**
      * When true, pressing Back in the phone video player enters
      * Picture-in-Picture instead of returning to the previous screen.
@@ -110,6 +122,20 @@ class PrefsManager(context: Context) {
     }
 
     companion object {
+        const val THEME_SIMPLE = "simple"
+        const val THEME_FROSTED = "frosted"
+        const val THEME_EXTREME = "extreme"
+        const val THEME_NEON = "neon"
+        val VISUAL_THEMES = listOf(THEME_SIMPLE, THEME_FROSTED, THEME_EXTREME, THEME_NEON)
+
+        fun visualThemeLabel(value: String): String = when (value) {
+            THEME_SIMPLE -> "Simple"
+            THEME_FROSTED -> "Frosted Glass"
+            THEME_EXTREME -> "Extreme Glass"
+            THEME_NEON -> "Neon Grid"
+            else -> "Frosted Glass"
+        }
+
         val QUALITY_OPTIONS = listOf("auto", "1080p", "720p", "480p", "360p")
 
         fun qualityLabel(value: String): String = when (value) {

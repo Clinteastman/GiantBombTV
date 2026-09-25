@@ -1,6 +1,7 @@
 package com.giantbomb.tv
 
 import android.app.Activity
+import android.content.res.ColorStateList
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -8,12 +9,15 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -27,13 +31,17 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import androidx.fragment.app.FragmentActivity
 import com.giantbomb.tv.data.UpdateChecker
+import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.mobile.MobileBrowseFragment
 import com.giantbomb.tv.mobile.MobileShowGridFragment
+import com.giantbomb.tv.ui.BackdropRefractionHost
+import com.giantbomb.tv.ui.GlassSurface
+import com.giantbomb.tv.ui.NeonGridView
 import com.giantbomb.tv.util.DeviceUtil
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import kotlinx.coroutines.*
 
-class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
+class MainActivity : FragmentActivity(), CoroutineScope by MainScope(), BackdropRefractionHost {
 
     companion object {
         const val SETUP_REQUEST = 1001
@@ -51,6 +59,14 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private var isTv = false
     private var exitOverlay: View? = null
     private var updateOverlay: View? = null
+    private var neonGrid: NeonGridView? = null
+    private var neonFocusListener: ViewTreeObserver.OnGlobalFocusChangeListener? = null
+    private var lastNeonBurstAt = 0L
+    private var lastTouchX = 0f
+    private var lastTouchY = 0f
+    private var touchDownX = 0f
+    private var touchDownY = 0f
+    private var touchWasDrag = false
 
     // Activity-level long-press detection for the TV side menu. Leanback's
     // HeadersSupportFragment installs its own click listener and BaseGridView
@@ -133,11 +149,42 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
         super.onCreate(savedInstanceState)
 
+        val visualPrefs = PrefsManager(this)
+        GlassSurface.configure(visualPrefs.visualTheme)
+
         if (!isTv) {
             enableEdgeToEdge()
         }
 
         setContentView(R.layout.activity_main)
+        neonGrid = findViewById<NeonGridView>(R.id.neon_grid).apply {
+            visibility = if (GlassSurface.theme == GlassSurface.Theme.NEON) View.VISIBLE else View.GONE
+            setMotionEnabled(visualPrefs.neonParticlesEnabled)
+        }
+        if (GlassSurface.theme == GlassSurface.Theme.NEON && visualPrefs.neonParticlesEnabled) {
+            GlassSurface.setNeonMotionSink { left, top, right, bottom, dx, dy ->
+                neonGrid?.disturbLozenge(left, top, right, bottom, dx, dy)
+            }
+            val root = findViewById<View>(android.R.id.content)
+            neonFocusListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, focused ->
+                val now = SystemClock.uptimeMillis()
+                if (focused == null || now - lastNeonBurstAt < 220L ||
+                    focused.width <= 0 || focused.height <= 0) {
+                    return@OnGlobalFocusChangeListener
+                }
+                lastNeonBurstAt = now
+                val position = IntArray(2)
+                focused.getLocationOnScreen(position)
+                neonGrid?.burstLozenge(
+                    position[0].toFloat(),
+                    position[1].toFloat(),
+                    (position[0] + focused.width).toFloat(),
+                    (position[1] + focused.height).toFloat()
+                )
+            }.also { root.viewTreeObserver.addOnGlobalFocusChangeListener(it) }
+        } else {
+            GlassSurface.setNeonMotionSink(null)
+        }
 
         // Load persisted downloads now so a download interrupted by process
         // death resumes on relaunch, not only once a download screen opens.
@@ -184,6 +231,7 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private fun wireMobileBottomNav() {
         val nav = findViewById<BottomNavigationView>(R.id.bottom_nav) ?: return
         nav.visibility = View.VISIBLE
+        styleMobileBottomNav(nav)
 
         // Edge-to-edge is on for phones, so the nav would otherwise sit under the
         // gesture pill / 3-button bar. Pad it down by the bottom system-bar inset.
@@ -204,9 +252,47 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 else -> return@setOnItemSelectedListener false
             }
             showOnlyMobileTab(tag)
+            nav.findViewById<View>(item.itemId)?.let(::burstForView)
             true
         }
         nav.setOnItemReselectedListener { /* no-op for now; could scroll to top */ }
+    }
+
+    private fun styleMobileBottomNav(nav: BottomNavigationView) {
+        val (active, inactive, indicator) = when (GlassSurface.theme) {
+            GlassSurface.Theme.SIMPLE -> Triple(
+                0xFFFF2035.toInt(), 0xC8FFFFFF.toInt(), 0x28FFFFFF
+            )
+            GlassSurface.Theme.FROSTED -> Triple(
+                Color.WHITE, 0xC8DFE3EA.toInt(), 0x38FFFFFF
+            )
+            GlassSurface.Theme.EXTREME -> Triple(
+                0xFFFFE8FF.toInt(), 0xCCE3E9F2.toInt(), 0x46FFFFFF
+            )
+            GlassSurface.Theme.NEON -> Triple(
+                0xFFFF43E6.toInt(), 0xFF42F5FF.toInt(), 0xA0340A48.toInt()
+            )
+        }
+        val itemColours = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(active, inactive)
+        )
+        nav.itemIconTintList = itemColours
+        nav.itemTextColor = itemColours
+        nav.itemRippleColor = ColorStateList.valueOf(
+            if (GlassSurface.theme == GlassSurface.Theme.NEON) 0x40FF43E6 else 0x30FFFFFF
+        )
+        nav.isItemActiveIndicatorEnabled = true
+        nav.itemActiveIndicatorColor = ColorStateList.valueOf(indicator)
+        nav.backgroundTintList = null
+        GlassSurface.applyState(
+            nav,
+            GlassSurface.Emphasis.PLAYER_CONTROL,
+            focused = false,
+            cornerRadiusDp = 28f,
+            accentColor = if (GlassSurface.theme == GlassSurface.Theme.NEON) 0xFF42F5FF.toInt() else null
+        )
+        nav.elevation = 0f
     }
 
     private fun showOnlyMobileTab(activeTag: String) {
@@ -291,6 +377,58 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
         } finally {
             callback.isEnabled = true
         }
+    }
+
+    private fun burstForView(view: View) {
+        if (GlassSurface.theme != GlassSurface.Theme.NEON || neonGrid?.visibility != View.VISIBLE) return
+        val now = SystemClock.uptimeMillis()
+        if (now - lastNeonBurstAt < 220L || view.width <= 0 || view.height <= 0) return
+        lastNeonBurstAt = now
+        val location = IntArray(2)
+        view.getLocationOnScreen(location)
+        neonGrid?.burstLozenge(location[0].toFloat(), location[1].toFloat(),
+            (location[0] + view.width).toFloat(), (location[1] + view.height).toFloat())
+    }
+
+    private fun findTappedControl(view: View, x: Float, y: Float): View? {
+        if (!view.isShown || !view.isEnabled) return null
+        val bounds = android.graphics.Rect()
+        if (!view.getGlobalVisibleRect(bounds) || !bounds.contains(x.toInt(), y.toInt())) return null
+        if (view is ViewGroup) {
+            for (i in view.childCount - 1 downTo 0) {
+                findTappedControl(view.getChildAt(i), x, y)?.let { return it }
+            }
+        }
+        return view.takeIf { it.isClickable }
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (GlassSurface.theme == GlassSurface.Theme.NEON && neonGrid?.visibility == View.VISIBLE) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastTouchX = event.rawX
+                    lastTouchY = event.rawY
+                    touchDownX = event.rawX
+                    touchDownY = event.rawY
+                    touchWasDrag = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (kotlin.math.hypot(event.rawX - touchDownX, event.rawY - touchDownY) >
+                        ViewConfiguration.get(this).scaledTouchSlop) touchWasDrag = true
+                    val dx = event.rawX - lastTouchX
+                    val dy = event.rawY - lastTouchY
+                    neonGrid?.disturb(event.rawX, event.rawY, dx, dy)
+                    lastTouchX = event.rawX
+                    lastTouchY = event.rawY
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!touchWasDrag) findTappedControl(window.decorView, event.rawX, event.rawY)
+                        ?.let(::burstForView)
+                }
+                MotionEvent.ACTION_CANCEL -> touchWasDrag = true
+            }
+        }
+        return super.dispatchTouchEvent(event)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -678,6 +816,13 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope() {
     }
 
     override fun onDestroy() {
+        neonFocusListener?.let { listener ->
+            findViewById<View>(android.R.id.content)?.viewTreeObserver
+                ?.takeIf { it.isAlive }
+                ?.removeOnGlobalFocusChangeListener(listener)
+        }
+        neonFocusListener = null
+        GlassSurface.setNeonMotionSink(null)
         super.onDestroy()
         cancel()
     }
