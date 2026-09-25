@@ -158,7 +158,16 @@ class PlaybackService : MediaSessionService() {
                 repository.saveProgress(videoId, positionSeconds, durationSeconds)
             }
             // Skip the stop if the player was reopened during the save.
-            if (stoppingForExit && exitGeneration == token) stopSelf()
+            if (stoppingForExit && exitGeneration == token) {
+                // Clear the player first. stopSelf() alone leaves the service
+                // (and its paused notification) alive while any system media
+                // controller is still bound, which Google TV does.
+                mediaSession?.player?.run {
+                    stop()
+                    clearMediaItems()
+                }
+                stopSelf()
+            }
         }
     }
 
@@ -264,9 +273,16 @@ class PlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
         // Our own player reconnecting means the user reopened playback, so a
-        // pending exit stop must not tear the new session down.
-        if (controllerInfo.packageName == packageName) cancelPendingExit()
-        return mediaSession
+        // pending exit stop must not tear the new session down. Media3's own
+        // notification controller also connects from our package; it is not a
+        // reopen and must not cancel the exit.
+        val session = mediaSession
+        if (controllerInfo.packageName == packageName &&
+            session?.isMediaNotificationController(controllerInfo) != true
+        ) {
+            cancelPendingExit()
+        }
+        return session
     }
 
     // Keep the stream going when the user swipes the app from recents; only
