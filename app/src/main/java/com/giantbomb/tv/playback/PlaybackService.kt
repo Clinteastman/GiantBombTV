@@ -44,6 +44,10 @@ class PlaybackService : MediaSessionService() {
     private var progressJob: Job? = null
     private var playerListener: Player.Listener? = null
     private var stoppingForExit = false
+    // Identifies the current exit attempt. Each deferred stop only fires if
+    // its own attempt is still current, so an older save finishing late can't
+    // stop the service before a newer exit's save has landed.
+    private var exitGeneration = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -136,6 +140,7 @@ class PlaybackService : MediaSessionService() {
     private fun saveProgressAndStop() {
         if (stoppingForExit) return
         stoppingForExit = true
+        val token = ++exitGeneration
         stopProgressSaving()
 
         val player = mediaSession?.player
@@ -149,12 +154,13 @@ class PlaybackService : MediaSessionService() {
                 repository.saveProgress(videoId, positionSeconds, durationSeconds)
             }
             // Skip the stop if the player was reopened during the save.
-            if (stoppingForExit) stopSelf()
+            if (stoppingForExit && exitGeneration == token) stopSelf()
         }
     }
 
     private fun cancelPendingExit() {
         stoppingForExit = false
+        exitGeneration++
     }
 
     private fun buildSessionActivity(mediaItem: MediaItem?): PendingIntent {
