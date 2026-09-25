@@ -118,11 +118,16 @@ class VideoDownloadService : Service() {
                     DownloadStore.writeValidator(ctx, id, null)
                     throw IllegalStateException("Unexpected Content-Range")
                 }
-                if (!resumed) {
-                    // Fresh download: remember what we're fetching. Weak ETags
-                    // can't be used with If-Range, so fall back to Last-Modified.
-                    val etag = response.header("ETag")?.takeUnless { it.startsWith("W/") }
-                    DownloadStore.writeValidator(ctx, id, etag ?: response.header("Last-Modified"))
+                // Fresh download: drop the old validator before the partial is
+                // truncated, and save the new one only once it has been. A crash
+                // in between then leaves no validator, which restarts from zero,
+                // never a new validator next to the old file's bytes.
+                // Weak ETags can't be used with If-Range, so fall back to
+                // Last-Modified.
+                val newValidator = if (resumed) null else {
+                    DownloadStore.writeValidator(ctx, id, null)
+                    response.header("ETag")?.takeUnless { it.startsWith("W/") }
+                        ?: response.header("Last-Modified")
                 }
                 val startingBytes = if (resumed) existingBytes else 0L
                 val responseLength = body.contentLength()
@@ -130,6 +135,7 @@ class VideoDownloadService : Service() {
 
                 body.byteStream().use { input ->
                     FileOutputStream(part, resumed).use { output ->
+                        if (!resumed) DownloadStore.writeValidator(ctx, id, newValidator)
                         val buffer = ByteArray(64 * 1024)
                         var downloaded = startingBytes
                         var lastPercent = -1
