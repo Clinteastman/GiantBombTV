@@ -165,7 +165,11 @@ class CustomizeBrowseActivity : ComponentActivity() {
                 setTextColor(0xFFE6E6E6.toInt())
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
-            val toggle = SwitchCompat(ctx)
+            val toggle = SwitchCompat(ctx).apply {
+                // The TV (Leanback) theme turns on the switch's on/off labels
+                // but gives it no text, so measuring it crashed the screen.
+                showText = false
+            }
             container.addView(handle)
             container.addView(label)
             container.addView(toggle)
