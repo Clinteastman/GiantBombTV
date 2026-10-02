@@ -685,6 +685,14 @@ object GlassSurface {
         private val drawingBounds = RectF()
         private val tracker = ScreenTracker(owner)
         private var appliedBackdropGeneration = -1
+        // Darkens the lower part of cards, where the title and date sit, so
+        // text stays readable over the sharp refracted artwork.
+        private val scrimStrength = when {
+            emphasis != Emphasis.CARD -> 0
+            activeTheme == Theme.EXTREME -> 0xD0
+            else -> 0x80
+        }
+        private val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
         override fun updateLiveScreenPosition(): Boolean {
             val changed = tracker.update()
@@ -718,6 +726,13 @@ object GlassSurface {
 
         override fun onBoundsChange(bounds: Rect) {
             drawingBounds.set(bounds)
+            if (scrimStrength > 0) {
+                scrimPaint.shader = LinearGradient(
+                    0f, bounds.top + bounds.height() * 0.45f, 0f, bounds.bottom.toFloat(),
+                    Color.TRANSPARENT, Color.argb(scrimStrength, 0, 0, 0),
+                    Shader.TileMode.CLAMP
+                )
+            }
             shader.setFloatUniform("origin", bounds.left.toFloat(), bounds.top.toFloat())
             shader.setFloatUniform("radius", radius)
             shader.setFloatUniform(
@@ -739,6 +754,7 @@ object GlassSurface {
             shader.setFloatUniform("backdropMix", backdropMix)
             updateLiveScreenPosition()
             canvas.drawRoundRect(drawingBounds, radius, radius, paint)
+            if (scrimStrength > 0) canvas.drawRoundRect(drawingBounds, radius, radius, scrimPaint)
         }
 
         override fun setAlpha(alpha: Int) {
