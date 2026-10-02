@@ -11,6 +11,7 @@ import com.bumptech.glide.Glide
 import com.giantbomb.tv.R
 import com.giantbomb.tv.model.Show
 import com.giantbomb.tv.ui.GlassSurface
+import com.giantbomb.tv.ui.VectorFont
 import com.giantbomb.tv.model.Video
 
 /**
@@ -111,7 +112,8 @@ class MobileGridAdapter(
     }
 
     inner class HeaderVH(view: View) : RecyclerView.ViewHolder(view) {
-        private val text: TextView = view.findViewById(R.id.grid_section_header)
+        private val text: TextView = view.findViewById<TextView>(R.id.grid_section_header)
+            .also(VectorFont::applyIfNeon)
         fun bind(value: String) { text.text = value }
     }
 
@@ -132,7 +134,8 @@ class MobileGridAdapter(
 
     inner class ShowVH(view: View) : RecyclerView.ViewHolder(view) {
         private val poster: ImageView = view.findViewById(R.id.show_poster)
-        private val title: TextView = view.findViewById(R.id.show_title)
+        private val title: TextView = view.findViewById<TextView>(R.id.show_title)
+            .also(VectorFont::applyIfNeon)
         private val pinBadge: ImageView = view.findViewById(R.id.show_pin_badge)
         init {
             GlassSurface.applyState(itemView, GlassSurface.Emphasis.CARD, focused = false, cornerRadiusDp = 10f)

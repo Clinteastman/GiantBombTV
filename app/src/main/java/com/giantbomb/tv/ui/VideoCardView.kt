@@ -44,6 +44,7 @@ class VideoCardView(context: Context) : FrameLayout(context) {
         glassBg = findViewById(R.id.card_glass_bg)
         thumbnail = findViewById(R.id.card_thumbnail)
         titleView = findViewById(R.id.card_title)
+        VectorFont.applyIfNeon(titleView)
         metaView = findViewById(R.id.card_meta)
         progressBar = findViewById(R.id.card_progress)
         progressTrack = findViewById(R.id.card_progress_track)

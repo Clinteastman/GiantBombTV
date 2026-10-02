@@ -945,7 +945,9 @@ object GlassSurface {
     }
 
     private fun applyTextHalo(view: View) {
-        if (view is TextView && ColorUtils.calculateLuminance(view.currentTextColor) > 0.25) {
+        if (view is TextView && !VectorFont.isVector(view) &&
+            ColorUtils.calculateLuminance(view.currentTextColor) > 0.25
+        ) {
             val shadowColor = if (theme == Theme.NEON) 0xB000CFE8.toInt() else 0xF0000000.toInt()
             view.setShadowLayer(view.context.dp(if (theme == Theme.NEON) 4f else 7f), 0f,
                 view.context.dp(1.5f), shadowColor)

@@ -1243,7 +1243,8 @@ class MobileBrowseFragment : Fragment() {
     // -----------------------------------------------------------------------
 
     private inner class SectionHeaderVH(view: View) : RecyclerView.ViewHolder(view) {
-        private val title: TextView = view.findViewById(R.id.section_title)
+        private val title: TextView = view.findViewById<TextView>(R.id.section_title)
+            .also(com.giantbomb.tv.ui.VectorFont::applyIfNeon)
         private val seeAll: TextView = view.findViewById(R.id.section_see_all)
 
         fun bind(item: BrowseItem.SectionHeader) {
@@ -1254,7 +1255,8 @@ class MobileBrowseFragment : Fragment() {
     }
 
     private inner class ShowSectionHeaderVH(view: View) : RecyclerView.ViewHolder(view) {
-        private val title: TextView = view.findViewById(R.id.section_title)
+        private val title: TextView = view.findViewById<TextView>(R.id.section_title)
+            .also(com.giantbomb.tv.ui.VectorFont::applyIfNeon)
         private val pinStar: TextView = view.findViewById(R.id.pin_star)
 
         fun bind(item: BrowseItem.ShowSectionHeader) {
@@ -1404,7 +1406,8 @@ class MobileBrowseFragment : Fragment() {
     private inner class VerticalVideoVH(view: View) : RecyclerView.ViewHolder(view) {
         private val thumbnailContainer: FrameLayout = view.findViewById(R.id.thumbnail_container)
         private val thumbnail: ImageView = view.findViewById(R.id.video_thumbnail)
-        private val titleView: TextView = view.findViewById(R.id.video_title)
+        private val titleView: TextView = view.findViewById<TextView>(R.id.video_title)
+            .also(com.giantbomb.tv.ui.VectorFont::applyIfNeon)
         private val metaView: TextView = view.findViewById(R.id.video_meta)
         private val premiumBadge: TextView = view.findViewById(R.id.video_premium_badge)
         private val watchedBadge: TextView = view.findViewById(R.id.video_watched)
@@ -1683,7 +1686,8 @@ class MobileBrowseFragment : Fragment() {
 
         inner class VH(view: View) : RecyclerView.ViewHolder(view) {
             val thumbnail: ImageView = view.findViewById(R.id.small_thumbnail)
-            val title: TextView = view.findViewById(R.id.small_title)
+            val title: TextView = view.findViewById<TextView>(R.id.small_title)
+                .also(com.giantbomb.tv.ui.VectorFont::applyIfNeon)
             val showName: TextView = view.findViewById(R.id.small_show_name)
             val progressTrack: View = view.findViewById(R.id.small_progress_track)
             val progressBar: View = view.findViewById(R.id.small_progress_bar)
@@ -1769,7 +1773,8 @@ class MobileBrowseFragment : Fragment() {
 
         inner class VH(view: View) : RecyclerView.ViewHolder(view) {
             val poster: ImageView = view.findViewById(R.id.show_poster)
-            val title: TextView = view.findViewById(R.id.show_title)
+            val title: TextView = view.findViewById<TextView>(R.id.show_title)
+                .also(com.giantbomb.tv.ui.VectorFont::applyIfNeon)
 
             init {
                 GlassSurface.applyState(
@@ -1824,7 +1829,8 @@ class MobileBrowseFragment : Fragment() {
         inner class VH(view: View) : RecyclerView.ViewHolder(view) {
             val cardBg: FrameLayout = view.findViewById(R.id.upcoming_card_bg)
             val image: ImageView = view.findViewById(R.id.upcoming_image)
-            val title: TextView = view.findViewById(R.id.upcoming_title)
+            val title: TextView = view.findViewById<TextView>(R.id.upcoming_title)
+                .also(com.giantbomb.tv.ui.VectorFont::applyIfNeon)
             val time: TextView = view.findViewById(R.id.upcoming_time)
             val countdownGroup: View = view.findViewById(R.id.upcoming_countdown_group)
             val hours: TextView = view.findViewById(R.id.upcoming_hours)

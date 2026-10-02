@@ -70,6 +70,10 @@ class BrowseFragment : BrowseSupportFragment() {
         const val SETTINGS_TWITCH_CHAT = 7
         const val SETTINGS_DOWNLOADS = 8
         const val SETTINGS_VISUAL_THEME = 9
+        // Neon HUD lettering sizes: side menu (narrow, one line) and the
+        // titles above each row.
+        const val NEON_SIDE_HEADER_SP = 19f
+        const val NEON_ROW_TITLE_SP = 26f
         const val SETTINGS_NEON_PARTICLES = 10
         private const val BACKDROP_DELAY_MS = 300L
         private const val CROSSFADE_DURATION = 600L
@@ -241,10 +245,21 @@ class BrowseFragment : BrowseSupportFragment() {
             // distinction instead of relying on low opacity.
             holder.view.alpha = 1f
             tv.alpha = 1f
+            val neon = GlassSurface.theme == GlassSurface.Theme.NEON
+            if (neon) {
+                com.giantbomb.tv.ui.VectorFont.applyIfNeon(tv)
+                // The side menu is narrow: keep each name on one line rather
+                // than letting the wider lettering wrap mid-word.
+                tv.maxLines = 1
+                tv.ellipsize = android.text.TextUtils.TruncateAt.END
+                tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, NEON_SIDE_HEADER_SP)
+            }
             tv.setTextColor(
                 when {
+                    // Geometry Wars HUD green; brighter on the focused header.
+                    neon && selected -> 0xFFC6FF9E.toInt()
+                    neon -> com.giantbomb.tv.ui.VectorFont.GW_GREEN
                     selected -> android.graphics.Color.WHITE
-                    GlassSurface.theme == GlassSurface.Theme.NEON -> 0xE8F1F5FF.toInt()
                     else -> 0xDEFFFFFF.toInt()
                 }
             )
@@ -252,12 +267,12 @@ class BrowseFragment : BrowseSupportFragment() {
                 "sans-serif-medium",
                 if (selected) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL
             )
-            if (GlassSurface.theme == GlassSurface.Theme.NEON) {
+            if (neon) {
                 tv.setShadowLayer(
-                    if (selected) 9f else 5f,
+                    if (selected) 10f else 6f,
                     0f,
                     0f,
-                    if (selected) 0xCC35E9FF.toInt() else 0x99000000.toInt()
+                    if (selected) 0xE07CFF3C.toInt() else 0x904CFF1E.toInt()
                 )
             } else {
                 tv.setShadowLayer(if (selected) 6f else 4f, 0f, 1f, 0xCC000000.toInt())
@@ -273,7 +288,7 @@ class BrowseFragment : BrowseSupportFragment() {
                     start, end, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
                 span.setSpan(
-                    android.text.style.RelativeSizeSpan(0.72f),
+                    android.text.style.RelativeSizeSpan(if (neon) 0.5f else 0.72f),
                     start, end, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
                 span.setSpan(
@@ -563,6 +578,27 @@ class BrowseFragment : BrowseSupportFragment() {
             val rowPresenter = ListRowPresenter(androidx.leanback.widget.FocusHighlight.ZOOM_FACTOR_NONE).apply {
                 shadowEnabled = false
                 selectEffectEnabled = false  // disable the dim overlay on unfocused rows
+                // Row titles above each row use the Neon vector lettering.
+                headerPresenter = object : RowHeaderPresenter() {
+                    override fun onBindViewHolder(viewHolder: Presenter.ViewHolder, item: Any?) {
+                        super.onBindViewHolder(viewHolder, item)
+                        viewHolder.view.findViewById<android.widget.TextView>(
+                            androidx.leanback.R.id.row_header
+                        )?.let { title ->
+                            com.giantbomb.tv.ui.VectorFont.applyIfNeon(title)
+                            if (GlassSurface.theme == GlassSurface.Theme.NEON) {
+                                title.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, NEON_ROW_TITLE_SP)
+                            }
+                        }
+                    }
+
+                    // Leanback fades the titles of unselected rows; in Neon the
+                    // HUD lettering stays at full brightness, like the game.
+                    override fun onSelectLevelChanged(holder: RowHeaderPresenter.ViewHolder) {
+                        super.onSelectLevelChanged(holder)
+                        if (GlassSurface.theme == GlassSurface.Theme.NEON) holder.view.alpha = 1f
+                    }
+                }
             }
             val rowsAdapter = ArrayObjectAdapter(rowPresenter)
             headerIdCounter = 0L

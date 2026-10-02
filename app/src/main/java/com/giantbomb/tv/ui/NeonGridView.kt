@@ -34,7 +34,7 @@ class NeonGridView @JvmOverloads constructor(
     // One even mesh, about 30 cells across a 1080p TV like Geometry Wars.
     // Every line is a simulated spring; there are no decorative sub-lines.
     private val spacing = (if (isTelevision) 33f else 22f) * density
-    private val particleLimit = if (isTelevision) 400 else 600
+    private val particleLimit = if (isTelevision) 900 else 1200
     // Deep enough for the game's tunnels and funnels where lines bunch up.
     private val maxDisplacement = spacing * 1.3f
     private var columns = 0
@@ -162,7 +162,7 @@ class NeonGridView @JvmOverloads constructor(
         // Per half-frame velocity retention for sparks.
         const val SPARK_DRAG = 0.955f
         // A focus burst (~140) fits in one frame; card drift adds a trickle.
-        const val SPARK_BUDGET_PER_FRAME = 160
+        const val SPARK_BUDGET_PER_FRAME = 420
         // Saturated Geometry Wars grid blue.
         const val GRID_BLUE = 0xFF1E30FF.toInt()
         // Streak length per unit of spark speed.
@@ -208,7 +208,7 @@ class NeonGridView @JvmOverloads constructor(
         val centreX = (left + right) * 0.5f
         val centreY = (top + bottom) * 0.5f
         val perimeter = 2f * ((right - left) + (bottom - top)).coerceAtLeast(1f)
-        val count = if (isTelevision) 140 else 200
+        val count = if (isTelevision) 320 else 420
 
         repeat(count) { index ->
             val distance = perimeter * (index + Random.nextFloat()) / count
@@ -223,7 +223,7 @@ class NeonGridView @JvmOverloads constructor(
             val nx = point.first - centreX
             val ny = point.second - centreY
             val length = max(1f, hypot(nx, ny))
-            val speed = (8f + Random.nextFloat() * 14f) * density
+            val speed = (8f + Random.nextFloat() * 22f) * density
             emitBurstParticle(
                 point.first,
                 point.second,
@@ -231,7 +231,8 @@ class NeonGridView @JvmOverloads constructor(
                 ny / length * speed
             )
         }
-        disturbLocal(centreX, centreY, 14f * density)
+        disturbLocal(centreX, centreY, 20f * density)
+        addShockwave(centreX, centreY, max(right - left, bottom - top) * 0.5f)
         postInvalidateOnAnimation()
     }
 
@@ -342,6 +343,7 @@ class NeonGridView @JvmOverloads constructor(
         // over the blurred emissive buffer, exactly like a post-process bloom.
         canvas.drawLines(gridLines, 0, gridLineCount, gridPaint)
         if (motionEnabled) drawParticleCores(canvas)
+        if (motionEnabled) drawShockwaves(canvas)
         // Keep animating only while the mesh is moving or sparks are alive.
         // A settled field costs nothing until the next disturbance wakes it.
         if (motionEnabled && isShown && isAttachedToWindow) {
@@ -406,7 +408,8 @@ class NeonGridView @JvmOverloads constructor(
 
         // Below this the mesh is visually still: snap it flat and let the
         // frame loop stop.
-        if (maxMotion < SETTLE_THRESHOLD * density && particles.isEmpty()) {
+        updateShockwaves(step)
+        if (maxMotion < SETTLE_THRESHOLD * density && particles.isEmpty() && shockwaves.isEmpty()) {
             dx.fill(0f); dy.fill(0f); vx.fill(0f); vy.fill(0f)
             settled = true
         } else {
@@ -534,10 +537,50 @@ class NeonGridView @JvmOverloads constructor(
             y,
             outwardX + (Random.nextFloat() - 0.5f) * 4f * density,
             outwardY + (Random.nextFloat() - 0.5f) * 4f * density,
-            1.25f + Random.nextFloat() * 0.35f,
+            1.3f + Random.nextFloat() * 0.6f,
             colours.random(),
-            decay = 0.025f
+            decay = 0.018f
         )
+    }
+
+    // ---------------------------------------------------------------------
+    // Shockwave rings: the expanding glow circle from a Geometry Wars blast.
+    // ---------------------------------------------------------------------
+    private class Shockwave(val x: Float, val y: Float, var radius: Float, var life: Float, val colour: Int)
+
+    private val shockwaves = ArrayList<Shockwave>()
+    private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+
+    private fun addShockwave(x: Float, y: Float, startRadius: Float) {
+        if (shockwaves.size >= 6) shockwaves.removeAt(0)
+        shockwaves += Shockwave(x, y, startRadius * 0.6f, 1f, colours.random())
+        settled = false
+    }
+
+    private fun updateShockwaves(step: Float) {
+        val iterator = shockwaves.iterator()
+        while (iterator.hasNext()) {
+            val wave = iterator.next()
+            wave.radius += 9f * density * step
+            wave.life -= 0.022f * step
+            if (wave.life <= 0f) iterator.remove()
+        }
+    }
+
+    private fun drawShockwaves(canvas: Canvas) {
+        for (wave in shockwaves) {
+            val alpha = (wave.life * wave.life * 255).toInt().coerceIn(0, 255)
+            // Wide soft halo, then a bright core ring.
+            ringPaint.color = Color.argb(alpha / 2, Color.red(wave.colour), Color.green(wave.colour), Color.blue(wave.colour))
+            ringPaint.strokeWidth = 22f * density * wave.life
+            canvas.drawCircle(wave.x, wave.y, wave.radius, ringPaint)
+            ringPaint.color = Color.argb(alpha, 255, 255, 255)
+            ringPaint.strokeWidth = 4f * density
+            canvas.drawCircle(wave.x, wave.y, wave.radius, ringPaint)
+            ringPaint.color = Color.argb(alpha, Color.red(wave.colour), Color.green(wave.colour), Color.blue(wave.colour))
+            ringPaint.strokeWidth = 8f * density * wave.life
+            canvas.drawCircle(wave.x, wave.y, wave.radius * 0.97f, ringPaint)
+        }
     }
 
     private fun updateParticles(step: Float) {
