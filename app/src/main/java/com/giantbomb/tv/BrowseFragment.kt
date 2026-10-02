@@ -525,13 +525,40 @@ class BrowseFragment : BrowseSupportFragment() {
                     com.bumptech.glide.load.resource.bitmap.CenterCrop(),
                     com.giantbomb.tv.ui.BlurTransformation(radius = 2, passes = 2)
                 )
+                // The displayed backdrop is pre-blurred on these versions, so
+                // give the glass its own unblurred copy: Extreme's clear lens
+                // needs the detail that the blur removes.
+                if (GlassSurface.usesBackdropRefraction) {
+                    Glide.with(requireContext())
+                        .asBitmap()
+                        .load(imageUrl)
+                        .override(960, 540)
+                        .centerCrop()
+                        .into(object : com.bumptech.glide.request.target.CustomTarget<android.graphics.Bitmap>() {
+                            override fun onResourceReady(
+                                bitmap: android.graphics.Bitmap,
+                                transition: com.bumptech.glide.request.transition.Transition<in android.graphics.Bitmap>?
+                            ) {
+                                if (!isAdded || currentBackdropUrl != imageUrl) return
+                                GlassSurface.updateBackdrop(
+                                    bitmap,
+                                    requireActivity().window.decorView.width,
+                                    requireActivity().window.decorView.height
+                                )
+                            }
+                            override fun onLoadCleared(placeholder: android.graphics.drawable.Drawable?) = Unit
+                        })
+                }
             }
             backdropRequest.into(object : com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
                     override fun onResourceReady(resource: android.graphics.drawable.Drawable, transition: com.bumptech.glide.request.transition.Transition<in android.graphics.drawable.Drawable>?) {
                         // Focus may have moved on while this loaded; a late
                         // older image must not replace the newer backdrop.
                         if (!isAdded || currentBackdropUrl != imageUrl) return
-                        (resource as? BitmapDrawable)?.bitmap?.let { bitmap ->
+                        // On older versions the glass gets the unblurred copy above.
+                        (resource as? BitmapDrawable)?.bitmap
+                            ?.takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.S }
+                            ?.let { bitmap ->
                             GlassSurface.updateBackdrop(
                                 bitmap,
                                 requireActivity().window.decorView.width,
