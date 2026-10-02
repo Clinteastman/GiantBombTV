@@ -819,14 +819,17 @@ class MobileBrowseFragment : Fragment() {
             SETTINGS_VISUAL_THEME,
             "Visual Theme",
             PrefsManager.visualThemeLabel(prefs.visualTheme),
-            R.drawable.ic_settings_cog
+            R.drawable.ic_settings_theme
         )))
-        items.add(BrowseItem.SettingRow(SettingsItem(
-            SETTINGS_NEON_PARTICLES,
-            "Neon Grid Motion",
-            if (prefs.neonParticlesEnabled) "On - grid reacts to movement" else "Off - static grid",
-            R.drawable.ic_settings_cog
-        )))
+        // Only meaningful for the Neon theme, so only shown there.
+        if (prefs.visualTheme == PrefsManager.THEME_NEON) {
+            items.add(BrowseItem.SettingRow(SettingsItem(
+                SETTINGS_NEON_PARTICLES,
+                "Neon Grid Motion",
+                if (prefs.neonParticlesEnabled) "On - grid reacts to movement" else "Off - static grid",
+                R.drawable.ic_settings_motion
+            )))
+        }
         items.add(BrowseItem.SettingRow(SettingsItem(
             SETTINGS_PIP_BACK,
             "Back Enters Picture-in-Picture",
@@ -1590,19 +1593,11 @@ class MobileBrowseFragment : Fragment() {
     }
 
     private fun showVisualThemePicker() {
-        val values = PrefsManager.VISUAL_THEMES
-        val labels = values.map(PrefsManager::visualThemeLabel).toTypedArray()
-        val selected = values.indexOf(prefs.visualTheme).coerceAtLeast(0)
-        android.app.AlertDialog.Builder(requireContext())
-            .setTitle("Visual Theme")
-            .setSingleChoiceItems(labels, selected) { dialog, which ->
-                prefs.visualTheme = values[which]
-                GlassSurface.configure(values[which])
-                dialog.dismiss()
-                requireActivity().recreate()
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        com.giantbomb.tv.ui.ThemePickerDialog.show(requireContext(), prefs.visualTheme) { value ->
+            prefs.visualTheme = value
+            GlassSurface.configure(value)
+            requireActivity().recreate()
+        }
     }
 
     private fun toggleNeonParticles() {
