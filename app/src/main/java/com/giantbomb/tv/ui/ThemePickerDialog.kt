@@ -113,7 +113,12 @@ object ThemePickerDialog {
             if (selected) currentRow = row
         }
 
-        dialog.setContentView(panel)
+        // Scrolls when the screen is short (phone landscape, large fonts) so
+        // every theme stays reachable by touch and D-pad.
+        dialog.setContentView(android.widget.ScrollView(context).apply {
+            isFillViewport = true
+            addView(panel)
+        })
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             val screenWidth = context.resources.displayMetrics.widthPixels
