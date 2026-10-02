@@ -6,6 +6,7 @@ import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
+import android.graphics.LightingColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Matrix
 import android.graphics.Outline
@@ -112,8 +113,8 @@ object GlassSurface {
             val backdropChanged = updateBackdropTransition(frameTimeNanos)
             trackedCards.forEach { card ->
                 if (!card.isAttachedToWindow || !card.isShown || card.windowVisibility != View.VISIBLE) return@forEach
-                val positionChanged = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                    (card.background as? RuntimeGlassDrawable)?.updateLiveScreenPosition() == true
+                val positionChanged =
+                    (card.background as? LivePositioned)?.updateLiveScreenPosition() == true
                 if (positionChanged || backdropChanged) {
                     card.invalidate()
                 }
@@ -170,6 +171,7 @@ object GlassSurface {
             // opaque-backdrop path while sampling a transparent target.
             backdropFromInput = backdropToInput
             hasBackdropFrom = hasBackdropTo
+            compatFrom = compatTo
             backdropGeneration++
         }
         return true
@@ -192,6 +194,14 @@ object GlassSurface {
         // this also gives rapid navigation a stable forward direction.
         backdropFromInput = backdropToInput
         hasBackdropFrom = hasBackdropTo
+        compatFrom = compatTo
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            compatTo = if (bitmap != null && targetWidth > 0 && targetHeight > 0) {
+                compatBlur(bitmap)?.let { CompatBackdrop(it, targetWidth, targetHeight) }
+            } else {
+                null
+            }
+        }
         if (bitmap == null || targetWidth <= 0 || targetHeight <= 0) {
             backdropToInput = transparentInputShader()
             hasBackdropTo = false
@@ -240,6 +250,284 @@ object GlassSurface {
         }.getOrNull()
     }
 
+    // ---------------------------------------------------------------------
+    // Android 12 and older: no AGSL, so glass is drawn from a small, heavily
+    // blurred copy of the backdrop. Each card draws the part of it that sits
+    // behind the card on screen, crossfading old and new artwork in step with
+    // the activity backdrop. Frosted adds a milky frost; Extreme stays clearer,
+    // magnifies slightly like a lens and adds a rim and sheen.
+    // ---------------------------------------------------------------------
+
+    /** A blurred backdrop plus the screen size it was cropped to fill. */
+    private class CompatBackdrop(val bitmap: Bitmap, val targetWidth: Int, val targetHeight: Int)
+
+    private var compatFrom: CompatBackdrop? = null
+    private var compatTo: CompatBackdrop? = null
+    // Frosted glass scatters light, so it shows a heavily blurred image.
+    // Clear (Extreme) glass shows a much sharper one, which is what makes its
+    // lens magnification visible.
+    private const val FROSTED_BLUR_EDGE = 96
+    private const val FROSTED_BLUR_RADIUS = 3
+    private const val FROSTED_BLUR_PASSES = 3
+    private const val CLEAR_BLUR_EDGE = 320
+    private const val CLEAR_BLUR_RADIUS = 1
+    private const val CLEAR_BLUR_PASSES = 1
+
+    private fun compatBlur(source: Bitmap): Bitmap? = runCatching {
+        val clear = theme == Theme.EXTREME
+        val edge = if (clear) CLEAR_BLUR_EDGE else FROSTED_BLUR_EDGE
+        val radius = if (clear) CLEAR_BLUR_RADIUS else FROSTED_BLUR_RADIUS
+        val passes = if (clear) CLEAR_BLUR_PASSES else FROSTED_BLUR_PASSES
+        val scale = minOf(1f, edge.toFloat() / maxOf(source.width, source.height))
+        val w = (source.width * scale).toInt().coerceAtLeast(1)
+        val h = (source.height * scale).toInt().coerceAtLeast(1)
+        val small = Bitmap.createScaledBitmap(source, w, h, true)
+        val pixels = IntArray(w * h)
+        small.getPixels(pixels, 0, w, 0, 0, w, h)
+        // Repeated box passes approximate a gaussian; cheap at these sizes.
+        repeat(passes) {
+            boxBlur(pixels, w, h, radius, horizontal = true)
+            boxBlur(pixels, w, h, radius, horizontal = false)
+        }
+        Bitmap.createBitmap(pixels, w, h, Bitmap.Config.ARGB_8888)
+    }.getOrNull()
+
+    private fun boxBlur(pixels: IntArray, w: Int, h: Int, r: Int, horizontal: Boolean) {
+        val source = pixels.copyOf()
+        val lines = if (horizontal) h else w
+        val length = if (horizontal) w else h
+        val window = 2 * r + 1
+        for (line in 0 until lines) {
+            fun at(i: Int): Int {
+                val c = i.coerceIn(0, length - 1)
+                return source[if (horizontal) line * w + c else c * w + line]
+            }
+            var red = 0
+            var green = 0
+            var blue = 0
+            for (i in -r..r) {
+                val p = at(i)
+                red += (p shr 16) and 0xFF
+                green += (p shr 8) and 0xFF
+                blue += p and 0xFF
+            }
+            for (i in 0 until length) {
+                val index = if (horizontal) line * w + i else i * w + line
+                pixels[index] = (0xFF shl 24) or ((red / window) shl 16) or
+                    ((green / window) shl 8) or (blue / window)
+                val add = at(i + r + 1)
+                val remove = at(i - r)
+                red += ((add shr 16) and 0xFF) - ((remove shr 16) and 0xFF)
+                green += ((add shr 8) and 0xFF) - ((remove shr 8) and 0xFF)
+                blue += (add and 0xFF) - (remove and 0xFF)
+            }
+        }
+    }
+
+    /** Drawables that follow their view's position on screen each frame. */
+    private interface LivePositioned {
+        fun updateLiveScreenPosition(): Boolean
+    }
+
+    /**
+     * Tracks where a view is on screen. getLocationOnScreen() can lag while
+     * RecyclerView animates on the render thread; the ancestor scroll deltas
+     * stay live, so they fill that gap without any synthetic movement.
+     */
+    private class ScreenTracker(private val owner: View?) {
+        var x = 0f
+            private set
+        var y = 0f
+            private set
+        private val location = IntArray(2)
+        private val scrollContainers = mutableListOf<RecyclerView>()
+        private var resolved = false
+        private var initialized = false
+        private var previousRawX = 0
+        private var previousRawY = 0
+        private var previousScrollX = 0
+        private var previousScrollY = 0
+
+        /** Returns true when the position changed (always true the first time). */
+        fun update(): Boolean {
+            val target = owner ?: return false
+            target.getLocationOnScreen(location)
+            if (!resolved) {
+                var ancestor = target.parent
+                while (ancestor != null) {
+                    if (ancestor is RecyclerView) scrollContainers += ancestor
+                    ancestor = ancestor.parent
+                }
+                resolved = target.isAttachedToWindow
+            }
+            val rawX = location[0]
+            val rawY = location[1]
+            val scrollX = scrollContainers.sumOf { it.computeHorizontalScrollOffset() }
+            val scrollY = scrollContainers.sumOf { it.computeVerticalScrollOffset() }
+            if (!initialized) {
+                initialized = true
+                x = rawX.toFloat()
+                y = rawY.toFloat()
+                previousRawX = rawX
+                previousRawY = rawY
+                previousScrollX = scrollX
+                previousScrollY = scrollY
+                return true
+            }
+            val nextX = if (rawX != previousRawX) rawX.toFloat() else x - (scrollX - previousScrollX)
+            val nextY = if (rawY != previousRawY) rawY.toFloat() else y - (scrollY - previousScrollY)
+            val changed = abs(nextX - x) > 0.1f || abs(nextY - y) > 0.1f
+            x = nextX
+            y = nextY
+            previousRawX = rawX
+            previousRawY = rawY
+            previousScrollX = scrollX
+            previousScrollY = scrollY
+            return changed
+        }
+    }
+
+    private class CompatGlassDrawable(
+        private val radius: Float,
+        focused: Boolean,
+        accentColor: Int?,
+        owner: View?,
+        activeTheme: Theme,
+        private val fallback: Drawable
+    ) : Drawable(), LivePositioned {
+        private val tracker = ScreenTracker(owner)
+        private val extreme = activeTheme == Theme.EXTREME
+        private val rect = RectF()
+        private val matrix = Matrix()
+        private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+            // Dim the artwork so text on the card stays readable.
+            val level = when {
+                extreme && focused -> 0xC4
+                extreme -> 0xAC
+                focused -> 0xA4
+                else -> 0x8C
+            }
+            colorFilter = LightingColorFilter(Color.rgb(level, level, level), 0)
+        }
+        private val frostPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            val frost = accentColor ?: Color.WHITE
+            color = ColorUtils.setAlphaComponent(
+                frost,
+                when {
+                    accentColor != null -> if (focused) 0x58 else 0x40
+                    extreme -> if (focused) 0x14 else 0x06
+                    else -> if (focused) 0x52 else 0x3C
+                }
+            )
+        }
+        // Darkens the lower part of the card, where the title and date sit,
+        // so text stays readable over bright or busy artwork.
+        private val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val scrimStrength = if (extreme) 0xC8 else 0x78
+        private var fromShader: BitmapShader? = null
+        private var fromSource: Bitmap? = null
+        private var toShader: BitmapShader? = null
+        private var toSource: Bitmap? = null
+
+        override fun updateLiveScreenPosition(): Boolean = tracker.update()
+
+        private fun shaderFor(backdrop: CompatBackdrop, isFrom: Boolean): BitmapShader {
+            val cached = if (isFrom) fromShader else toShader
+            val cachedSource = if (isFrom) fromSource else toSource
+            if (cached != null && cachedSource === backdrop.bitmap) return cached
+            return BitmapShader(backdrop.bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).also {
+                if (isFrom) {
+                    fromShader = it
+                    fromSource = backdrop.bitmap
+                } else {
+                    toShader = it
+                    toSource = backdrop.bitmap
+                }
+            }
+        }
+
+        private fun drawBackdrop(canvas: Canvas, backdrop: CompatBackdrop, isFrom: Boolean, alpha: Float) {
+            if (alpha <= 0.01f) return
+            val bitmap = backdrop.bitmap
+            val scale = maxOf(
+                backdrop.targetWidth.toFloat() / bitmap.width,
+                backdrop.targetHeight.toFloat() / bitmap.height
+            )
+            matrix.setScale(scale, scale)
+            matrix.postTranslate(
+                (backdrop.targetWidth - bitmap.width * scale) * 0.5f - tracker.x,
+                (backdrop.targetHeight - bitmap.height * scale) * 0.5f - tracker.y
+            )
+            // Extreme: a gentle lens magnification centred on the card.
+            if (extreme) matrix.postScale(1.12f, 1.12f, rect.centerX(), rect.centerY())
+            val shader = shaderFor(backdrop, isFrom)
+            shader.setLocalMatrix(matrix)
+            imagePaint.shader = shader
+            imagePaint.alpha = (alpha * 255).toInt().coerceIn(0, 255)
+            canvas.drawRoundRect(rect, radius, radius, imagePaint)
+        }
+
+        override fun onBoundsChange(bounds: Rect) {
+            rect.set(bounds)
+            fallback.bounds = bounds
+            scrimPaint.shader = LinearGradient(
+                0f, rect.top + rect.height() * 0.45f, 0f, rect.bottom,
+                Color.TRANSPARENT, Color.argb(scrimStrength, 0, 0, 0),
+                Shader.TileMode.CLAMP
+            )
+        }
+
+        override fun draw(canvas: Canvas) {
+            val from = compatFrom
+            val to = compatTo
+            if (from == null && to == null) {
+                fallback.draw(canvas)
+                return
+            }
+            tracker.update()
+            // Fading to or from "no artwork": the plain glass shows through.
+            if (from == null || to == null) fallback.draw(canvas)
+            from?.let { drawBackdrop(canvas, it, isFrom = true, alpha = 1f - backdropMix) }
+            to?.let { drawBackdrop(canvas, it, isFrom = false, alpha = backdropMix) }
+            canvas.drawRoundRect(rect, radius, radius, scrimPaint)
+            canvas.drawRoundRect(rect, radius, radius, frostPaint)
+        }
+
+        override fun setAlpha(alpha: Int) {
+            fallback.alpha = alpha
+            invalidateSelf()
+        }
+
+        override fun setColorFilter(colorFilter: ColorFilter?) {
+            fallback.colorFilter = colorFilter
+            invalidateSelf()
+        }
+
+        @Deprecated("Deprecated in Android")
+        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+    }
+
+    /** Light on the front face of a card on Android 12 and older. */
+    private fun compatOverlay(context: Context, radius: Float, focused: Boolean, accentColor: Int?): Drawable {
+        val extreme = theme == Theme.EXTREME
+        val edge = accentColor ?: Color.WHITE
+        val rim = GradientDrawable().apply {
+            setColor(Color.TRANSPARENT)
+            setStroke(
+                context.dp(if (focused) 1.6f else if (extreme) 1f else 0.75f).toInt().coerceAtLeast(1),
+                ColorUtils.setAlphaComponent(edge, if (focused) 0xD0 else if (extreme) 0x70 else 0x38)
+            )
+            cornerRadius = radius
+        }
+        if (!extreme) return rim
+        // A soft sheen across the top edge, like light catching curved glass.
+        val sheen = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(if (focused) 0x30FFFFFF else 0x20FFFFFF, 0x00FFFFFF, 0x00FFFFFF)
+        ).apply { cornerRadius = radius }
+        return LayerDrawable(arrayOf(sheen, rim))
+    }
+
     fun drawable(
         context: Context,
         emphasis: Emphasis,
@@ -264,6 +552,10 @@ object GlassSurface {
                     refractBackdrop = context.findActivity() is BackdropRefractionHost
                 )
             }
+            context.findActivity() is BackdropRefractionHost -> CompatGlassDrawable(
+                radius, focused, accentColor, owner, activeTheme,
+                fallback = fallbackDrawable(radius, emphasis, focused, accentColor, activeTheme)
+            )
             else -> fallbackDrawable(radius, emphasis, focused, accentColor, activeTheme)
         }
 
@@ -385,82 +677,27 @@ object GlassSurface {
         private val owner: View?,
         activeTheme: Theme,
         private val refractBackdrop: Boolean = true
-    ) : Drawable() {
+    ) : Drawable(), LivePositioned {
         private val shader = RuntimeShader(GLASS_SHADER)
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = this@RuntimeGlassDrawable.shader
         }
         private val drawingBounds = RectF()
-        private val screenLocation = IntArray(2)
-        private val scrollContainers = mutableListOf<RecyclerView>()
+        private val tracker = ScreenTracker(owner)
         private var appliedBackdropGeneration = -1
-        private var scrollContainersResolved = false
-        private var positionInitialized = false
-        private var previousRawX = 0
-        private var previousRawY = 0
-        private var previousScrollX = 0
-        private var previousScrollY = 0
-        private var effectiveX = 0f
-        private var effectiveY = 0f
-
-        /**
-         * Keeps the backdrop sample attached to this card while RecyclerView is
-         * animating it on the render thread. getLocationOnScreen() can lag until
-         * scrolling settles; the ancestor scroll deltas remain live, so they fill
-         * that gap without introducing any synthetic or page-wide movement.
-         */
-        fun updateLiveScreenPosition(): Boolean {
-            val target = owner ?: return false
-            target.getLocationOnScreen(screenLocation)
-            resolveScrollContainers(target)
-
-            val rawX = screenLocation[0]
-            val rawY = screenLocation[1]
-            val scrollX = scrollContainers.sumOf { it.computeHorizontalScrollOffset() }
-            val scrollY = scrollContainers.sumOf { it.computeVerticalScrollOffset() }
-
-            if (!positionInitialized) {
-                positionInitialized = true
-                effectiveX = rawX.toFloat()
-                effectiveY = rawY.toFloat()
-                previousRawX = rawX
-                previousRawY = rawY
-                previousScrollX = scrollX
-                previousScrollY = scrollY
-                shader.setFloatUniform("screenOrigin", effectiveX, effectiveY)
-                return true
-            }
-
-            val nextX = if (rawX != previousRawX) {
-                rawX.toFloat()
-            } else {
-                effectiveX - (scrollX - previousScrollX)
-            }
-            val nextY = if (rawY != previousRawY) {
-                rawY.toFloat()
-            } else {
-                effectiveY - (scrollY - previousScrollY)
-            }
-            val changed = abs(nextX - effectiveX) > 0.1f || abs(nextY - effectiveY) > 0.1f
-
-            effectiveX = nextX
-            effectiveY = nextY
-            previousRawX = rawX
-            previousRawY = rawY
-            previousScrollX = scrollX
-            previousScrollY = scrollY
-            if (changed) shader.setFloatUniform("screenOrigin", effectiveX, effectiveY)
-            return changed
+        // Darkens the lower part of cards, where the title and date sit, so
+        // text stays readable over the sharp refracted artwork.
+        private val scrimStrength = when {
+            emphasis != Emphasis.CARD -> 0
+            activeTheme == Theme.EXTREME -> 0xD0
+            else -> 0x80
         }
+        private val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-        private fun resolveScrollContainers(target: View) {
-            if (scrollContainersResolved) return
-            var ancestor = target.parent
-            while (ancestor != null) {
-                if (ancestor is RecyclerView) scrollContainers += ancestor
-                ancestor = ancestor.parent
-            }
-            scrollContainersResolved = target.isAttachedToWindow
+        override fun updateLiveScreenPosition(): Boolean {
+            val changed = tracker.update()
+            if (changed) shader.setFloatUniform("screenOrigin", tracker.x, tracker.y)
+            return changed
         }
 
         init {
@@ -489,6 +726,13 @@ object GlassSurface {
 
         override fun onBoundsChange(bounds: Rect) {
             drawingBounds.set(bounds)
+            if (scrimStrength > 0) {
+                scrimPaint.shader = LinearGradient(
+                    0f, bounds.top + bounds.height() * 0.45f, 0f, bounds.bottom.toFloat(),
+                    Color.TRANSPARENT, Color.argb(scrimStrength, 0, 0, 0),
+                    Shader.TileMode.CLAMP
+                )
+            }
             shader.setFloatUniform("origin", bounds.left.toFloat(), bounds.top.toFloat())
             shader.setFloatUniform("radius", radius)
             shader.setFloatUniform(
@@ -510,6 +754,7 @@ object GlassSurface {
             shader.setFloatUniform("backdropMix", backdropMix)
             updateLiveScreenPosition()
             canvas.drawRoundRect(drawingBounds, radius, radius, paint)
+            if (scrimStrength > 0) canvas.drawRoundRect(drawingBounds, radius, radius, scrimPaint)
         }
 
         override fun setAlpha(alpha: Int) {
@@ -607,6 +852,16 @@ object GlassSurface {
             accentColor,
             owner = view
         )
+        if (emphasis == Emphasis.CARD && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU &&
+            (theme == Theme.FROSTED || theme == Theme.EXTREME) &&
+            view.context.findActivity() is BackdropRefractionHost
+        ) {
+            val radius = when (shape) {
+                Shape.CIRCLE, Shape.PILL -> view.context.dp(999f)
+                Shape.ROUNDED -> view.context.dp(cornerRadiusDp)
+            }
+            view.foreground = compatOverlay(view.context, radius, focused, accentColor)
+        }
         if (emphasis == Emphasis.CARD && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val radius = when (shape) {
                 Shape.CIRCLE, Shape.PILL -> view.context.dp(999f)
@@ -690,7 +945,9 @@ object GlassSurface {
     }
 
     private fun applyTextHalo(view: View) {
-        if (view is TextView && ColorUtils.calculateLuminance(view.currentTextColor) > 0.25) {
+        if (view is TextView && !VectorFont.isVector(view) &&
+            ColorUtils.calculateLuminance(view.currentTextColor) > 0.25
+        ) {
             val shadowColor = if (theme == Theme.NEON) 0xB000CFE8.toInt() else 0xF0000000.toInt()
             view.setShadowLayer(view.context.dp(if (theme == Theme.NEON) 4f else 7f), 0f,
                 view.context.dp(1.5f), shadowColor)

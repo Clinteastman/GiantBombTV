@@ -70,6 +70,7 @@ class MobileShowGridFragment : Fragment() {
 
         recycler = view.findViewById(R.id.grid_recycler)
         titleView = view.findViewById(R.id.grid_title)
+        com.giantbomb.tv.ui.VectorFont.applyIfNeon(titleView)
         emptyView = view.findViewById(R.id.grid_empty)
         loadingView = view.findViewById(R.id.grid_loading)
 

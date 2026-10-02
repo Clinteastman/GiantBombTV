@@ -70,6 +70,10 @@ class BrowseFragment : BrowseSupportFragment() {
         const val SETTINGS_TWITCH_CHAT = 7
         const val SETTINGS_DOWNLOADS = 8
         const val SETTINGS_VISUAL_THEME = 9
+        // Neon HUD lettering sizes: side menu (narrow, one line) and the
+        // titles above each row.
+        const val NEON_SIDE_HEADER_SP = 19f
+        const val NEON_ROW_TITLE_SP = 26f
         const val SETTINGS_NEON_PARTICLES = 10
         private const val BACKDROP_DELAY_MS = 300L
         private const val CROSSFADE_DURATION = 600L
@@ -241,10 +245,21 @@ class BrowseFragment : BrowseSupportFragment() {
             // distinction instead of relying on low opacity.
             holder.view.alpha = 1f
             tv.alpha = 1f
+            val neon = GlassSurface.theme == GlassSurface.Theme.NEON
+            if (neon) {
+                com.giantbomb.tv.ui.VectorFont.applyIfNeon(tv)
+                // The side menu is narrow: keep each name on one line rather
+                // than letting the wider lettering wrap mid-word.
+                tv.maxLines = 1
+                tv.ellipsize = android.text.TextUtils.TruncateAt.END
+                tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, NEON_SIDE_HEADER_SP)
+            }
             tv.setTextColor(
                 when {
+                    // Geometry Wars HUD green; brighter on the focused header.
+                    neon && selected -> 0xFFC6FF9E.toInt()
+                    neon -> com.giantbomb.tv.ui.VectorFont.GW_GREEN
                     selected -> android.graphics.Color.WHITE
-                    GlassSurface.theme == GlassSurface.Theme.NEON -> 0xE8F1F5FF.toInt()
                     else -> 0xDEFFFFFF.toInt()
                 }
             )
@@ -252,12 +267,12 @@ class BrowseFragment : BrowseSupportFragment() {
                 "sans-serif-medium",
                 if (selected) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL
             )
-            if (GlassSurface.theme == GlassSurface.Theme.NEON) {
+            if (neon) {
                 tv.setShadowLayer(
-                    if (selected) 9f else 5f,
+                    if (selected) 10f else 6f,
                     0f,
                     0f,
-                    if (selected) 0xCC35E9FF.toInt() else 0x99000000.toInt()
+                    if (selected) 0xE07CFF3C.toInt() else 0x904CFF1E.toInt()
                 )
             } else {
                 tv.setShadowLayer(if (selected) 6f else 4f, 0f, 1f, 0xCC000000.toInt())
@@ -273,7 +288,7 @@ class BrowseFragment : BrowseSupportFragment() {
                     start, end, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
                 span.setSpan(
-                    android.text.style.RelativeSizeSpan(0.72f),
+                    android.text.style.RelativeSizeSpan(if (neon) 0.5f else 0.72f),
                     start, end, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
                 span.setSpan(
@@ -510,13 +525,40 @@ class BrowseFragment : BrowseSupportFragment() {
                     com.bumptech.glide.load.resource.bitmap.CenterCrop(),
                     com.giantbomb.tv.ui.BlurTransformation(radius = 2, passes = 2)
                 )
+                // The displayed backdrop is pre-blurred on these versions, so
+                // give the glass its own unblurred copy: Extreme's clear lens
+                // needs the detail that the blur removes.
+                if (GlassSurface.usesBackdropRefraction) {
+                    Glide.with(requireContext())
+                        .asBitmap()
+                        .load(imageUrl)
+                        .override(960, 540)
+                        .centerCrop()
+                        .into(object : com.bumptech.glide.request.target.CustomTarget<android.graphics.Bitmap>() {
+                            override fun onResourceReady(
+                                bitmap: android.graphics.Bitmap,
+                                transition: com.bumptech.glide.request.transition.Transition<in android.graphics.Bitmap>?
+                            ) {
+                                if (!isAdded || currentBackdropUrl != imageUrl) return
+                                GlassSurface.updateBackdrop(
+                                    bitmap,
+                                    requireActivity().window.decorView.width,
+                                    requireActivity().window.decorView.height
+                                )
+                            }
+                            override fun onLoadCleared(placeholder: android.graphics.drawable.Drawable?) = Unit
+                        })
+                }
             }
             backdropRequest.into(object : com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
                     override fun onResourceReady(resource: android.graphics.drawable.Drawable, transition: com.bumptech.glide.request.transition.Transition<in android.graphics.drawable.Drawable>?) {
                         // Focus may have moved on while this loaded; a late
                         // older image must not replace the newer backdrop.
                         if (!isAdded || currentBackdropUrl != imageUrl) return
-                        (resource as? BitmapDrawable)?.bitmap?.let { bitmap ->
+                        // On older versions the glass gets the unblurred copy above.
+                        (resource as? BitmapDrawable)?.bitmap
+                            ?.takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.S }
+                            ?.let { bitmap ->
                             GlassSurface.updateBackdrop(
                                 bitmap,
                                 requireActivity().window.decorView.width,
@@ -563,6 +605,27 @@ class BrowseFragment : BrowseSupportFragment() {
             val rowPresenter = ListRowPresenter(androidx.leanback.widget.FocusHighlight.ZOOM_FACTOR_NONE).apply {
                 shadowEnabled = false
                 selectEffectEnabled = false  // disable the dim overlay on unfocused rows
+                // Row titles above each row use the Neon vector lettering.
+                headerPresenter = object : RowHeaderPresenter() {
+                    override fun onBindViewHolder(viewHolder: Presenter.ViewHolder, item: Any?) {
+                        super.onBindViewHolder(viewHolder, item)
+                        viewHolder.view.findViewById<android.widget.TextView>(
+                            androidx.leanback.R.id.row_header
+                        )?.let { title ->
+                            com.giantbomb.tv.ui.VectorFont.applyIfNeon(title)
+                            if (GlassSurface.theme == GlassSurface.Theme.NEON) {
+                                title.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, NEON_ROW_TITLE_SP)
+                            }
+                        }
+                    }
+
+                    // Leanback fades the titles of unselected rows; in Neon the
+                    // HUD lettering stays at full brightness, like the game.
+                    override fun onSelectLevelChanged(holder: RowHeaderPresenter.ViewHolder) {
+                        super.onSelectLevelChanged(holder)
+                        if (GlassSurface.theme == GlassSurface.Theme.NEON) holder.view.alpha = 1f
+                    }
+                }
             }
             val rowsAdapter = ArrayObjectAdapter(rowPresenter)
             headerIdCounter = 0L
@@ -805,19 +868,11 @@ class BrowseFragment : BrowseSupportFragment() {
     }
 
     private fun showVisualThemePicker() {
-        val values = PrefsManager.VISUAL_THEMES
-        val labels = values.map(PrefsManager::visualThemeLabel).toTypedArray()
-        val selected = values.indexOf(prefs.visualTheme).coerceAtLeast(0)
-        android.app.AlertDialog.Builder(requireContext())
-            .setTitle("Visual Theme")
-            .setSingleChoiceItems(labels, selected) { dialog, which ->
-                prefs.visualTheme = values[which]
-                GlassSurface.configure(values[which])
-                dialog.dismiss()
-                requireActivity().recreate()
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        com.giantbomb.tv.ui.ThemePickerDialog.show(requireContext(), prefs.visualTheme) { value ->
+            prefs.visualTheme = value
+            GlassSurface.configure(value)
+            requireActivity().recreate()
+        }
     }
 
     private fun toggleNeonParticles() {
@@ -1087,14 +1142,17 @@ class BrowseFragment : BrowseSupportFragment() {
             SETTINGS_VISUAL_THEME,
             "Visual Theme",
             PrefsManager.visualThemeLabel(prefs.visualTheme),
-            R.drawable.ic_settings_cog
+            R.drawable.ic_settings_theme
         ))
-        utilAdapter.add(SettingsItem(
-            SETTINGS_NEON_PARTICLES,
-            "Neon Grid Motion",
-            if (prefs.neonParticlesEnabled) "On - grid reacts to movement" else "Off - static grid",
-            R.drawable.ic_settings_cog
-        ))
+        // Only meaningful for the Neon theme, so only shown there.
+        if (prefs.visualTheme == PrefsManager.THEME_NEON) {
+            utilAdapter.add(SettingsItem(
+                SETTINGS_NEON_PARTICLES,
+                "Neon Grid Motion",
+                if (prefs.neonParticlesEnabled) "On - grid reacts to movement" else "Off - static grid",
+                R.drawable.ic_settings_motion
+            ))
+        }
         utilAdapter.add(SettingsItem(
             SETTINGS_DOWNLOADS,
             "Downloads",

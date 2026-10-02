@@ -436,6 +436,8 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             bold = false
         ).apply {
             contentDescription = "Download for offline viewing"
+            // On TV the button row is tight; never wrap a label mid-word.
+            isSingleLine = true
             setPadding(24.dp(), 10.dp(), 24.dp(), 10.dp())
             visibility = View.GONE
             layoutParams = if (isTv) {
@@ -458,10 +460,14 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 if (d != null || downloadSource != null) View.VISIBLE else View.GONE
             downloadButton.text = when (d?.status) {
                 DownloadStatus.COMPLETED -> "✓ Downloaded"
-                DownloadStatus.DOWNLOADING -> "Downloading ${d.progressPercent}%"
+                DownloadStatus.DOWNLOADING -> "↓ ${d.progressPercent}%"
                 DownloadStatus.QUEUED -> "Queued…"
                 DownloadStatus.FAILED -> "Retry Download"
                 else -> "Download"
+            }
+            downloadButton.contentDescription = when (d?.status) {
+                DownloadStatus.DOWNLOADING -> "Downloading, ${d.progressPercent} percent. Select to cancel"
+                else -> downloadButton.text
             }
         }
         renderDownloadButton()

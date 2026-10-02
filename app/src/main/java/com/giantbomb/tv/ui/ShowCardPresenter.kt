@@ -36,6 +36,7 @@ class ShowCardPresenter(
         // ImageCardView truncates it to one ellipsized line. Marquee the
         // title so the full name scrolls while the card is focused.
         val titleView = cardView.findViewById<TextView>(androidx.leanback.R.id.title_text)
+        titleView?.let(VectorFont::applyIfNeon)
         titleView?.apply {
             ellipsize = TextUtils.TruncateAt.MARQUEE
             marqueeRepeatLimit = -1

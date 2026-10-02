@@ -62,6 +62,7 @@ class UpcomingCardView(context: Context) : FrameLayout(context) {
         glassBg = findViewById(R.id.upcoming_glass_bg)
         imageView = findViewById(R.id.upcoming_image)
         titleView = findViewById(R.id.upcoming_title)
+        VectorFont.applyIfNeon(titleView)
         timeView = findViewById(R.id.upcoming_time)
         premiumBadge = findViewById(R.id.upcoming_premium_badge)
         liveBadge = findViewById(R.id.upcoming_live_badge)
