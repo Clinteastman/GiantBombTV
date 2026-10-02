@@ -312,3 +312,9 @@ These tools handle the repetitive parts of solo development (writing tests, revi
 ## License
 
 This project is provided as-is for personal, non-commercial use only.
+
+### Third-party credits
+
+- The Neon theme's vector lettering uses glyph data from
+  [arcadefont](https://github.com/coolbutuseless/arcadefont) by mikefc
+  (coolbutuseless), MIT licence, Copyright (c) 2020 mikefc@coolbutuseless.com.
