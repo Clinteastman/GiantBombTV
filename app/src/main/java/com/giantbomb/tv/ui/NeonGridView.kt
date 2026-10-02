@@ -31,13 +31,12 @@ class NeonGridView @JvmOverloads constructor(
     private val isTelevision =
         resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK ==
             Configuration.UI_MODE_TYPE_TELEVISION
-    // TV emulators are particularly sensitive to full-screen vector work. A
-    // slightly wider mesh and fewer, longer-lived trails preserve the hectic
-    // look without asking the renderer to paint thousands of glowing strokes.
-    private val spacing = (if (isTelevision) 44f else 26f) * density
+    // One even mesh, about 30 cells across a 1080p TV like Geometry Wars.
+    // Every line is a simulated spring; there are no decorative sub-lines.
+    private val spacing = (if (isTelevision) 33f else 22f) * density
     private val particleLimit = if (isTelevision) 400 else 600
-    // Half a cell: far enough to read as a deep dent, never far enough to fold.
-    private val maxDisplacement = spacing * 0.6f
+    // Deep enough for the game's tunnels and funnels where lines bunch up.
+    private val maxDisplacement = spacing * 1.3f
     private var columns = 0
     private var rows = 0
     private var dx = FloatArray(0)
@@ -49,74 +48,55 @@ class NeonGridView @JvmOverloads constructor(
     private var nodePoints = FloatArray(0)
     private var gridLines = FloatArray(0)
     private var fineGridLines = FloatArray(0)
-    private var energyLines = FloatArray(0)
     private var gridLineCount = 0
     private var fineGridLineCount = 0
-    private var energyLineCount = 0
     private var lastFrameNanos = 0L
     private var frameNumber = 0
     private var accumulatedStep = 0f
     private var motionEnabled = true
     // True once the mesh has come to rest and no sparks are alive.
     private var settled = false
+    private var sparksThisFrame = 0
 
-    private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xD03A4CFF.toInt()
-        strokeWidth = 0.72f * density
+    private val gridPaint = Paint().apply {
+        color = GRID_BLUE
+        strokeWidth = 1.1f * density
         style = Paint.Style.STROKE
     }
-    private val fineGridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val fineGridPaint = Paint().apply {
         color = 0x38405AC8
         strokeWidth = 0.34f * density
         style = Paint.Style.STROKE
     }
-    private val gridOuterGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x14264CFF
+    private val gridOuterGlowPaint = Paint().apply {
+        color = 0x141E30FF
         strokeWidth = 6.4f * density
         style = Paint.Style.STROKE
     }
-    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x34345FFF
+    private val glowPaint = Paint().apply {
+        color = 0x301E30FF
         strokeWidth = 3.1f * density
         style = Paint.Style.STROKE
     }
-    private val nodePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val nodePaint = Paint().apply {
         color = 0xB36E7CFF.toInt()
         strokeWidth = 1.3f * density
         strokeCap = Paint.Cap.ROUND
     }
-    private val energyGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x903A4CFF.toInt()
-        strokeWidth = 7f * density
-        strokeCap = Paint.Cap.ROUND
-        style = Paint.Style.STROKE
-    }
-    private val energyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF3A4CFF.toInt()
-        strokeWidth = 2.2f * density
-        strokeCap = Paint.Cap.ROUND
-        style = Paint.Style.STROKE
-    }
-    private val particlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val particlePaint = Paint().apply {
         strokeWidth = 1.7f * density
         strokeCap = Paint.Cap.ROUND
     }
-    private val bloomGridSourcePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xC43A52FF.toInt()
+    private val bloomGridSourcePaint = Paint().apply {
+        color = 0xB01E30FF.toInt()
         strokeWidth = 1.15f * density
         style = Paint.Style.STROKE
     }
-    private val bloomEnergySourcePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF3A4CFF.toInt()
-        strokeWidth = 3f * density
+    private val bloomParticleSourcePaint = Paint().apply {
         strokeCap = Paint.Cap.ROUND
         style = Paint.Style.STROKE
     }
-    private val bloomParticleSourcePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        strokeCap = Paint.Cap.ROUND
-        style = Paint.Style.STROKE
-    }
-    private val particleHotCorePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val particleHotCorePaint = Paint().apply {
         color = Color.WHITE
         strokeCap = Paint.Cap.ROUND
     }
@@ -154,6 +134,8 @@ class NeonGridView @JvmOverloads constructor(
 
     private fun addParticle(x: Float, y: Float, vx: Float, vy: Float, life: Float,
                             colour: Int, decay: Float = 0.0018f) {
+        if (sparksThisFrame >= SPARK_BUDGET_PER_FRAME) return
+        sparksThisFrame++
         val p = if (freeParticles.isEmpty()) {
             particles[replacementIndex].also {
                 replacementIndex = (replacementIndex + 1) % particles.size
@@ -169,7 +151,7 @@ class NeonGridView @JvmOverloads constructor(
     // Batch particles by colour and rough lifetime instead of issuing several
     // Canvas calls per particle. This keeps hundreds of independently moving
     // particles affordable during a high-refresh scroll.
-    private val particleLines = Array(colours.size * 3) { FloatArray(particleLimit * 12) }
+    private val particleLines = Array(colours.size * 3) { FloatArray(particleLimit * 4) }
     private val particleLineCounts = IntArray(colours.size * 3)
     private val particlePoints = Array(colours.size * 3) { FloatArray(particleLimit * 2) }
     private val particlePointCounts = IntArray(colours.size * 3)
@@ -179,9 +161,12 @@ class NeonGridView @JvmOverloads constructor(
         const val SETTLE_THRESHOLD = 0.05f
         // Per half-frame velocity retention for sparks.
         const val SPARK_DRAG = 0.955f
-        // Displacement (dp) before a line lights up. Only real dents glow,
-        // not the gentle drift from cards scrolling past.
-        const val ENERGY_THRESHOLD = 4f
+        // A focus burst (~140) fits in one frame; card drift adds a trickle.
+        const val SPARK_BUDGET_PER_FRAME = 160
+        // Saturated Geometry Wars grid blue.
+        const val GRID_BLUE = 0xFF1E30FF.toInt()
+        // Streak length per unit of spark speed.
+        const val STREAK_SCALE = 0.9f
         const val ANCHOR_STIFFNESS = 0.085f
         const val NEIGHBOUR_STIFFNESS = 0.055f
         const val MOTION_DRAG_FORCE = 0.32f
@@ -336,13 +321,13 @@ class NeonGridView @JvmOverloads constructor(
         val maxSegments = rows * (columns - 1) + (rows - 1) * columns
         gridLines = FloatArray(maxSegments * 4)
         fineGridLines = FloatArray(max(0, (rows - 1) * (columns - 1) * 6 * 4))
-        energyLines = FloatArray(maxSegments * 4)
         clearParticles()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         canvas.drawColor(0xF7000000.toInt())
+        sparksThisFrame = 0
         if (motionEnabled) stepSimulation()
         buildGridLines()
         if (motionEnabled) prepareParticleGeometry()
@@ -355,9 +340,7 @@ class NeonGridView @JvmOverloads constructor(
 
         // The original sharp spring mesh and particle filaments are composited
         // over the blurred emissive buffer, exactly like a post-process bloom.
-        canvas.drawLines(fineGridLines, 0, fineGridLineCount, fineGridPaint)
         canvas.drawLines(gridLines, 0, gridLineCount, gridPaint)
-        canvas.drawLines(energyLines, 0, energyLineCount, energyPaint)
         if (motionEnabled) drawParticleCores(canvas)
         // Keep animating only while the mesh is moving or sparks are alive.
         // A settled field costs nothing until the next disturbance wakes it.
@@ -453,7 +436,6 @@ class NeonGridView @JvmOverloads constructor(
     private fun buildGridLines() {
         gridLineCount = 0
         fineGridLineCount = 0
-        energyLineCount = 0
         for (row in 0 until rows) for (column in 0 until columns) {
             val i = row * columns + column
             val x = column * spacing + dx[i]
@@ -466,12 +448,6 @@ class NeonGridView @JvmOverloads constructor(
                 gridLines[gridLineCount++] = y
                 gridLines[gridLineCount++] = x2
                 gridLines[gridLineCount++] = y2
-                if (segmentEnergy(i, right) > ENERGY_THRESHOLD * density) {
-                    energyLines[energyLineCount++] = x
-                    energyLines[energyLineCount++] = y
-                    energyLines[energyLineCount++] = x2
-                    energyLines[energyLineCount++] = y2
-                }
             }
             if (row + 1 < rows) {
                 val below = i + columns
@@ -481,15 +457,8 @@ class NeonGridView @JvmOverloads constructor(
                 gridLines[gridLineCount++] = y
                 gridLines[gridLineCount++] = x2
                 gridLines[gridLineCount++] = y2
-                if (segmentEnergy(i, below) > ENERGY_THRESHOLD * density) {
-                    energyLines[energyLineCount++] = x
-                    energyLines[energyLineCount++] = y
-                    energyLines[energyLineCount++] = x2
-                    energyLines[energyLineCount++] = y2
-                }
             }
         }
-        buildFineGridLines()
     }
 
     /** Subdivides every elastic cell, so the subtle mesh follows the exact
@@ -534,9 +503,6 @@ class NeonGridView @JvmOverloads constructor(
     private fun lerp(start: Float, end: Float, fraction: Float): Float =
         start + (end - start) * fraction
 
-    private fun segmentEnergy(first: Int, second: Int): Float =
-        (hypot(dx[first], dy[first]) + hypot(dx[second], dy[second])) * 0.5f
-
     private fun drawNodes(canvas: Canvas) {
         var offset = 0
         for (row in 0 until rows) for (column in 0 until columns) {
@@ -578,12 +544,6 @@ class NeonGridView @JvmOverloads constructor(
         var index = 0
         while (index < particles.size) {
             val p = particles[index]
-            if (frameNumber % 2 == 0) {
-                p.x3 = p.x2; p.y3 = p.y2
-                p.x2 = p.x1; p.y2 = p.y1
-                p.x1 = p.x; p.y1 = p.y
-            }
-
             // Sparks fly straight and brake; they aren't pulled by the springy
             // grid (that made them swing back like boomerangs).
             p.x += p.vx * step
@@ -611,7 +571,8 @@ class NeonGridView @JvmOverloads constructor(
     private fun prepareParticleGeometry() {
         particleLineCounts.fill(0)
         particlePointCounts.fill(0)
-
+        val minLength = 1.5f * density
+        val maxLength = 11f * density
         for (p in particles) {
             val colourIndex = colours.indexOf(p.colour).coerceAtLeast(0)
             val lifeBand = when {
@@ -620,96 +581,61 @@ class NeonGridView @JvmOverloads constructor(
                 else -> 2
             }
             val bucket = colourIndex * 3 + lifeBand
-            var lineOffset = particleLineCounts[bucket]
+            val speed = hypot(p.vx, p.vy)
+            val length = (speed * STREAK_SCALE).coerceIn(minLength, maxLength)
+            val ux = if (speed > 0.01f) p.vx / speed else 1f
+            val uy = if (speed > 0.01f) p.vy / speed else 0f
+            var offset = particleLineCounts[bucket]
             val lines = particleLines[bucket]
-            lines[lineOffset++] = p.x
-            lines[lineOffset++] = p.y
-            lines[lineOffset++] = p.x1
-            lines[lineOffset++] = p.y1
-            lines[lineOffset++] = p.x1
-            lines[lineOffset++] = p.y1
-            lines[lineOffset++] = p.x2
-            lines[lineOffset++] = p.y2
-            lines[lineOffset++] = p.x2
-            lines[lineOffset++] = p.y2
-            lines[lineOffset++] = p.x3
-            lines[lineOffset++] = p.y3
-            particleLineCounts[bucket] = lineOffset
-            val offset = particlePointCounts[bucket]
-            particlePoints[bucket][offset] = p.x
-            particlePoints[bucket][offset + 1] = p.y
-            particlePointCounts[bucket] = offset + 2
+            lines[offset++] = p.x
+            lines[offset++] = p.y
+            lines[offset++] = p.x - ux * length
+            lines[offset++] = p.y - uy * length
+            particleLineCounts[bucket] = offset
+            particlePointCounts[bucket] += 1
         }
     }
 
     private fun drawParticleCores(canvas: Canvas) {
         for (bucket in particleLines.indices) {
-            val count = particlePointCounts[bucket]
-            if (count == 0) continue
+            if (particlePointCounts[bucket] == 0) continue
             val colour = colours[bucket / 3]
             val alpha = particleBandAlpha[bucket % 3]
             particlePaint.color = Color.argb(
                 alpha, Color.red(colour), Color.green(colour), Color.blue(colour)
             )
-            particlePaint.strokeWidth = 1.7f * density
-            canvas.drawLines(
-                particleLines[bucket], 0, particleLineCounts[bucket], particlePaint
-            )
-
-            particlePaint.color = Color.argb(
-                alpha, Color.red(colour), Color.green(colour), Color.blue(colour)
-            )
-            particlePaint.strokeWidth = 2.3f * density
-            canvas.drawPoints(particlePoints[bucket], 0, count, particlePaint)
-
-            // Bright cores give the coloured screen-space bloom an emissive,
-            // almost over-exposed centre instead of reading as pastel fog.
-            if (bucket % 3 == 2) {
-                particleHotCorePaint.alpha = 225
-                particleHotCorePaint.strokeWidth = 1.05f * density
-                canvas.drawPoints(particlePoints[bucket], 0, count, particleHotCorePaint)
-            }
+            particlePaint.strokeWidth = 2f * density
+            canvas.drawLines(particleLines[bucket], 0, particleLineCounts[bucket], particlePaint)
         }
     }
 
     private fun drawBloomSources(canvas: Canvas) {
         canvas.drawLines(gridLines, 0, gridLineCount, bloomGridSourcePaint)
-        canvas.drawLines(energyLines, 0, energyLineCount, bloomEnergySourcePaint)
         drawParticleBloomSources(canvas, wide = false)
     }
 
     private fun drawParticleBloomSources(canvas: Canvas, wide: Boolean) {
         if (!motionEnabled) return
-
         for (bucket in particleLines.indices) {
-            val count = particlePointCounts[bucket]
-            if (count == 0) continue
+            if (particlePointCounts[bucket] == 0) continue
             val colour = colours[bucket / 3]
             val alpha = particleBandAlpha[bucket % 3]
             bloomParticleSourcePaint.color = Color.argb(
                 if (wide) min(255, alpha + 45) else alpha,
                 Color.red(colour), Color.green(colour), Color.blue(colour)
             )
-            bloomParticleSourcePaint.strokeWidth = (if (wide) 3.8f else 2.2f) * density
-            canvas.drawLines(
-                particleLines[bucket], 0, particleLineCounts[bucket], bloomParticleSourcePaint
-            )
-            bloomParticleSourcePaint.strokeWidth = (if (wide) 6.2f else 3.2f) * density
-            canvas.drawPoints(
-                particlePoints[bucket], 0, count, bloomParticleSourcePaint
-            )
+            bloomParticleSourcePaint.strokeWidth = (if (wide) 4.5f else 2.6f) * density
+            canvas.drawLines(particleLines[bucket], 0, particleLineCounts[bucket], bloomParticleSourcePaint)
         }
     }
 
     private fun drawFallbackGlow(canvas: Canvas) {
         canvas.drawLines(gridLines, 0, gridLineCount, gridOuterGlowPaint)
         canvas.drawLines(gridLines, 0, gridLineCount, glowPaint)
-        canvas.drawLines(energyLines, 0, energyLineCount, energyGlowPaint)
         if (!motionEnabled) return
 
         for (bucket in particleLines.indices) {
-            val count = particlePointCounts[bucket]
-            if (count == 0) continue
+            if (particlePointCounts[bucket] == 0) continue
             val colour = colours[bucket / 3]
             val alpha = particleBandAlpha[bucket % 3]
             particlePaint.color = Color.argb(
@@ -720,8 +646,6 @@ class NeonGridView @JvmOverloads constructor(
             canvas.drawLines(
                 particleLines[bucket], 0, particleLineCounts[bucket], particlePaint
             )
-            particlePaint.strokeWidth = 9f * density
-            canvas.drawPoints(particlePoints[bucket], 0, count, particlePaint)
         }
     }
 
