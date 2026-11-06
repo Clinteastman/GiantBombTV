@@ -25,6 +25,7 @@ import androidx.core.graphics.ColorUtils
 object CardFocus {
     const val FOCUSED_SCALE = 1.10f
     private const val DURATION_MS = 150L
+    private val EASE = DecelerateInterpolator()
 
     /**
      * Installs the focus ring on [target] and returns a [Ring] to call from
@@ -64,12 +65,12 @@ object CardFocus {
                 .scaleX(scale)
                 .scaleY(scale)
                 .setDuration(DURATION_MS)
-                .setInterpolator(DecelerateInterpolator())
+                .setInterpolator(EASE)
                 .start()
             animator?.cancel()
             animator = ValueAnimator.ofFloat(drawable.progress, if (focused) 1f else 0f).apply {
                 duration = DURATION_MS
-                interpolator = DecelerateInterpolator()
+                interpolator = EASE
                 addUpdateListener { drawable.progress = it.animatedValue as Float }
                 start()
             }
