@@ -565,8 +565,9 @@ object GlassSurface {
         // legibility over moving video.
         if (emphasis == Emphasis.CARD) return base
 
-        val borderColor = if (focused) 0xE6FFFFFF.toInt() else 0x66FFFFFF
-        val borderWidth = context.dp(if (focused) 1.5f else 0.75f).toInt().coerceAtLeast(1)
+        // A thick solid rim marks the focused control from across a room.
+        val borderColor = if (focused) 0xFFFFFFFF.toInt() else 0x66FFFFFF
+        val borderWidth = context.dp(if (focused) 3f else 0.75f).toInt().coerceAtLeast(1)
         val rim = GradientDrawable().apply {
             setColor(Color.TRANSPARENT)
             setStroke(borderWidth, borderColor)

@@ -43,9 +43,9 @@ class ShowCardPresenter(
             isSingleLine = true
         }
 
+        val focusRing = CardFocus.install(cardView)
         cardView.setOnFocusChangeListener { v, hasFocus ->
-            val scale = if (hasFocus) 1.05f else 1.0f
-            v.animate().scaleX(scale).scaleY(scale).setDuration(150).start()
+            focusRing.update(hasFocus)
             GlassSurface.applyState(v, GlassSurface.Emphasis.CARD, hasFocus)
             // Marquee only animates while the view is "selected"; tie that to
             // focus so the focused card scrolls its full title.

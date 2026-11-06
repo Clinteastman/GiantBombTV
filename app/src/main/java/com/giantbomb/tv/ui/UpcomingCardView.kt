@@ -115,9 +115,9 @@ class UpcomingCardView(context: Context) : FrameLayout(context) {
         isFocusable = true
         isFocusableInTouchMode = true
 
+        val focusRing = CardFocus.install(cardRoot, liftView = this)
         setOnFocusChangeListener { _, hasFocus ->
-            val scale = if (hasFocus) 1.05f else 1.0f
-            cardRoot.animate().scaleX(scale).scaleY(scale).setDuration(150).start()
+            focusRing.update(hasFocus)
             GlassSurface.applyState(glassBg, GlassSurface.Emphasis.CARD, hasFocus)
         }
     }
