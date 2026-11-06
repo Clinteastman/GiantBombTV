@@ -209,7 +209,7 @@ class MobileShowFragment : Fragment() {
             val kind = TierBadge.kindOf(video)
             GlassSurface.applyState(
                 itemView, GlassSurface.Emphasis.CARD, focused = false,
-                cornerRadiusDp = 14f, accentColor = TierBadge.glassTint(kind)
+                cornerRadiusDp = GlassSurface.CARD_CORNER_DP, accentColor = TierBadge.glassTint(kind)
             )
             thumbContainer.post {
                 val w = thumbContainer.width

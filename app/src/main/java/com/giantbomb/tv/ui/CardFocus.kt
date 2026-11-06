@@ -38,7 +38,7 @@ object CardFocus {
      */
     fun install(
         target: View,
-        cornerRadiusDp: Float = 28f,
+        cornerRadiusDp: Float = GlassSurface.CARD_CORNER_DP,
         focusedScale: Float = FOCUSED_SCALE,
         liftView: View = target
     ): Ring {
@@ -160,11 +160,14 @@ object CardFocus {
 
         private companion object {
             const val VEIL_ALPHA = 0x40
-            const val RING_DP = 4f
-            const val EDGE_LINE_DP = 1.5f
-            const val EDGE_LINE_ALPHA = 0xA0
-            const val GLOW_STEP_DP = 2.5f
-            val GLOW = intArrayOf(0x80, 0x48, 0x1C)
+            // A lighter ring than the first pass (4 dp plus a 3-step glow read
+            // as heavy); the 1.10 lift and the veil on the other cards still
+            // make the focused card obvious from a sofa.
+            const val RING_DP = 2.5f
+            const val EDGE_LINE_DP = 1f
+            const val EDGE_LINE_ALPHA = 0x90
+            const val GLOW_STEP_DP = 2f
+            val GLOW = intArrayOf(0x50, 0x20)
         }
     }
 }

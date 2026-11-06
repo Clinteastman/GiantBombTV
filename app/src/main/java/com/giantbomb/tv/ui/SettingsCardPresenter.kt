@@ -1,5 +1,6 @@
 package com.giantbomb.tv.ui
 
+import android.graphics.Typeface
 import android.text.TextUtils
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -36,6 +37,8 @@ class SettingsCardPresenter : Presenter() {
             minLines = 1
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
+            // Same face as the video card titles (Leanback uses a condensed one).
+            typeface = Typeface.DEFAULT
             VectorFont.applyIfNeon(this)
         }
         cardView.findViewById<TextView>(androidx.leanback.R.id.content_text)?.apply {
@@ -44,6 +47,7 @@ class SettingsCardPresenter : Presenter() {
             setLines(2)
             ellipsize = TextUtils.TruncateAt.END
             setTextColor(DESCRIPTION_COLOUR)
+            typeface = Typeface.DEFAULT
         }
 
         // Focus: lift, ring and brighten glass
@@ -67,10 +71,12 @@ class SettingsCardPresenter : Presenter() {
         cardView.mainImage = ContextCompat.getDrawable(viewHolder.view.context, settings.iconResId)
             ?.mutate()
             ?.apply { setTint(ICON_COLOUR) }
+        // Icon on the same left edge as the title and description below it.
         cardView.mainImageView?.apply {
-            val pad = ((ICON_AREA_DP - ICON_DP) / 2f * resources.displayMetrics.density).toInt()
-            setPadding(0, pad, 0, pad)
-            scaleType = ImageView.ScaleType.FIT_CENTER
+            val density = resources.displayMetrics.density
+            val pad = ((ICON_AREA_DP - ICON_DP) / 2f * density).toInt()
+            setPadding((TEXT_START_DP * density).toInt(), pad, 0, pad)
+            scaleType = ImageView.ScaleType.FIT_START
         }
     }
 
@@ -84,6 +90,8 @@ class SettingsCardPresenter : Presenter() {
         const val ICON_AREA_DP = 72f
         const val ICON_DP = 40f
         const val FOCUSED_SCALE = 1.06f
+        /** Leanback's ImageCardView info area text inset. */
+        const val TEXT_START_DP = 11f
         const val ICON_COLOUR = 0xFFFFFFFF.toInt()
         const val DESCRIPTION_COLOUR = 0xFFC4C4C4.toInt()
     }

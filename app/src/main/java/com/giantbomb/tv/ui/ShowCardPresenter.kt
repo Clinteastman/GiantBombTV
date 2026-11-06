@@ -44,6 +44,8 @@ class ShowCardPresenter(
             maxLines = 2
             setLines(2)
             ellipsize = TextUtils.TruncateAt.END
+            // Same face as the video card titles (Leanback uses a condensed one).
+            if (!VectorFont.isVector(this)) typeface = android.graphics.Typeface.DEFAULT
         }
 
         val focusRing = CardFocus.install(cardView)

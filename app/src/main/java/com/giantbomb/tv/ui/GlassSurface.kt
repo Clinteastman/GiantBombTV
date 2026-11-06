@@ -52,6 +52,14 @@ interface BackdropRefractionHost
  * Older devices retain a lightweight translucent-gradient fallback.
  */
 object GlassSurface {
+    /**
+     * Corner radius shared by every card (video, show, upcoming, settings,
+     * phone cards) and their focus ring. 28 dp read as a pill and crowded the
+     * title and date lines; 12 dp keeps a soft corner without eating the text
+     * area.
+     */
+    const val CARD_CORNER_DP = 12f
+
     enum class Shape { ROUNDED, PILL, CIRCLE }
     enum class Emphasis { CARD, BUTTON, PLAYER_CONTROL }
     enum class Theme { SIMPLE, FROSTED, EXTREME, NEON }
@@ -533,7 +541,7 @@ object GlassSurface {
         emphasis: Emphasis,
         focused: Boolean = false,
         shape: Shape = Shape.ROUNDED,
-        cornerRadiusDp: Float = 28f,
+        cornerRadiusDp: Float = CARD_CORNER_DP,
         accentColor: Int? = null,
         owner: View? = null
     ): Drawable {
@@ -858,7 +866,7 @@ object GlassSurface {
         emphasis: Emphasis,
         focused: Boolean,
         shape: Shape = Shape.ROUNDED,
-        cornerRadiusDp: Float = 28f,
+        cornerRadiusDp: Float = CARD_CORNER_DP,
         accentColor: Int? = null
     ) {
         view.background = drawable(

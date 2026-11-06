@@ -1424,7 +1424,7 @@ class MobileBrowseFragment : Fragment() {
                 itemView,
                 GlassSurface.Emphasis.CARD,
                 focused = false,
-                cornerRadiusDp = 14f
+                cornerRadiusDp = GlassSurface.CARD_CORNER_DP
             )
 
             // Watched badge styling
@@ -1449,7 +1449,7 @@ class MobileBrowseFragment : Fragment() {
                 itemView,
                 GlassSurface.Emphasis.CARD,
                 focused = false,
-                cornerRadiusDp = 14f,
+                cornerRadiusDp = GlassSurface.CARD_CORNER_DP,
                 accentColor = TierBadge.glassTint(tierKind)
             )
 
@@ -1558,7 +1558,7 @@ class MobileBrowseFragment : Fragment() {
             GlassSurface.styleInteractive(
                 itemView,
                 GlassSurface.Emphasis.CARD,
-                cornerRadiusDp = 14f,
+                cornerRadiusDp = GlassSurface.CARD_CORNER_DP,
                 focusedScale = 1.01f
             )
             GlassSurface.applyState(
@@ -1699,7 +1699,7 @@ class MobileBrowseFragment : Fragment() {
                     itemView,
                     GlassSurface.Emphasis.CARD,
                     focused = false,
-                    cornerRadiusDp = 10f
+                    cornerRadiusDp = GlassSurface.CARD_CORNER_DP
                 )
                 watched.background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
@@ -1723,7 +1723,7 @@ class MobileBrowseFragment : Fragment() {
                 holder.itemView,
                 GlassSurface.Emphasis.CARD,
                 focused = false,
-                cornerRadiusDp = 10f,
+                cornerRadiusDp = GlassSurface.CARD_CORNER_DP,
                 accentColor = TierBadge.glassTint(tierKind)
             )
             holder.title.text = video.title
@@ -1788,7 +1788,7 @@ class MobileBrowseFragment : Fragment() {
                     itemView,
                     GlassSurface.Emphasis.CARD,
                     focused = false,
-                    cornerRadiusDp = 10f
+                    cornerRadiusDp = GlassSurface.CARD_CORNER_DP
                 )
             }
         }
@@ -1858,7 +1858,7 @@ class MobileBrowseFragment : Fragment() {
                     cardBg,
                     GlassSurface.Emphasis.CARD,
                     focused = false,
-                    cornerRadiusDp = 12f
+                    cornerRadiusDp = GlassSurface.CARD_CORNER_DP
                 )
                 cardBg.outlineProvider = object : android.view.ViewOutlineProvider() {
                     override fun getOutline(view: View, outline: android.graphics.Outline) {
@@ -1894,7 +1894,7 @@ class MobileBrowseFragment : Fragment() {
                 holder.cardBg,
                 GlassSurface.Emphasis.CARD,
                 focused = false,
-                cornerRadiusDp = 12f,
+                cornerRadiusDp = GlassSurface.CARD_CORNER_DP,
                 accentColor = if (stream.premium) PREMIUM_GLASS_TINT else null
             )
             holder.title.text = stream.title
