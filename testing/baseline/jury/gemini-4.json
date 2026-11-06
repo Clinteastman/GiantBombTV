@@ -1,0 +1,78 @@
+{
+  "score": 5.5,
+  "criteria": {
+    "sofa_readability": 6.0,
+    "focus_clarity": 8.0,
+    "hierarchy": 7.0,
+    "spacing_alignment": 4.5,
+    "consistency": 6.5,
+    "image_text_contrast": 6.0,
+    "information_density": 6.0,
+    "polish": 3.5
+  },
+  "pages": {
+    "tv-home": 6.5,
+    "tv-show-grid": 6.0,
+    "tv-detail": 8.5,
+    "tv-playback": 7.0,
+    "tv-search": 7.0,
+    "tv-downloads": 6.5,
+    "tv-settings": 4.5,
+    "tv-theme-picker": 8.5,
+    "phone-home": 6.5,
+    "phone-show-page": 1.5,
+    "phone-player": 7.0,
+    "phone-downloads": 7.0
+  },
+  "summary": "While the TV detail screen and theme picker are clean and clear, severe layout bugs on the phone show page, heavily truncated settings cards on TV, and clipped text descenders across video cards hold the app back from shipping quality.",
+  "top_changes": [
+    {
+      "page": "phone-show-page",
+      "element": "Entire page layout (header text and video card list)",
+      "change": "Add top window-inset padding so the show description does not overlap the status bar clock, and fix the video cards so they span the full width (with 16dp horizontal margins) instead of being clipped in half inside a narrow centered column.",
+      "why": "The page is currently broken: the header collides with system UI and video cards are cut off horizontally, hiding titles and thumbnails.",
+      "impact": "high"
+    },
+    {
+      "page": "tv-settings",
+      "element": "Settings row cards and Browse Shows row cards",
+      "change": "Increase the width of Settings cards from ~140px to at least 220px (or allow 2 lines for titles), and allow 2 lines or smaller text for Show titles so labels like 'Stream ...', 'Visual T...', 'Customi...', and 'Giant Bomb Gamin' are not cut off.",
+      "why": "Users on a sofa cannot read what half the settings or shows actually are because almost every title and subtitle is truncated to a few letters.",
+      "impact": "high"
+    },
+    {
+      "page": "tv-home",
+      "element": "Video card metadata subtitle (also affects tv-search)",
+      "change": "Increase bottom padding or line-height by 4dp on the subtitle TextView inside video cards.",
+      "why": "Descenders on letters like 'g' and 'p' ('Mornings', 'Aug', 'Sep') are vertically clipped at the bottom edge of the text box.",
+      "impact": "medium"
+    },
+    {
+      "page": "phone-home",
+      "element": "PREMIUM badge and status bar icons",
+      "change": "Give the 'PREMIUM' label on Continue Watching cards a solid dark or gold pill background (matching tv-show-grid), and set the Android status bar icon appearance to light (white icons).",
+      "why": "Plain white 'PREMIUM' text vanishes against light thumbnails like Grubbsnax, and black status bar icons are nearly invisible against the dark background.",
+      "impact": "medium"
+    },
+    {
+      "page": "tv-playback",
+      "element": "Bottom seekbar and transport controls overlay (also affects phone-player)",
+      "change": "Add 48dp horizontal safe-margin to the seekbar container so the red scrubber thumb is not flush against the left screen edge, and add a dark gradient scrim behind the bottom controls and center buttons.",
+      "why": "The scrubber thumb touches the screen edge (risking overscan clipping on TVs), and thin white button outlines get lost over bright or busy video frames.",
+      "impact": "medium"
+    }
+  ],
+  "already_good": [
+    "tv-detail has strong hierarchy, readable typography, good backdrop scrimming, and clear focus states on the action buttons.",
+    "tv-theme-picker modal is well-centered, legible from 10 feet, and uses a high-contrast red border and checkmark to indicate selection and focus.",
+    "Focused video cards on tv-home and tv-search clearly scale up and add a bright white border, making remote position easy to spot."
+  ],
+  "_meta": {
+    "judge": "gemini-4",
+    "provider": "google",
+    "model": "gemini-4-argon",
+    "started": "2026-11-06T18:17:45",
+    "finished": "2026-11-06T18:18:04",
+    "attempts": 1
+  }
+}

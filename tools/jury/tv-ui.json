@@ -1,0 +1,47 @@
+{
+  "title": "10-foot TV UI and phone UI (Giant Bomb TV, Simple theme)",
+  "for": "screenshots of an Android TV / Fire TV app driven by a remote, plus the same app on a phone",
+  "criteria": [
+    {
+      "id": "sofa_readability",
+      "name": "Readability from a sofa",
+      "test": "TV: every label, title and date can be read from about 3 m on a 55 inch screen (roughly 12 sp or more, no thin grey-on-grey). Phone: body text and metadata are comfortable at arm's length."
+    },
+    {
+      "id": "focus_clarity",
+      "name": "Focus clarity",
+      "test": "TV: within one second you can tell which single item the remote is on; the focused item clearly differs from its neighbours and is never hidden or cut off. Phone: tappable items look tappable."
+    },
+    {
+      "id": "hierarchy",
+      "name": "Hierarchy",
+      "test": "The order of importance is obvious on each screen: what you are looking at, the main action (Watch, Play, Search) and the key facts stand out first."
+    },
+    {
+      "id": "spacing_alignment",
+      "name": "Spacing and alignment",
+      "test": "Rows, cards, headers and buttons line up on a clear grid with even gaps; TV content keeps a safe margin from the screen edges; nothing cramped or floating."
+    },
+    {
+      "id": "consistency",
+      "name": "Consistency",
+      "test": "Cards, buttons, badges, row headers, type and colours look and behave the same across home, show grid, detail, search, downloads and settings, on TV and phone."
+    },
+    {
+      "id": "image_text_contrast",
+      "name": "Image and text contrast",
+      "test": "Text over artwork, backdrops and video stays readable (scrims or solid panels where needed); badges and metadata do not vanish into busy thumbnails."
+    },
+    {
+      "id": "information_density",
+      "name": "Information density",
+      "test": "Each screen shows enough to choose a video (title, show, date, length, progress) without clutter; TV rows show a sensible number of cards for a 1080p screen; empty states explain what to do."
+    },
+    {
+      "id": "polish",
+      "name": "Polish",
+      "test": "No glitches: clipped or ellipsized titles that hide meaning, overlapping text, stray borders, misaligned icons, placeholder art, odd empty or loading states."
+    }
+  ],
+  "scale": "Score 0-10 against a well-made streaming app on Android TV (think the best of the big video apps). 9 = you would ship it as is; a viewer on a sofa reads everything, always knows where focus is, and what is left is nitpicks (a 2 px misalignment, one slightly tight gap). 8 = clear and consistent with one or two real but small problems (one row header a bit dim, one screen a bit sparse, one truncated label). 7 = works, but a regular viewer would notice several issues (small or low-contrast metadata, focus that is easy to lose, uneven spacing between screens). 6 or below = something gets in the way of choosing or watching a video. This is the plain Simple theme: judge clarity, not flair. Do not mark it down for being flat or for not having glass or neon effects. Video thumbnails, artwork and the frame inside the player are content from the website, not app design: judge only how the app frames them."
+}

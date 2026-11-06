@@ -1,0 +1,30 @@
+{
+  "score": 5.6,
+  "criteria": {"sofa_readability": 6.5, "focus_clarity": 7, "hierarchy": 6.5, "spacing_alignment": 5.5, "consistency": 5.5, "image_text_contrast": 6, "information_density": 6, "polish": 4.5},
+  "pages": {"tv-home": 6.5, "tv-show-grid": 5.5, "tv-detail": 8, "tv-playback": 7, "tv-search": 6.5, "tv-downloads": 7, "tv-settings": 4.5, "tv-theme-picker": 8.5, "phone-home": 7, "phone-show-page": 2.5, "phone-player": 7, "phone-downloads": 7},
+  "summary": "The TV detail, theme picker and phone home/player are solid, but a broken phone show page, heavily truncated TV settings cards and app-wide descender clipping on card metadata keep this well short of shippable.",
+  "top_changes": [
+    {"page": "phone-show-page", "element": "Whole show page layout: show title/description text and the video card list",
+     "change": "Apply status-bar and navigation-bar insets (WindowInsets.systemBars) so the title starts below the status bar; put the title and description on a solid or scrimmed header panel (at least 70% opaque dark) instead of raw text over the backdrop; make the card list match_parent width with 16 dp side margins so cards are not cut off at about 60% of the screen width; keep the bottom nav or add a back arrow in a top bar.",
+     "why": "Right now the title collides with the clock and status icons, the cards are cropped mid-title and mid-date, and there is no visible way back; the page is close to unusable.", "impact": "high"},
+    {"page": "tv-settings", "element": "Settings row cards (Stream..., Visual T..., Downloa..., Customi..., Twitch C..., Privacy ...) and their subtitle lines",
+     "change": "Widen the settings cards to about 260-280 dp or allow the title to wrap to 2 lines and the subtitle to 2 lines at 14 sp, so full labels like Stream Quality, Visual Theme, Downloads, Customise Shows, Twitch Chat and Privacy Policy show without ellipsis; use one icon colour (all white or all red) and a distinct icon for Twitch rather than a second gear.",
+     "why": "Almost every setting is unreadable as a word, so the viewer has to open each card to learn what it does; the duplicate gear and mixed red/white icons add confusion.", "impact": "high"},
+    {"page": "tv-home", "element": "Video card subtitle line (date and show name, e.g. 'May 8, 2026 - Game Mess Mornings') on home, show grid and search cards",
+     "change": "Stop clipping descenders: give the subtitle TextView includeFontPadding or about 4 dp more bottom padding/line height so g, y, p and commas render fully; and keep the date/show line visible on the focused card (currently a 2-line title pushes it out) by reserving a fixed 2-line title plus 1-line subtitle area.",
+     "why": "Dates read as 'Mav 8' and 'Sep 17.' and show names lose their tails on every card, and the focused card, the one the viewer is deciding on, hides its date and show.", "impact": "high"},
+    {"page": "tv-show-grid", "element": "Show title header and the card grid below it",
+     "change": "Use the same bold title style as tv-detail (Roboto Medium/Bold about 48 sp) instead of the thin light weight, allow it to wrap to 2 lines rather than ellipsizing, add a dark scrim behind the header, and left-align the grid to the title's 96-128 px start margin instead of floating the cards in the centre.",
+     "why": "The show name is cut off and the cards float off the page grid, so the screen feels unanchored and inconsistent with the detail screen.", "impact": "medium"},
+    {"page": "tv-search", "element": "Focused search result card backing shadow and the search text field",
+     "change": "Remove the square-cornered dark rectangle drawn behind the rounded focused card (clip the shadow to the card's corner radius), keep the focused card's scaled edge at least 96 px from the left screen edge, and raise the query text in the search field to white or about 90% white on the field background.",
+     "why": "The stray square box reads as a rendering glitch, the focused card pokes past the TV safe margin, and the grey query text is hard to read from the sofa.", "impact": "medium"}
+  ],
+  "already_good": [
+    "tv-detail: clear hierarchy with the red QUICK LOOKS eyebrow, large bold title, duration and date, then a strongly focused red Watch Now button ahead of Watchlist and Download",
+    "TV card focus treatment: white outline plus scale-up makes the focused card obvious within a second on home, search and settings",
+    "tv-theme-picker: red focus border, check mark on the current theme, readable titles and subtitles, and a dimmed scrim behind the dialog",
+    "Empty Downloads states on TV and phone explain what to do in plain words",
+    "phone-player: details under the video with a bold title, show and date line, and a clean Up Next list with thumbnails and dates"
+  ]
+}
