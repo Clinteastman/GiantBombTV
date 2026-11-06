@@ -75,9 +75,10 @@ import kotlinx.coroutines.*
 class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     companion object {
-        /** TV overscan safe margin (5% of a 960 x 540 dp screen). */
-        private const val TV_SAFE_X_DP = 48
+        /** TV overscan safe margin at the bottom (5% of 540 dp). */
         private const val TV_SAFE_Y_DP = 28
+        /** TV left keyline shared with home, search and settings (clears the 48 dp overscan band). */
+        private const val TV_KEYLINE_DP = 56
         private const val PHONE_CONTROL_INSET_DP = 8
         private const val WATCHLIST_ADD = "+ Watchlist"
         private const val WATCHLIST_ON = "✓ Watchlist"
@@ -335,7 +336,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 ).apply {
                     // Clear of the TV overscan band (48 dp each side) and
                     // above the time bar once it is lifted out of the band.
-                    setMargins(TV_SAFE_X_DP.dp(), 0, TV_SAFE_X_DP.dp(), (90 + TV_SAFE_Y_DP).dp())
+                    setMargins(TV_KEYLINE_DP.dp(), 0, TV_KEYLINE_DP.dp(), (90 + TV_SAFE_Y_DP).dp())
                 }
             }
             rootLayout.addView(tvTitleOverlay)
@@ -1876,7 +1877,11 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         if (controllerRoot != null) walk(controllerRoot)
         // TV: clear of overscan. Phone: off the screen edge, where the
         // settings gear touched it.
-        if (isTv) insetControls(pv, TV_SAFE_X_DP, TV_SAFE_Y_DP) else insetControls(pv, PHONE_CONTROL_INSET_DP, 0)
+        // On TV the numbers put the title, the time bar's start and the
+        // time text on one 56 dp keyline (the bar and the times carry their
+        // own inner padding of 8 and 14 dp).
+        if (isTv) insetControls(pv, barXDp = TV_KEYLINE_DP - 14, timeBarXDp = TV_KEYLINE_DP - 8, yDp = TV_SAFE_Y_DP)
+        else insetControls(pv, barXDp = PHONE_CONTROL_INSET_DP, timeBarXDp = PHONE_CONTROL_INSET_DP, yDp = 0)
 
         // Time bar: always red so the played position reads as the YouTube /
         // standard media-app cue. Scrubber thumb stays default; the colour
@@ -1905,14 +1910,14 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     /**
      * Media3 runs the time bar and the bottom bar (times, settings) to the
-     * screen edges, where a TV's overscan can crop them. Pull both in by
-     * [xDp] at the sides and [yDp] at the bottom: the bottom bar by padding,
+     * screen edges, where a TV's overscan can crop them. Pull them in at the
+     * sides ([barXDp], [timeBarXDp]) and by [yDp] at the bottom: the bottom bar by padding,
      * so its dark strip still runs edge to edge, and the time bar by margins,
      * lifted by the same amount the bar grew. Tagged once, so calling this on
      * every controller show is safe.
      */
-    private fun insetControls(pv: PlayerView, xDp: Int, yDp: Int) {
-        val x = xDp.dp()
+    private fun insetControls(pv: PlayerView, barXDp: Int, timeBarXDp: Int, yDp: Int) {
+        val x = barXDp.dp()
         val y = yDp.dp()
         pv.findViewById<View>(androidx.media3.ui.R.id.exo_bottom_bar)?.let { bar ->
             if (bar.getTag(R.id.tv_overscan_inset) != true) {
@@ -1924,8 +1929,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         pv.findViewById<View>(androidx.media3.ui.R.id.exo_progress)?.let { bar ->
             val lp = bar.layoutParams as? android.view.ViewGroup.MarginLayoutParams ?: return@let
             if (bar.getTag(R.id.tv_overscan_inset) != true) {
-                lp.leftMargin += x
-                lp.rightMargin += x
+                lp.leftMargin += timeBarXDp.dp()
+                lp.rightMargin += timeBarXDp.dp()
                 lp.bottomMargin += y
                 bar.layoutParams = lp
                 bar.setTag(R.id.tv_overscan_inset, true)
