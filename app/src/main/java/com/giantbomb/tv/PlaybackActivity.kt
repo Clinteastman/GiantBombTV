@@ -30,7 +30,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.enableEdgeToEdge
+import com.giantbomb.tv.util.enableDarkEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -74,6 +74,9 @@ import kotlinx.coroutines.*
 class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     companion object {
+        /** TV overscan safe margin (5% of a 960 x 540 dp screen). */
+        private const val TV_SAFE_X_DP = 48
+        private const val TV_SAFE_Y_DP = 28
         const val EXTRA_VIDEO = "extra_video"
         const val EXTRA_LIVE_HLS_URL = "extra_live_hls_url"
         const val EXTRA_LIVE_TITLE = "extra_live_title"
@@ -206,7 +209,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         isTv = DeviceUtil.isTv(this)
 
         if (!isTv) {
-            enableEdgeToEdge()
+            enableDarkEdgeToEdge()
         }
 
         prefs = PrefsManager(this)
@@ -324,7 +327,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     FrameLayout.LayoutParams.WRAP_CONTENT,
                     Gravity.BOTTOM or Gravity.START
                 ).apply {
-                    setMargins(40.dp(), 0, 40.dp(), 90.dp())
+                    // Clear of the TV overscan band (48 dp each side) and
+                    // above the time bar once it is lifted out of the band.
+                    setMargins(TV_SAFE_X_DP.dp(), 0, TV_SAFE_X_DP.dp(), (90 + TV_SAFE_Y_DP).dp())
                 }
             }
             rootLayout.addView(tvTitleOverlay)
@@ -1774,6 +1779,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // focus transform there scales the decoded frame from its top-left.
         val controllerRoot = pv.findViewById<View>(androidx.media3.ui.R.id.exo_controller)
         if (controllerRoot != null) walk(controllerRoot)
+        if (isTv) insetControlsForOverscan(pv)
 
         // Time bar: always red so the played position reads as the YouTube /
         // standard media-app cue. Scrubber thumb stays default; the colour
@@ -1784,6 +1790,35 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         timeBar?.apply {
             setPlayedColor(red)
             setScrubberColor(red)
+        }
+    }
+
+    /**
+     * Media3 runs the time bar and the bottom bar (times, settings) to the
+     * screen edges, where a TV's overscan can crop them. Pull both in by the
+     * 5% safe margin: the bottom bar by padding, so its dark strip still runs
+     * edge to edge, and the time bar by margins, lifted by the same amount the
+     * bar grew. Tagged once, so calling this on every controller show is safe.
+     */
+    private fun insetControlsForOverscan(pv: PlayerView) {
+        val x = TV_SAFE_X_DP.dp()
+        val y = TV_SAFE_Y_DP.dp()
+        pv.findViewById<View>(androidx.media3.ui.R.id.exo_bottom_bar)?.let { bar ->
+            if (bar.getTag(R.id.tv_overscan_inset) != true) {
+                bar.setPadding(bar.paddingLeft + x, bar.paddingTop, bar.paddingRight + x, bar.paddingBottom + y)
+                bar.layoutParams = bar.layoutParams.apply { if (height > 0) height += y }
+                bar.setTag(R.id.tv_overscan_inset, true)
+            }
+        }
+        pv.findViewById<View>(androidx.media3.ui.R.id.exo_progress)?.let { bar ->
+            val lp = bar.layoutParams as? android.view.ViewGroup.MarginLayoutParams ?: return@let
+            if (bar.getTag(R.id.tv_overscan_inset) != true) {
+                lp.leftMargin += x
+                lp.rightMargin += x
+                lp.bottomMargin += y
+                bar.layoutParams = lp
+                bar.setTag(R.id.tv_overscan_inset, true)
+            }
         }
     }
 
@@ -1893,6 +1928,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             val thumbnail: ImageView = view.findViewById(R.id.related_thumbnail)
             val title: TextView = view.findViewById(R.id.related_title)
             val meta: TextView = view.findViewById(R.id.related_meta)
+            val badge: TextView = view.findViewById(R.id.related_premium_badge)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -1907,6 +1943,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             val video = videos[position]
             holder.title.text = video.title
             holder.meta.text = if (video.publishDate.isNotEmpty()) DateFormat.formatPublishDate(video.publishDate) else ""
+            com.giantbomb.tv.ui.TierBadge.styleLabel(holder.badge, com.giantbomb.tv.ui.TierBadge.kindOf(video))
 
             if (!video.thumbnailUrl.isNullOrEmpty()) {
                 Glide.with(holder.thumbnail)

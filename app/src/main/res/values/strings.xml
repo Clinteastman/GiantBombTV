@@ -28,4 +28,5 @@
     <string name="toast_twitch_chat_hidden">Twitch chat: hidden on live streams</string>
     <string name="hide_chat">Hide chat</string>
     <string name="hide_chat_for_stream">Hide chat for this stream</string>
+    <string name="back">Back</string>
 </resources>

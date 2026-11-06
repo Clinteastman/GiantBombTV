@@ -76,7 +76,9 @@ class DownloadsFragment : Fragment() {
         val column = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             val h = if (isTv) 48.dp() else 16.dp()
-            setPadding(h, 24.dp(), h, 16.dp())
+            // TV: keep the heading below the 27 dp overscan band.
+            val top = if (isTv) 36.dp() else 24.dp()
+            setPadding(h, top, h, 16.dp())
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT

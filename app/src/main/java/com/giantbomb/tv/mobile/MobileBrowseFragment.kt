@@ -1427,10 +1427,6 @@ class MobileBrowseFragment : Fragment() {
                 cornerRadiusDp = 14f
             )
 
-            // Premium is expressed by the card's champagne glass tint. The
-            // label is intentionally just an identifier, not a sticker.
-            premiumBadge.background = null
-            premiumBadge.setShadowLayer(4f * density, 0f, 1f * density, 0xE0000000.toInt())
             // Watched badge styling
             watchedBadge.background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -1482,9 +1478,7 @@ class MobileBrowseFragment : Fragment() {
             metaView.text = meta
             metaView.visibility = if (meta.isEmpty()) View.GONE else View.VISIBLE
 
-            premiumBadge.text = TierBadge.label(tierKind)
-            premiumBadge.setTextColor(TierBadge.labelTextColor(tierKind))
-            premiumBadge.visibility = if (tierKind != TierBadge.Kind.NONE) View.VISIBLE else View.GONE
+            TierBadge.styleLabel(premiumBadge, tierKind)
             watchedBadge.visibility = if (video.watched) View.VISIBLE else View.GONE
 
             // Duration
@@ -1736,9 +1730,7 @@ class MobileBrowseFragment : Fragment() {
             // Keep the metadata line's space even when this video has no show
             // name so every glass card in the row remains the same height.
             holder.showName.visibility = if (video.showTitle.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
-            holder.premiumBadge.text = TierBadge.label(tierKind)
-            holder.premiumBadge.setTextColor(TierBadge.labelTextColor(tierKind))
-            holder.premiumBadge.visibility = if (tierKind != TierBadge.Kind.NONE) View.VISIBLE else View.GONE
+            TierBadge.styleLabel(holder.premiumBadge, tierKind)
             holder.watched.visibility = if (video.watched) View.VISIBLE else View.GONE
 
             // Progress
@@ -1874,9 +1866,6 @@ class MobileBrowseFragment : Fragment() {
 
                 view.findViewById<View>(R.id.upcoming_text_area).background = null
 
-                premiumBadge.background = null
-                premiumBadge.setShadowLayer(4f * density, 0f, 1f * density, 0xE0000000.toInt())
-
                 liveBadge.background = GradientDrawable().apply {
                     setColor(0xFFE3192C.toInt())
                     setCornerRadius(4f * density)
@@ -1901,7 +1890,10 @@ class MobileBrowseFragment : Fragment() {
                 accentColor = if (stream.premium) PREMIUM_GLASS_TINT else null
             )
             holder.title.text = stream.title
-            holder.premiumBadge.visibility = if (stream.premium) View.VISIBLE else View.GONE
+            TierBadge.styleLabel(
+                holder.premiumBadge,
+                if (stream.premium) TierBadge.Kind.PREMIUM else TierBadge.Kind.NONE
+            )
 
             if (!stream.image.isNullOrEmpty()) {
                 Glide.with(holder.image.context).load(stream.image).centerCrop().into(holder.image)

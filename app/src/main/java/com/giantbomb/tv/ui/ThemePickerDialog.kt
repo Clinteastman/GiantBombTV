@@ -106,7 +106,10 @@ object ThemePickerDialog {
             row.addView(TextView(context).apply {
                 text = if (selected) "✓" else ""
                 textSize = 20f
-                setTextColor(focusAccent)
+                // White, not the accent: the focused row is tinted with the
+                // accent, which left an accent tick at about 1.4:1.
+                setTextColor(Color.WHITE)
+                setTypeface(typeface, Typeface.BOLD)
                 setPadding(dp(12), 0, 0, 0)
             })
             panel.addView(row)

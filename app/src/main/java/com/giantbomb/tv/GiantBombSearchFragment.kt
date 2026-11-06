@@ -11,12 +11,15 @@ import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.ui.CardPresenter
+import com.giantbomb.tv.ui.TvRowPresenter
 import kotlinx.coroutines.*
 
 class GiantBombSearchFragment : SearchSupportFragment(),
     SearchSupportFragment.SearchResultProvider {
 
-    private val rowsAdapter = ArrayObjectAdapter(ListRowPresenter())
+    // Search rows start nearer the left edge than the home rows, so the
+    // first card gets extra room to lift without entering the overscan band.
+    private val rowsAdapter = ArrayObjectAdapter(TvRowPresenter.create(extraStartPaddingDp = 24))
     private val handler = Handler(Looper.getMainLooper())
     private var searchRunnable: Runnable? = null
     private var searchJob: Job? = null

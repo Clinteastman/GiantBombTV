@@ -15,7 +15,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.ScrollView
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
+import com.giantbomb.tv.util.enableDarkEdgeToEdge
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Membership
@@ -34,7 +34,7 @@ class SetupActivity : ComponentActivity(), CoroutineScope by MainScope() {
         super.onCreate(savedInstanceState)
 
         if (!DeviceUtil.isTv(this)) {
-            enableEdgeToEdge()
+            enableDarkEdgeToEdge()
         }
 
         val prefs = PrefsManager(this)

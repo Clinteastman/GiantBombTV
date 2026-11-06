@@ -151,6 +151,7 @@ class MobileSearchFragment : Fragment() {
             val thumbnail: ImageView = view.findViewById(R.id.related_thumbnail)
             val title: TextView = view.findViewById(R.id.related_title)
             val meta: TextView = view.findViewById(R.id.related_meta)
+            val badge: TextView = view.findViewById(R.id.related_premium_badge)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -173,6 +174,7 @@ class MobileSearchFragment : Fragment() {
                 }
             }
             holder.meta.text = meta
+            com.giantbomb.tv.ui.TierBadge.styleLabel(holder.badge, com.giantbomb.tv.ui.TierBadge.kindOf(video))
 
             if (!video.thumbnailUrl.isNullOrEmpty()) {
                 Glide.with(holder.thumbnail)

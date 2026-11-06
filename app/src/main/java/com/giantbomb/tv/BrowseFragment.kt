@@ -70,10 +70,8 @@ class BrowseFragment : BrowseSupportFragment() {
         const val SETTINGS_TWITCH_CHAT = 7
         const val SETTINGS_DOWNLOADS = 8
         const val SETTINGS_VISUAL_THEME = 9
-        // Neon HUD lettering sizes: side menu (narrow, one line) and the
-        // titles above each row.
+        // Neon HUD lettering size for the side menu (narrow, one line).
         const val NEON_SIDE_HEADER_SP = 19f
-        const val NEON_ROW_TITLE_SP = 26f
         const val SETTINGS_NEON_PARTICLES = 10
         private const val BACKDROP_DELAY_MS = 300L
         private const val CROSSFADE_DURATION = 600L
@@ -602,31 +600,7 @@ class BrowseFragment : BrowseSupportFragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             try {
             loadingSpinner?.visibility = View.VISIBLE
-            val rowPresenter = ListRowPresenter(androidx.leanback.widget.FocusHighlight.ZOOM_FACTOR_NONE).apply {
-                shadowEnabled = false
-                selectEffectEnabled = false  // disable the dim overlay on unfocused rows
-                // Row titles above each row use the Neon vector lettering.
-                headerPresenter = object : RowHeaderPresenter() {
-                    override fun onBindViewHolder(viewHolder: Presenter.ViewHolder, item: Any?) {
-                        super.onBindViewHolder(viewHolder, item)
-                        viewHolder.view.findViewById<android.widget.TextView>(
-                            androidx.leanback.R.id.row_header
-                        )?.let { title ->
-                            com.giantbomb.tv.ui.VectorFont.applyIfNeon(title)
-                            if (GlassSurface.theme == GlassSurface.Theme.NEON) {
-                                title.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, NEON_ROW_TITLE_SP)
-                            }
-                        }
-                    }
-
-                    // Leanback fades the titles of unselected rows; in Neon the
-                    // HUD lettering stays at full brightness, like the game.
-                    override fun onSelectLevelChanged(holder: RowHeaderPresenter.ViewHolder) {
-                        super.onSelectLevelChanged(holder)
-                        if (GlassSurface.theme == GlassSurface.Theme.NEON) holder.view.alpha = 1f
-                    }
-                }
-            }
+            val rowPresenter = com.giantbomb.tv.ui.TvRowPresenter.create()
             val rowsAdapter = ArrayObjectAdapter(rowPresenter)
             headerIdCounter = 0L
             // Reset row tracking — rowsAdapter is brand new and the upcoming row, if any,
@@ -1178,7 +1152,7 @@ class BrowseFragment : BrowseSupportFragment() {
                 if (prefs.showTwitchChat) R.string.settings_twitch_chat_shown
                 else R.string.settings_twitch_chat_hidden
             ),
-            R.drawable.ic_settings_cog
+            R.drawable.ic_settings_chat
         ))
         utilAdapter.add(SettingsItem(
             SETTINGS_PRIVACY,

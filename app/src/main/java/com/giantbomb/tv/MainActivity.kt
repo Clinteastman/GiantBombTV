@@ -25,7 +25,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.enableEdgeToEdge
+import com.giantbomb.tv.util.enableDarkEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
@@ -154,7 +154,7 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope(), Backdrop
         GlassSurface.configure(visualPrefs.visualTheme)
 
         if (!isTv) {
-            enableEdgeToEdge()
+            enableDarkEdgeToEdge()
         }
 
         setContentView(R.layout.activity_main)

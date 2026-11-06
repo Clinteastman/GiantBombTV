@@ -8,11 +8,30 @@
     android:paddingBottom="8dp"
     android:background="?android:attr/selectableItemBackground">
 
-    <ImageView
-        android:id="@+id/related_thumbnail"
+    <FrameLayout
         android:layout_width="160dp"
-        android:layout_height="90dp"
-        android:scaleType="centerCrop" />
+        android:layout_height="90dp">
+
+        <ImageView
+            android:id="@+id/related_thumbnail"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop" />
+
+        <!-- Premium / Premium 64 pill, styled in code by TierBadge.styleLabel -->
+        <TextView
+            android:id="@+id/related_premium_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:layout_margin="6dp"
+            android:letterSpacing="0.06"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            tools:text="PREMIUM 64"
+            tools:visibility="visible" />
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="0dp"

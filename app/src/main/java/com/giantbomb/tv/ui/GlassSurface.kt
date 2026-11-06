@@ -583,6 +583,9 @@ object GlassSurface {
         accentColor: Int?,
         activeTheme: Theme
     ): Drawable {
+        if (activeTheme == Theme.SIMPLE && emphasis == Emphasis.CARD) {
+            return simpleCardFill(radius, focused, accentColor)
+        }
         val fill = accentColor?.let { accent ->
             if (focused) {
                 intArrayOf(
@@ -620,6 +623,23 @@ object GlassSurface {
             cornerRadius = radius
         }
     }
+
+    /**
+     * Simple theme cards are flat and opaque, so backdrop artwork never shows
+     * through a card's title. A paid video's accent is mixed into the solid
+     * colour instead of laid over the backdrop.
+     */
+    private fun simpleCardFill(radius: Float, focused: Boolean, accentColor: Int?): Drawable {
+        val base = if (focused) SIMPLE_CARD_FOCUSED else SIMPLE_CARD
+        val fill = accentColor?.let { ColorUtils.blendARGB(base, it, if (focused) 0.34f else 0.26f) } ?: base
+        return GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = radius
+        }
+    }
+
+    private const val SIMPLE_CARD = 0xFF20232A.toInt()
+    private const val SIMPLE_CARD_FOCUSED = 0xFF30343D.toInt()
 
     private fun neonDrawable(
         context: Context,
