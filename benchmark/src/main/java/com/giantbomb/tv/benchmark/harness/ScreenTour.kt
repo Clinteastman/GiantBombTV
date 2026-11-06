@@ -57,6 +57,33 @@ class ScreenTour {
         HarnessIo.capture(name)
     }
 
+    /**
+     * Browses the home rows the same way the scroll benchmark does, then saves
+     * `dumpsys meminfo` to the harness folder (read by scripts/harness/perf.py).
+     * A Macrobenchmark memory trace needs more RAM than a TV emulator has.
+     */
+    @Test
+    fun browse() {
+        launch()
+        repeat(2) {
+            if (d.hasObject(res("browse_recycler"))) {
+                d.findObject(res("browse_recycler"))?.fling(Direction.DOWN)
+                pause(800)
+                d.findObject(res("browse_recycler"))?.fling(Direction.UP)
+                pause(800)
+            } else {
+                key(KeyEvent.KEYCODE_DPAD_RIGHT, 300)
+                repeat(6) { key(KeyEvent.KEYCODE_DPAD_DOWN, 300) }
+                repeat(4) { key(KeyEvent.KEYCODE_DPAD_RIGHT, 300) }
+                repeat(6) { key(KeyEvent.KEYCODE_DPAD_UP, 300) }
+            }
+        }
+        pause(2_000) // let image loads settle
+        // Read memory here: the app does not outlive the instrumentation run.
+        val meminfo = d.executeShellCommand("dumpsys meminfo $PKG")
+        java.io.File(HarnessIo.outDir(), "meminfo.txt").writeText(meminfo)
+    }
+
     // ---- shared -----------------------------------------------------------
 
     private fun pause(ms: Long) = SystemClock.sleep(ms)

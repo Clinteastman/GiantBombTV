@@ -202,7 +202,11 @@ proof of a bug.
 `benchmark/src/main/java/com/giantbomb/tv/benchmark/BaselineProfileGenerator.kt`:
 
 - `coldStartup`, `warmStartup`: time to initial display, 5 runs each
-- `memoryAfterBrowse`: memory at the end of browsing the home rows, 3 runs
+- memory after browsing: the harness `ScreenTour#browse` step walks the
+  home rows like the scroll test, then saves `dumpsys meminfo` (median of 3).
+  A Macrobenchmark memory trace (`MemoryUsageMetric`) was tried first: the
+  on-device trace processor needs more RAM than a TV emulator has and it
+  thrashed a 1 GB AVD for 10 minutes
 - `homeScroll`: frame timing while scrolling home, 5 runs, once per theme
   (TV walks the rows with the D-pad, phone flings the list)
 
@@ -210,6 +214,10 @@ It installs the `benchmarkRelease` build (minified, profileable) over the
 debug build so the key stays, runs each test with `am instrument` (Gradle's
 connected task uninstalls the app at the end, which would lose the key), then
 puts the debug build back.
+
+The countdown cards tick every second, so the UI is never idle. The
+benchmark class sets a 500 ms idle wait; with the default 10 s every D-pad
+step in the scroll test would wait the full 10 s.
 
 Results table: cold and warm start medians, jank % (frames that missed their
 deadline, from `frameOverrunMs`), CPU frame time P50/P90/P99, overrun
@@ -233,20 +241,33 @@ Rubric: `tools/jury/tv-ui.json` (readability from a sofa, focus clarity,
 hierarchy, spacing and alignment, consistency, image and text contrast,
 information density, polish).
 
+The baseline run is `gbtv-simple-baseline-20261106` (12 pages, default
+panel `claude-opus,codex,gemini-4`). Its exact setup, so later runs match it:
+
 ```bash
 cd C:\Users\cmoss\github\gscontent
 python tools/jury.py init --name gbtv-simple-<date> --kind url \
-  --target "Giant Bomb TV, Simple theme, TV 1080p and phone" \
-  --context "Android TV / Fire TV app used from a sofa with a remote, plus the phone app" \
-  --rubric-file C:\path\to\GiantBombTV\tools\jury\tv-ui.json \
-  --page tv-home --page tv-show-grid --page tv-detail ... \
-  --constraint "Simple theme only: flat, solid cards by design" \
-  --constraint "Artwork, thumbnails and the video frame are website content, not app design"
+  --target "Giant Bomb TV app, Simple theme: Android TV 1080p screens and the phone app" \
+  --context "Android TV / Fire TV client for giantbomb.com videos, used from a sofa with a remote; the same app on Android phones. Screenshots come from emulators: TV at 1920x1080, phone at 1080x2400. On TV, focus starts on a fixed card; the focused item is the one the remote is on." \
+  --rubric-file <repo>\tools\jury\tv-ui.json \
+  --page tv-home --page tv-show-grid --page tv-detail --page tv-playback --page tv-search \
+  --page tv-downloads --page tv-settings --page tv-theme-picker \
+  --page phone-home --page phone-show-page --page phone-player --page phone-downloads \
+  --constraint "Simple theme only: flat, solid cards by design. Do not ask for glass, blur or neon effects." \
+  --constraint "Video thumbnails, show artwork, backdrops and the frame inside the player are website content, not app design." \
+  --constraint "The phone app has no separate detail screen: tapping a video opens the player, which shows the details below the video."
 python tools/jury.py round --run gbtv-simple-<date>
-python tools/jury.py evidence --run gbtv-simple-<date> --page tv-home --view full --viewport 1920x1080 --file <run>\tv\simple\tv_home.png
-python tools/jury.py evidence --run gbtv-simple-<date> --page phone-home --view phone --viewport 1080x2400 --file <run>\phone\simple\phone_home.png
+# one per page: TV shots as view desktop 1920x1080, phone shots as view phone 1080x2400
+python tools/jury.py evidence --run gbtv-simple-<date> --page tv-home --view desktop --viewport 1920x1080 --file <run>\tv\simple\tv_home.png
+python tools/jury.py evidence --run gbtv-simple-<date> --page phone-show-page --view phone --viewport 1080x2400 --file <run>\phone\simple\phone_show_grid.png
 python tools/jury.py brief --run gbtv-simple-<date> --full
 ```
+
+Page to file: `tv-<x>` is `tv/simple/tv_<x>.png` (dashes to underscores),
+`phone-home` and `phone-downloads` are `phone_home` and `phone_downloads`,
+`phone-show-page` is `phone_show_grid`, `phone-player` is `phone_playback`.
+The baseline also added a `--note` on playback, search, settings, theme
+picker and the phone pages saying how each screen was reached.
 
 Then start the agent judges and `jury.py judge` together, wait, and
 `jury.py tally`. Post the round card as printed.

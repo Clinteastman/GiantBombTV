@@ -2,7 +2,9 @@
 
 Per device:
   - cold and warm start (StartupTimingMetric, 5 runs each)
-  - memory after browsing the home rows (MemoryUsageMetric, last value, 3 runs)
+  - memory after browsing the home rows: the harness browse step, then
+    `dumpsys meminfo` (median of 3 runs; a Macrobenchmark memory trace needs
+    more RAM than a TV emulator has)
   - home scroll frame timing per theme (FrameTimingMetric, 5 runs):
     TV walks the Leanback rows with the D-pad, phone flings the home list
 
@@ -21,6 +23,8 @@ import json
 import statistics
 import sys
 from pathlib import Path
+
+import re
 
 import adbutil as a
 
@@ -52,6 +56,33 @@ def run_bench(serial: str, test: str, raw_dir: Path, tag: str) -> dict:
     return {"ok": True, "benchmark": data["benchmarks"][0], "context": data.get("context", {})}
 
 
+BROWSE = "com.giantbomb.tv.benchmark.harness.ScreenTour#browse"
+MEM_KEYS = {"Java Heap": "java_heap_kb", "Native Heap": "native_heap_kb",
+            "Graphics": "graphics_kb", "Code": "code_kb", "TOTAL PSS": "total_pss_kb"}
+
+
+def memory_after_browse(serial: str, runs: int = 3) -> dict:
+    samples: dict[str, list[int]] = {}
+    errors = []
+    for _ in range(runs):
+        a.shell(serial, f"rm -f {a.DEVICE_OUT}/meminfo.txt", check=False)
+        ok, out = a.instrument(serial, BROWSE, {})
+        if not ok:
+            errors.append(out[-400:])
+            continue
+        info = a.shell(serial, f"cat {a.DEVICE_OUT}/meminfo.txt", check=False)
+        summary = info[info.find("App Summary"):] if "App Summary" in info else info
+        for label, key in MEM_KEYS.items():
+            m = re.search(rf"{label}:\s+(\d+)", summary)
+            if m:
+                samples.setdefault(key, []).append(int(m.group(1)))
+    if not samples:
+        return {"ok": False, "error": (" | ".join(errors) or "no meminfo")[:1200]}
+    res = {"ok": True, "runs": runs - len(errors)}
+    res.update({k: int(statistics.median(v)) for k, v in samples.items()})
+    return res
+
+
 def pct(values: list[float], p: float) -> float:
     s = sorted(values)
     if not s:
@@ -72,12 +103,6 @@ def summarise(test: str, r: dict) -> dict:
         return {"ok": True, "ttid_median_ms": t.get("median"), "ttid_min_ms": t.get("minimum"),
                 "ttid_max_ms": t.get("maximum"), "ttfd_median_ms": full.get("median"),
                 "runs": t.get("runs")}
-    if test == "memoryAfterBrowse":
-        out = {"ok": True}
-        for k, v in m.items():
-            if k.startswith("memory"):
-                out[k] = v.get("median")
-        return out
     # homeScroll
     cpu = [x for run in sm.get("frameDurationCpuMs", {}).get("runs", []) for x in run]
     over = [x for run in sm.get("frameOverrunMs", {}).get("runs", []) for x in run]
@@ -132,8 +157,11 @@ def main(args) -> None:
                     a.adb(s, "install", "-r", str(APP_BENCH_APK))
                     current = theme
                 log(f"{s} {form} {theme} {test}")
-                r = run_bench(s, test, raw_dir, f"{form}-{theme}-{test}")
-                row = {"device": form, "serial": s, "theme": theme, "test": test, **summarise(test, r)}
+                if test == "memoryAfterBrowse":
+                    summary = memory_after_browse(s)
+                else:
+                    summary = summarise(test, run_bench(s, test, raw_dir, f"{form}-{theme}-{test}"))
+                row = {"device": form, "serial": s, "theme": theme, "test": test, **summary}
                 results["rows"] = [x for x in results["rows"]
                                    if not (x["device"] == form and x["theme"] == theme and x["test"] == test)]
                 results["rows"].append(row)
@@ -183,9 +211,9 @@ def write_md(results: dict, path: Path) -> None:
                  f"{fmt(r.get('cpu_p50_ms'))} | {fmt(r.get('cpu_p90_ms'))} | {fmt(r.get('cpu_p99_ms'))} | "
                  f"{fmt(r.get('overrun_p90_ms'))} | {fmt(r.get('overrun_p99_ms'))} |")
     L += ["", "Jank % = frames whose frameOverrunMs > 0 (missed their deadline). Times in ms.", "",
-          "## Memory after browsing (KB, median of 3)", ""]
+          "## Memory after browsing (dumpsys meminfo, KB, median of 3)", ""]
     mem_rows = [r for r in results["rows"] if r["test"] == "memoryAfterBrowse"]
-    keys = sorted({k for r in mem_rows for k in r if k.startswith("memory")})
+    keys = [k for k in MEM_KEYS.values() if any(k in r for r in mem_rows)]
     if mem_rows:
         L.append("| Device | Theme | " + " | ".join(keys) + " |")
         L.append("|---|---|" + "---|" * len(keys))

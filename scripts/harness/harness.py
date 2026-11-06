@@ -28,7 +28,7 @@ import adbutil as a  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "harness-results"
-TOUR = "com.giantbomb.tv.benchmark.harness.ScreenTour"
+TOUR = "com.giantbomb.tv.benchmark.harness.ScreenTour#capture"
 DUMP = "com.giantbomb.tv.benchmark.harness.HarnessDump"
 
 # The fixed screen list. Same names, same order, every run.
