@@ -18,6 +18,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
+import com.giantbomb.tv.model.Membership
 import com.giantbomb.tv.ui.GlassSurface
 import com.giantbomb.tv.util.DeviceUtil
 import kotlinx.coroutines.*
@@ -279,10 +280,15 @@ class SetupActivity : ComponentActivity(), CoroutineScope by MainScope() {
             val api = GiantBombApi(key)
             val result = api.validateKey()
 
-            result.onSuccess { isPremium ->
+            result.onSuccess { status ->
                 prefs.apiKey = key
-                prefs.isPremium = isPremium
-                statusText.text = if (isPremium) "Premium account linked!" else "Free account linked."
+                prefs.isPremium = status.isPremium
+                prefs.accountTier = status.tier
+                statusText.text = when {
+                    status.tier == Membership.TIER_SUPPORTER -> "Premium 64 account linked!"
+                    status.isPremium -> "Premium account linked!"
+                    else -> "Free account linked."
+                }
                 statusText.setTextColor(0xFF4CAF50.toInt())
                 setResult(RESULT_OK)
                 // Setup can also be the root of a task when opened from its

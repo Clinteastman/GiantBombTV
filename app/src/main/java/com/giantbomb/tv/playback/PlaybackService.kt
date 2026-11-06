@@ -20,6 +20,7 @@ import com.giantbomb.tv.MainActivity
 import com.giantbomb.tv.PlaybackActivity
 import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.PrefsManager
+import com.giantbomb.tv.model.Membership
 import com.giantbomb.tv.model.Video
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -237,7 +238,10 @@ class PlaybackService : MediaSessionService() {
             showTitle = extras.getString(PlaybackActivity.METADATA_VIDEO_SHOW_TITLE),
             author = extras.getString(PlaybackActivity.METADATA_VIDEO_AUTHOR),
             thumbnailUrl = extras.getString(PlaybackActivity.METADATA_VIDEO_THUMBNAIL_URL),
-            durationSeconds = extras.getInt(PlaybackActivity.METADATA_VIDEO_DURATION)
+            durationSeconds = extras.getInt(PlaybackActivity.METADATA_VIDEO_DURATION),
+            requiredTier = Membership.parseRequiredTier(
+                extras.getString(PlaybackActivity.METADATA_VIDEO_REQUIRED_TIER)
+            )
         )
     }
 

@@ -1,6 +1,7 @@
 package com.giantbomb.tv.playback
 
 import android.content.Context
+import com.giantbomb.tv.model.Membership
 import com.giantbomb.tv.model.Video
 import org.json.JSONObject
 import java.io.File
@@ -186,6 +187,7 @@ object DownloadStore {
         putOpt("author", v.author)
         putOpt("thumbnailUrl", v.thumbnailUrl)
         put("durationSeconds", v.durationSeconds)
+        put("requiredTier", v.requiredTier)
     }
 
     private fun videoFromJson(o: JSONObject): Video = Video(
@@ -200,7 +202,9 @@ object DownloadStore {
         showTitle = o.optStringOrNull("showTitle"),
         author = o.optStringOrNull("author"),
         thumbnailUrl = o.optStringOrNull("thumbnailUrl"),
-        durationSeconds = o.optInt("durationSeconds")
+        durationSeconds = o.optInt("durationSeconds"),
+        // Downloads saved before tiers were stored have no requiredTier.
+        requiredTier = Membership.parseRequiredTier(o.optStringOrNull("requiredTier"))
     )
 
     private fun JSONObject.optStringOrNull(key: String): String? =

@@ -30,6 +30,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import androidx.fragment.app.FragmentActivity
+import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.UpdateChecker
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.mobile.MobileBrowseFragment
@@ -190,6 +191,8 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope(), Backdrop
         // death resumes on relaunch, not only once a download screen opens.
         com.giantbomb.tv.playback.Downloads.ensureLoaded(this)
 
+        if (savedInstanceState == null) refreshAccountTier(visualPrefs)
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 handleBackNavigation(this)
@@ -314,6 +317,25 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope(), Backdrop
             tx.add(R.id.main_fragment_container, fragment, activeTag)
         }
         tx.commit()
+    }
+
+    /**
+     * Quietly re-checks the saved key's membership tier on app start. Older
+     * installs only stored is-premium, and a member can move between Premium
+     * and Premium 64 at any time, so one cheap key-status call keeps the
+     * stored tier current without asking anyone to re-enter their key.
+     * Failures keep the stored values.
+     */
+    private fun refreshAccountTier(prefs: PrefsManager) {
+        val key = prefs.apiKey?.takeIf { it.isNotBlank() } ?: return
+        launch {
+            GiantBombApi(key).validateKey().onSuccess { status ->
+                // Setup may have saved a different key while this was in flight.
+                if (prefs.apiKey != key) return@onSuccess
+                prefs.isPremium = status.isPremium
+                prefs.accountTier = status.tier
+            }
+        }
     }
 
     private fun checkForUpdate() {

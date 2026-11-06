@@ -42,6 +42,7 @@ import com.giantbomb.tv.model.UpcomingStream
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.ui.UpcomingCardView
 import com.giantbomb.tv.ui.GlassSurface
+import com.giantbomb.tv.ui.TierBadge
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
 import androidx.mediarouter.app.MediaRouteButton
@@ -123,7 +124,7 @@ class MobileBrowseFragment : Fragment() {
         private const val BACKDROP_DELAY_MS = 160L
         private const val BACKDROP_CROSSFADE_MS = 600L
         private const val MOBILE_BACKDROP_ALPHA = 0.48f
-        private const val PREMIUM_GLASS_TINT = 0xFFFFB436.toInt()
+        private const val PREMIUM_GLASS_TINT = TierBadge.PREMIUM_GLASS_TINT
         // Polling /upcoming_json every 60s pushed us into the endpoint's
         // hard rate limit (it applies to everyone, not just our UA). 180s is
         // still snappy enough for "stream went live" to surface within a few
@@ -1446,13 +1447,14 @@ class MobileBrowseFragment : Fragment() {
 
         fun bind(item: BrowseItem.VerticalVideo) {
             val video = item.video
+            val tierKind = TierBadge.kindOf(video)
 
             GlassSurface.applyState(
                 itemView,
                 GlassSurface.Emphasis.CARD,
                 focused = false,
                 cornerRadiusDp = 14f,
-                accentColor = if (video.premium) PREMIUM_GLASS_TINT else null
+                accentColor = TierBadge.glassTint(tierKind)
             )
 
             // Enforce 16:9 on each bind (handles orientation changes & recycling)
@@ -1480,7 +1482,9 @@ class MobileBrowseFragment : Fragment() {
             metaView.text = meta
             metaView.visibility = if (meta.isEmpty()) View.GONE else View.VISIBLE
 
-            premiumBadge.visibility = if (video.premium) View.VISIBLE else View.GONE
+            premiumBadge.text = TierBadge.label(tierKind)
+            premiumBadge.setTextColor(TierBadge.labelTextColor(tierKind))
+            premiumBadge.visibility = if (tierKind != TierBadge.Kind.NONE) View.VISIBLE else View.GONE
             watchedBadge.visibility = if (video.watched) View.VISIBLE else View.GONE
 
             // Duration
@@ -1719,19 +1723,22 @@ class MobileBrowseFragment : Fragment() {
 
         override fun onBindViewHolder(holder: VH, position: Int) {
             val video = videos[position]
+            val tierKind = TierBadge.kindOf(video)
             GlassSurface.applyState(
                 holder.itemView,
                 GlassSurface.Emphasis.CARD,
                 focused = false,
                 cornerRadiusDp = 10f,
-                accentColor = if (video.premium) PREMIUM_GLASS_TINT else null
+                accentColor = TierBadge.glassTint(tierKind)
             )
             holder.title.text = video.title
             holder.showName.text = video.showTitle ?: ""
             // Keep the metadata line's space even when this video has no show
             // name so every glass card in the row remains the same height.
             holder.showName.visibility = if (video.showTitle.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
-            holder.premiumBadge.visibility = if (video.premium) View.VISIBLE else View.GONE
+            holder.premiumBadge.text = TierBadge.label(tierKind)
+            holder.premiumBadge.setTextColor(TierBadge.labelTextColor(tierKind))
+            holder.premiumBadge.visibility = if (tierKind != TierBadge.Kind.NONE) View.VISIBLE else View.GONE
             holder.watched.visibility = if (video.watched) View.VISIBLE else View.GONE
 
             // Progress

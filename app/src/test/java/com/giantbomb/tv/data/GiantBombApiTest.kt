@@ -37,7 +37,8 @@ class GiantBombApiTest {
 
         val result = api.validateKey()
         assertTrue(result.isSuccess)
-        assertTrue(result.getOrThrow())
+        assertTrue(result.getOrThrow().isPremium)
+        assertNull(result.getOrThrow().tier)
     }
 
     @Test
@@ -48,7 +49,63 @@ class GiantBombApiTest {
 
         val result = api.validateKey()
         assertTrue(result.isSuccess)
-        assertFalse(result.getOrThrow())
+        assertFalse(result.getOrThrow().isPremium)
+        assertNull(result.getOrThrow().tier)
+    }
+
+    @Test
+    fun `validateKey - premium tier`() = runTest {
+        server.enqueue(MockResponse()
+            .setBody("""{"valid": true, "is_premium": true, "tier": "premium"}""")
+            .setResponseCode(200))
+
+        val status = api.validateKey().getOrThrow()
+        assertTrue(status.isPremium)
+        assertEquals("premium", status.tier)
+    }
+
+    @Test
+    fun `validateKey - supporter tier is Premium 64`() = runTest {
+        server.enqueue(MockResponse()
+            .setBody("""{"valid": true, "is_premium": true, "tier": "supporter"}""")
+            .setResponseCode(200))
+
+        val status = api.validateKey().getOrThrow()
+        assertTrue(status.isPremium)
+        assertEquals("supporter", status.tier)
+    }
+
+    @Test
+    fun `validateKey - null tier is a free key`() = runTest {
+        server.enqueue(MockResponse()
+            .setBody("""{"valid": true, "is_premium": false, "tier": null}""")
+            .setResponseCode(200))
+
+        val status = api.validateKey().getOrThrow()
+        assertFalse(status.isPremium)
+        assertNull(status.tier)
+    }
+
+    @Test
+    fun `validateKey - paid tier counts as premium without is_premium`() = runTest {
+        server.enqueue(MockResponse()
+            .setBody("""{"valid": true, "tier": "SUPPORTER"}""")
+            .setResponseCode(200))
+
+        val status = api.validateKey().getOrThrow()
+        assertTrue(status.isPremium)
+        assertEquals("supporter", status.tier)
+    }
+
+    @Test
+    fun `validateKey - unknown tier is ignored`() = runTest {
+        server.enqueue(MockResponse()
+            .setBody("""{"valid": true, "is_premium": true, "tier": "platinum"}""")
+            .setResponseCode(200))
+
+        val status = api.validateKey().getOrThrow()
+        assertTrue(status.isPremium)
+        assertNull(status.tier)
     }
 
     @Test
@@ -100,6 +157,33 @@ class GiantBombApiTest {
         assertEquals("Test Show", videos[0].showTitle)
         assertEquals(3600, videos[0].durationSeconds)
         assertEquals("https://example.com/thumb.jpg", videos[0].thumbnailUrl)
+        // No required_tier in the payload: defaults to normal Premium.
+        assertEquals("premium", videos[0].requiredTier)
+    }
+
+    @Test
+    fun `getVideos - parses required_tier`() = runTest {
+        fun video(id: Int, tier: Any?) = JSONObject().apply {
+            put("id", id)
+            put("title", "Video $id")
+            put("premium", true)
+            if (tier != null) put("required_tier", tier)
+        }
+        val body = JSONObject().apply {
+            put("results", JSONArray()
+                .put(video(1, "supporter"))
+                .put(video(2, "premium"))
+                .put(video(3, null))
+                .put(video(4, JSONObject.NULL))
+                .put(video(5, "Supporter")))
+        }
+        server.enqueue(MockResponse().setBody(body.toString()).setResponseCode(200))
+
+        val videos = api.getVideos().getOrThrow()
+        assertEquals(
+            listOf("supporter", "premium", "premium", "premium", "supporter"),
+            videos.map { it.requiredTier }
+        )
     }
 
     @Test
@@ -248,6 +332,38 @@ class GiantBombApiTest {
         assertEquals(2, info.mp4s.size)
         assertEquals("1080p", info.mp4s[0].label)
         assertEquals(1920, info.mp4s[0].width)
+    }
+
+    @Test
+    fun `getPlayback - Premium 64 video without access has no source`() = runTest {
+        val body = JSONObject().apply {
+            put("video_id", 900)
+            put("title", "Last of the Nintendogs")
+            put("required_tier", "supporter")
+            put("free", JSONObject.NULL)
+            put("premium", JSONObject.NULL)
+            put("youtube_url", JSONObject.NULL)
+        }
+        server.enqueue(MockResponse().setBody(body.toString()).setResponseCode(200))
+
+        val info = api.getPlayback(900).getOrThrow()
+        assertEquals("supporter", info.requiredTier)
+        assertTrue(info.hasNoSource)
+        assertNull(info.hlsUrl)
+        assertTrue(info.mp4s.isEmpty())
+    }
+
+    @Test
+    fun `getPlayback - required_tier defaults to premium`() = runTest {
+        val body = JSONObject().apply {
+            put("title", "Video")
+            put("premium", JSONObject().apply { put("hls_url", "https://example.com/a.m3u8") })
+        }
+        server.enqueue(MockResponse().setBody(body.toString()).setResponseCode(200))
+
+        val info = api.getPlayback(901).getOrThrow()
+        assertEquals("premium", info.requiredTier)
+        assertFalse(info.hasNoSource)
     }
 
     @Test

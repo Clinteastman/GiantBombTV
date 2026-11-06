@@ -31,12 +31,14 @@ import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Mp4Source
 import com.giantbomb.tv.model.ProgressEntry
+import com.giantbomb.tv.model.Membership
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.playback.DownloadStatus
 import com.giantbomb.tv.playback.Downloads
 import com.giantbomb.tv.util.DateFormat
 import com.giantbomb.tv.util.DeviceUtil
 import com.giantbomb.tv.ui.GlassSurface
+import com.giantbomb.tv.ui.TierBadge
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.*
 
@@ -215,16 +217,20 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             animViews.add(showTag)
         }
 
-        // Premium badge — frosted gold pill
-        if (video.premium) {
+        // Premium badge: frosted gold pill, violet for Premium 64
+        val tierKind = TierBadge.kindOf(video)
+        if (tierKind != TierBadge.Kind.NONE) {
             val premiumTag = TextView(this).apply {
-                text = "  PREMIUM  "
+                text = "  ${TierBadge.label(tierKind)}  "
                 textSize = 11f
-                setTextColor(0xFF1A1A1A.toInt())
+                setTextColor(TierBadge.pillTextColor(tierKind))
                 typeface = Typeface.DEFAULT_BOLD
                 letterSpacing = 0.1f
                 val pillFill = GradientDrawable().apply {
-                    setColor(0xBBFFD700.toInt())
+                    setColor(
+                        if (tierKind == TierBadge.Kind.PREMIUM_64) TierBadge.PREMIUM_64_PILL
+                        else 0xBBFFD700.toInt()
+                    )
                     cornerRadius = 4f * density
                 }
                 val pillBorder = GradientDrawable().apply {
@@ -266,6 +272,21 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
         }
         content.addView(metaView)
         animViews.add(metaView)
+
+        // Shown once playback comes back with nothing this account can
+        // play, so the membership gap is clear before Watch or Download.
+        var accessBlock = Membership.Block.NONE
+        val accessNotice = TextView(this).apply {
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(
+                if (tierKind == TierBadge.Kind.PREMIUM_64) TierBadge.PREMIUM_64_LABEL_TEXT
+                else 0xFFFFD27A.toInt()
+            )
+            setPadding(0, 0, 0, 12.dp())
+            visibility = View.GONE
+        }
+        content.addView(accessNotice)
 
         // Description
         if (!video.description.isNullOrEmpty()) {
@@ -481,8 +502,12 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 else -> {
                     val src = downloadSource
                     if (src == null) {
-                        Toast.makeText(this@DetailActivity,
-                            "Download isn't available for this video", Toast.LENGTH_SHORT).show()
+                        val reason = if (accessBlock != Membership.Block.NONE) {
+                            Membership.message(accessBlock)
+                        } else {
+                            "Download isn't available for this video"
+                        }
+                        Toast.makeText(this@DetailActivity, reason, Toast.LENGTH_SHORT).show()
                     } else {
                         val label = src.label.ifEmpty { if (src.height > 0) "${src.height}p" else "MP4" }
                         requestNotificationPermissionIfNeeded()
@@ -525,6 +550,13 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             val watchlistDeferred = async { repository.getWatchlist() }
 
             val playback = playbackDeferred.await().getOrNull()
+            if (playback != null) {
+                accessBlock = Membership.playbackBlock(playback, video, prefs.effectiveAccountTier)
+                if (accessBlock != Membership.Block.NONE) {
+                    accessNotice.text = Membership.message(accessBlock)
+                    accessNotice.visibility = View.VISIBLE
+                }
+            }
             // Pick the MP4 to offer for offline download and reveal the button.
             downloadSource = chooseDownloadSource(playback?.mp4s, prefs.preferredQuality)
             renderDownloadButton()
