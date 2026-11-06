@@ -59,6 +59,7 @@ import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.PrefsManager
 import com.giantbomb.tv.model.Mp4Source
+import com.giantbomb.tv.model.Membership
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.playback.DownloadStatus
 import com.giantbomb.tv.playback.Downloads
@@ -102,6 +103,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         internal const val METADATA_VIDEO_AUTHOR = "gb.video.author"
         internal const val METADATA_VIDEO_THUMBNAIL_URL = "gb.video.thumbnailUrl"
         internal const val METADATA_VIDEO_DURATION = "gb.video.duration"
+        internal const val METADATA_VIDEO_REQUIRED_TIER = "gb.video.requiredTier"
         internal const val METADATA_LIVE_HLS_URL = "gb.live.hlsUrl"
         internal const val METADATA_LIVE_TITLE = "gb.live.title"
         internal const val METADATA_LIVE_CHANNEL = "gb.live.channel"
@@ -187,6 +189,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             putString(METADATA_VIDEO_AUTHOR, v.author)
             putString(METADATA_VIDEO_THUMBNAIL_URL, v.thumbnailUrl)
             putInt(METADATA_VIDEO_DURATION, v.durationSeconds)
+            putString(METADATA_VIDEO_REQUIRED_TIER, v.requiredTier)
         }
         return MediaMetadata.Builder()
             .setTitle(v.title)
@@ -1101,8 +1104,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             }
 
             if (qualityOptions.isEmpty()) {
-                Toast.makeText(this@PlaybackActivity, "No playback source available", Toast.LENGTH_LONG).show()
-                finish()
+                showNoSourceMessage(Membership.playbackBlock(playback, v, prefs.effectiveAccountTier))
                 return@onSuccess
             }
 
@@ -1408,6 +1410,29 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 }
             }
         }
+    }
+
+    /**
+     * Ends playback when the video has nothing to play. A membership block
+     * gets a dialog that says which membership the video needs; anything
+     * else is a real failure and keeps the generic toast.
+     */
+    private fun showNoSourceMessage(block: Membership.Block) {
+        // A dialog can't be answered inside the small picture-in-picture
+        // window (autoplay of a locked next episode), so use a toast there.
+        val inPip = isInPipMode()
+        if (block == Membership.Block.NONE || inPip) {
+            Toast.makeText(this, Membership.message(block), Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        if (isFinishing || isDestroyed) return
+        android.app.AlertDialog.Builder(this, R.style.GbDialogTheme)
+            .setTitle(Membership.title(block))
+            .setMessage(Membership.message(block))
+            .setPositiveButton(android.R.string.ok, null)
+            .setOnDismissListener { finish() }
+            .show()
     }
 
     private fun confirmDeleteDownload(v: Video) {

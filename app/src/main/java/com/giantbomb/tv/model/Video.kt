@@ -17,7 +17,9 @@ data class Video(
     val durationSeconds: Int = 0,
     val progressPercent: Int = 0,
     val isFallbackThumb: Boolean = false,
-    val watched: Boolean = false
+    val watched: Boolean = false,
+    /** "premium" or "supporter" (Premium 64). See [Membership]. */
+    val requiredTier: String = Membership.TIER_PREMIUM
 ) : Serializable
 
 data class Show(
@@ -37,8 +39,14 @@ data class PlaybackInfo(
     val mp4s: List<Mp4Source>,
     val duration: Double,
     val posterUrl: String?,
-    val youtubeUrl: String? = null
-) : Serializable
+    val youtubeUrl: String? = null,
+    /** "premium" or "supporter" (Premium 64). See [Membership]. */
+    val requiredTier: String = Membership.TIER_PREMIUM
+) : Serializable {
+    /** True when the response held nothing the player can use. */
+    val hasNoSource: Boolean
+        get() = hlsUrl.isNullOrEmpty() && mp4s.isEmpty() && youtubeUrl.isNullOrEmpty()
+}
 
 data class Mp4Source(
     val url: String,

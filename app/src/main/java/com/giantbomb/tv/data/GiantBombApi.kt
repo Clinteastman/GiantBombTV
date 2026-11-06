@@ -33,6 +33,12 @@ class ApiException(
         get() = "HTTP $httpCode on $endpoint | ${responseSnippet.take(200)}"
 }
 
+/**
+ * Result of `/api/public/key-status`. [tier] is "premium", "supporter"
+ * (Premium 64) or null for a free key. See [Membership].
+ */
+data class KeyStatus(val isPremium: Boolean, val tier: String?)
+
 class GiantBombApi(
     private val apiKey: String,
     private val baseUrl: String = DEFAULT_BASE
@@ -70,10 +76,13 @@ class GiantBombApi(
             value.replace(Regex("([?&]api_key=)[^&]*", RegexOption.IGNORE_CASE), "$1REDACTED")
     }
 
-    suspend fun validateKey(): Result<Boolean> = withContext(Dispatchers.IO) {
+    suspend fun validateKey(): Result<KeyStatus> = withContext(Dispatchers.IO) {
         try {
             val json = get("/api/public/key-status?api_key=$apiKey")
-            Result.success(json.optBoolean("is_premium", false))
+            val tier = Membership.parseAccountTier(json.safeString("tier"))
+            // A key with any paid tier is premium even if is_premium is missing.
+            val isPremium = json.optBoolean("is_premium", false) || tier != null
+            Result.success(KeyStatus(isPremium = isPremium, tier = tier))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -171,7 +180,8 @@ class GiantBombApi(
                 mp4s = mp4s,
                 duration = duration,
                 posterUrl = poster,
-                youtubeUrl = youtubeUrl
+                youtubeUrl = youtubeUrl,
+                requiredTier = Membership.parseRequiredTier(json.safeString("required_tier"))
             ))
         } catch (e: Exception) {
             Result.failure(e)
@@ -372,7 +382,8 @@ class GiantBombApi(
                 showTitle = show?.optString("title"),
                 author = v.safeString("author"),
                 thumbnailUrl = thumbUrl,
-                durationSeconds = v.optInt("length_seconds", 0)
+                durationSeconds = v.optInt("length_seconds", 0),
+                requiredTier = Membership.parseRequiredTier(v.safeString("required_tier"))
             ))
         }
         return videos

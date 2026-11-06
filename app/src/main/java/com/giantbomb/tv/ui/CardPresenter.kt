@@ -41,7 +41,7 @@ class CardPresenter : Presenter() {
         }.joinToString(" \u2022 ")
         cardView.setMeta(meta)
 
-        cardView.setPremium(video.premium)
+        cardView.setTier(TierBadge.kindOf(video))
         cardView.setProgress(video.progressPercent)
         cardView.setWatched(video.watched)
 

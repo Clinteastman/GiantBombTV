@@ -76,13 +76,9 @@ class VideoCardView(context: Context) : FrameLayout(context) {
         // creates visible rectangular seams inside the rounded surface.
         findViewById<View>(R.id.card_text_area).background = null
 
-        // Premium badge -- frosted gold pill
-        val badgeBg = GradientDrawable().apply {
-            setColor(0xCCFFD700.toInt())
-            setCornerRadius(4f * density)
-            setStroke((0.5f * density).toInt(), 0x40FFFFFF)
-        }
-        premiumBadge.background = badgeBg
+        // Premium badge -- frosted pill, gold for Premium, violet for
+        // Premium 64. Styled per bind in setTier.
+        premiumBadge.background = TierBadge.pillBackground(TierBadge.Kind.PREMIUM, density)
 
         // Watched badge -- small green circle with checkmark
         val watchedBg = GradientDrawable().apply {
@@ -136,8 +132,15 @@ class VideoCardView(context: Context) : FrameLayout(context) {
         }
     }
 
-    fun setPremium(show: Boolean) {
-        premiumBadge.visibility = if (show) View.VISIBLE else View.GONE
+    fun setTier(kind: TierBadge.Kind) {
+        if (kind == TierBadge.Kind.NONE) {
+            premiumBadge.visibility = View.GONE
+            return
+        }
+        premiumBadge.text = TierBadge.label(kind)
+        premiumBadge.setTextColor(TierBadge.pillTextColor(kind))
+        premiumBadge.background = TierBadge.pillBackground(kind, resources.displayMetrics.density)
+        premiumBadge.visibility = View.VISIBLE
     }
 
     fun setWatched(watched: Boolean) {

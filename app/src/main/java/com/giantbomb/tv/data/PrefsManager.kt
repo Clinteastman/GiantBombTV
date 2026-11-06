@@ -2,6 +2,7 @@ package com.giantbomb.tv.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.giantbomb.tv.model.Membership
 
 class PrefsManager(context: Context) {
 
@@ -15,6 +16,19 @@ class PrefsManager(context: Context) {
     var isPremium: Boolean
         get() = prefs.getBoolean("is_premium", false)
         set(value) = prefs.edit().putBoolean("is_premium", value).apply()
+
+    /**
+     * Saved key's tier from key-status: "premium", "supporter" (Premium 64)
+     * or null. Null on installs from before tiers were stored, until the key
+     * is checked again on the next app start.
+     */
+    var accountTier: String?
+        get() = Membership.parseAccountTier(prefs.getString("account_tier", null))
+        set(value) = prefs.edit().putString("account_tier", Membership.parseAccountTier(value)).apply()
+
+    /** Tier to act on, falling back to [isPremium] for older installs. */
+    val effectiveAccountTier: String?
+        get() = Membership.effectiveAccountTier(accountTier, isPremium)
 
     /** Preferred quality: "auto", "1080p", "720p", "480p", "360p" */
     var preferredQuality: String
