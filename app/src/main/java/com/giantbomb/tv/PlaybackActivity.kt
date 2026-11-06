@@ -79,6 +79,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         private const val TV_SAFE_X_DP = 48
         private const val TV_SAFE_Y_DP = 28
         private const val PHONE_CONTROL_INSET_DP = 8
+        private const val WATCHLIST_ADD = "+ Watchlist"
+        private const val WATCHLIST_ON = "✓ Watchlist"
         const val EXTRA_VIDEO = "extra_video"
         const val EXTRA_LIVE_HLS_URL = "extra_live_hls_url"
         const val EXTRA_LIVE_TITLE = "extra_live_title"
@@ -123,6 +125,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private lateinit var playerView: PlayerView
     private lateinit var rootLayout: FrameLayout
     private lateinit var repository: GiantBombRepository
+    /** Phone portrait only: the Watchlist toggle under the video. */
+    private var mobileWatchlistBtn: TextView? = null
     private var video: Video? = null
     private var videoDuration: Double = 0.0
     private var isTv = false
@@ -551,14 +555,12 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             setPadding(16.dp(), 8.dp(), 16.dp(), 8.dp())
             GlassSurface.styleInteractive(this, cornerRadiusDp = 8f)
             gravity = Gravity.CENTER
-            minHeight = 44.dp()
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+            minHeight = 48.dp()
+            layoutParams = actionButtonParams(first = false)
             setOnClickListener { showQualityPicker() }
         }
-        // Quality and Download sit side by side as one row of actions.
+        // Watchlist, Download and Quality share one row of equal buttons,
+        // in the same order as the TV detail screen.
         val actionRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -566,7 +568,20 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = 14.dp() }
         }
-        actionRow.addView(qualityBtn)
+        mobileWatchlistBtn = TextView(this).apply {
+            text = WATCHLIST_ADD
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            minHeight = 48.dp()
+            setPadding(12.dp(), 8.dp(), 12.dp(), 8.dp())
+            GlassSurface.styleInteractive(this, cornerRadiusDp = 8f)
+            layoutParams = actionButtonParams(first = true)
+            contentDescription = "Add to watchlist"
+            setOnClickListener { toggleMobileWatchlist() }
+        }
+        actionRow.addView(mobileWatchlistBtn)
         contentLayout.addView(actionRow)
 
         // Download (offline) button — mobile's only entry to downloads, since
@@ -580,15 +595,13 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             setPadding(16.dp(), 8.dp(), 16.dp(), 8.dp())
             GlassSurface.styleInteractive(this, cornerRadiusDp = 8f)
             gravity = Gravity.CENTER
-            minHeight = 44.dp()
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { marginStart = 12.dp() }
+            minHeight = 48.dp()
+            layoutParams = actionButtonParams(first = false)
             visibility = View.GONE
             setOnClickListener { onDownloadButtonClicked() }
         }
         actionRow.addView(downloadBtn)
+        actionRow.addView(qualityBtn)
 
         // Stream live download state into the button while the screen is open
         // (so it updates Download -> Downloading X% -> Downloaded in place).
@@ -644,6 +657,56 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         bindVideoMetadata(v)
     }
 
+    /** Equal-width button in the phone player's action row, 12 dp apart. */
+    private fun actionButtonParams(first: Boolean) = LinearLayout.LayoutParams(
+        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+    ).apply { if (!first) marginStart = 12.dp() }
+
+    /** Shows whether [v] is on the watchlist on the phone player's button. */
+    private fun refreshMobileWatchlist(v: Video) {
+        val btn = mobileWatchlistBtn ?: return
+        btn.tag = null
+        btn.text = WATCHLIST_ADD
+        launch {
+            val onList = repository.getWatchlist().getOrNull()?.any { it.id == v.id } == true
+            if (video?.id != v.id) return@launch
+            setMobileWatchlistState(onList)
+        }
+    }
+
+    private fun setMobileWatchlistState(onList: Boolean) {
+        val btn = mobileWatchlistBtn ?: return
+        btn.tag = onList
+        btn.text = if (onList) WATCHLIST_ON else WATCHLIST_ADD
+        btn.contentDescription = if (onList) "Remove from watchlist" else "Add to watchlist"
+    }
+
+    private fun toggleMobileWatchlist() {
+        val v = video ?: return
+        val btn = mobileWatchlistBtn ?: return
+        val onList = btn.tag == true
+        btn.isEnabled = false
+        launch {
+            val result = if (onList) repository.removeFromWatchlist(v.id) else repository.addToWatchlist(v)
+            btn.isEnabled = true
+            result.onSuccess {
+                setMobileWatchlistState(!onList)
+                Toast.makeText(
+                    this@PlaybackActivity,
+                    if (onList) "Removed from watchlist" else "Added to watchlist",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            result.onFailure {
+                Toast.makeText(
+                    this@PlaybackActivity,
+                    if (onList) "Failed to remove" else "Failed to add",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
     /**
      * Refreshes the mobile portrait metadata UI (title, meta line, description,
      * and the "Up Next" list) for [v]. Called on initial layout and again when
@@ -676,6 +739,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 dv.visibility = View.VISIBLE
             }
         }
+
+        refreshMobileWatchlist(v)
 
         // Only the mobile layout has an "Up Next" list; skip the fetch otherwise.
         if (relatedRecycler != null) loadRelatedVideos(v)

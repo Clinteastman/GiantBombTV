@@ -218,8 +218,10 @@ class MobileShowFragment : Fragment() {
                 }
             }
             title.text = video.title
-            // Every card here is from the same show, so the date alone.
-            val date = DateFormat.formatPublishDate(video.publishDate)
+            // Every card here is from the same show, so the date alone, and
+            // not even that when the title already carries one.
+            val date = if (TITLE_DATE.containsMatchIn(video.title)) ""
+                else DateFormat.formatPublishDate(video.publishDate)
             meta.text = date
             meta.visibility = if (date.isEmpty()) View.GONE else View.VISIBLE
 
@@ -257,6 +259,8 @@ class MobileShowFragment : Fragment() {
         private const val PAGE_SIZE = 40
         private const val LOAD_MORE_THRESHOLD = 6
         private const val MIN_CARD_WIDTH_DP = 340
+        /** A date such as 11/02/2026 or 5/8/26 inside an episode title. */
+        private val TITLE_DATE = Regex("""\b\d{1,2}/\d{1,2}/\d{2,4}\b""")
 
         /** One column on a phone, two or more on a tablet or a phone on its side. */
         fun columnsFor(widthDp: Int): Int = (widthDp / MIN_CARD_WIDTH_DP).coerceIn(1, 4)

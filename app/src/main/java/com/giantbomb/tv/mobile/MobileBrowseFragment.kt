@@ -1686,7 +1686,8 @@ class MobileBrowseFragment : Fragment() {
             val thumbnail: ImageView = view.findViewById(R.id.small_thumbnail)
             val title: TextView = view.findViewById<TextView>(R.id.small_title)
                 .also(com.giantbomb.tv.ui.VectorFont::applyIfNeon)
-            val showName: TextView = view.findViewById(R.id.small_show_name)
+            val showName: TextView = view.findViewById<TextView>(R.id.small_show_name)
+                .apply { setLines(2) }
             val progressTrack: View = view.findViewById(R.id.small_progress_track)
             val progressBar: View = view.findViewById(R.id.small_progress_bar)
             val watched: TextView = view.findViewById(R.id.small_watched)
@@ -1726,14 +1727,16 @@ class MobileBrowseFragment : Fragment() {
                 accentColor = TierBadge.glassTint(tierKind)
             )
             holder.title.text = video.title
-            // Date first, then the show, like the TV cards.
+            // Date on one line, the show on the next, so neither is cut short
+            // on these narrow cards.
             val smallMeta = listOfNotNull(
                 video.publishDate.takeIf { it.isNotEmpty() }?.let(::formatDate),
                 video.showTitle?.takeIf { it.isNotEmpty() }
-            ).joinToString(" • ")
+            ).joinToString("\n")
             holder.showName.text = smallMeta
-            // Keep the metadata line's space even when this video has no date
-            // or show so every card in the row remains the same height.
+            // Two lines are always kept (setLines in the holder), even when
+            // this video has no date or show, so every card in the row
+            // remains the same height.
             holder.showName.visibility = if (smallMeta.isEmpty()) View.INVISIBLE else View.VISIBLE
             TierBadge.styleLabel(holder.premiumBadge, tierKind)
             holder.watched.visibility = if (video.watched) View.VISIBLE else View.GONE

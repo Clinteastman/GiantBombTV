@@ -23,6 +23,8 @@ class CardPresenter(private val showShowName: Boolean = true) : Presenter() {
 
     companion object {
         private const val TAG = "CardPresenter"
+        /** A date such as 11/02/2026 or 5/8/26 inside an episode title. */
+        private val TITLE_DATE = Regex("""\b\d{1,2}/\d{1,2}/\d{2,4}\b""")
     }
 
     private var defaultCardImage: Drawable? = null
@@ -42,7 +44,10 @@ class CardPresenter(private val showShowName: Boolean = true) : Presenter() {
         // Length first: with the date it is what a viewer chooses by.
         val meta = buildList {
             DateFormat.formatLength(video.durationSeconds).takeIf { it.isNotEmpty() }?.let(::add)
-            if (video.publishDate.isNotEmpty()) add(DateFormat.formatPublishDate(video.publishDate))
+            // On a show's own page the show name is dropped, and so is the
+            // date when the episode title already carries one ("| 11/02/2026").
+            val dateInTitle = !showShowName && TITLE_DATE.containsMatchIn(video.title)
+            if (video.publishDate.isNotEmpty() && !dateInTitle) add(DateFormat.formatPublishDate(video.publishDate))
             if (showShowName && !video.showTitle.isNullOrEmpty()) add(video.showTitle)
         }.joinToString(" \u2022 ")
         cardView.setMeta(meta)
