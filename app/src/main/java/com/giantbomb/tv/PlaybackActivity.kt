@@ -75,7 +75,8 @@ import kotlinx.coroutines.*
 class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     companion object {
-        /** TV overscan safe margin at the bottom (5% of 540 dp). */
+        /** TV overscan safe margins (5% of a 960 x 540 dp screen). */
+        private const val TV_SAFE_X_DP = 48
         private const val TV_SAFE_Y_DP = 28
         /** TV left keyline shared with home, search and settings (clears the 48 dp overscan band). */
         private const val TV_KEYLINE_DP = 56
@@ -1880,8 +1881,15 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // On TV the numbers put the title, the time bar's start and the
         // time text on one 56 dp keyline (the bar and the times carry their
         // own inner padding of 8 and 14 dp).
-        if (isTv) insetControls(pv, barXDp = TV_KEYLINE_DP - 14, timeBarXDp = TV_KEYLINE_DP - 8, yDp = TV_SAFE_Y_DP)
-        else insetControls(pv, barXDp = PHONE_CONTROL_INSET_DP, timeBarXDp = PHONE_CONTROL_INSET_DP, yDp = 0)
+        // The right edge keeps the full 48 dp so the settings gear stays out
+        // of the overscan band.
+        if (isTv) insetControls(
+            pv, barStartDp = TV_KEYLINE_DP - 14, barEndDp = TV_SAFE_X_DP,
+            timeBarXDp = TV_KEYLINE_DP - 8, yDp = TV_SAFE_Y_DP
+        ) else insetControls(
+            pv, barStartDp = PHONE_CONTROL_INSET_DP, barEndDp = PHONE_CONTROL_INSET_DP,
+            timeBarXDp = PHONE_CONTROL_INSET_DP, yDp = 0
+        )
 
         // Time bar: always red so the played position reads as the YouTube /
         // standard media-app cue. Scrubber thumb stays default; the colour
@@ -1895,11 +1903,16 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             // The bar has no focus look of its own, so from a sofa nothing
             // seemed focused when the remote was on it: give it a light pill
             // and a white scrubber while it has focus.
-            val focusPill = GradientDrawable().apply {
-                setColor(0x33FFFFFF)
-                setStroke(2.dp(), Color.WHITE)
-                cornerRadius = 999f
-            }
+            // The bar's view is a 48 dp touch target that reaches up under
+            // the title; keep the pill to a 16 dp band around the track.
+            val focusPill = android.graphics.drawable.InsetDrawable(
+                GradientDrawable().apply {
+                    setColor(0x33FFFFFF)
+                    setStroke(2.dp(), Color.WHITE)
+                    cornerRadius = 999f
+                },
+                0, 16.dp(), 0, 16.dp()
+            )
             background = if (isFocused) focusPill else null
             setOnFocusChangeListener { bar, focused ->
                 bar.background = if (focused) focusPill else null
@@ -1911,17 +1924,16 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     /**
      * Media3 runs the time bar and the bottom bar (times, settings) to the
      * screen edges, where a TV's overscan can crop them. Pull them in at the
-     * sides ([barXDp], [timeBarXDp]) and by [yDp] at the bottom: the bottom bar by padding,
+     * sides ([barStartDp], [barEndDp], [timeBarXDp]) and by [yDp] at the bottom: the bottom bar by padding,
      * so its dark strip still runs edge to edge, and the time bar by margins,
      * lifted by the same amount the bar grew. Tagged once, so calling this on
      * every controller show is safe.
      */
-    private fun insetControls(pv: PlayerView, barXDp: Int, timeBarXDp: Int, yDp: Int) {
-        val x = barXDp.dp()
+    private fun insetControls(pv: PlayerView, barStartDp: Int, barEndDp: Int, timeBarXDp: Int, yDp: Int) {
         val y = yDp.dp()
         pv.findViewById<View>(androidx.media3.ui.R.id.exo_bottom_bar)?.let { bar ->
             if (bar.getTag(R.id.tv_overscan_inset) != true) {
-                bar.setPadding(bar.paddingLeft + x, bar.paddingTop, bar.paddingRight + x, bar.paddingBottom + y)
+                bar.setPadding(bar.paddingLeft + barStartDp.dp(), bar.paddingTop, bar.paddingRight + barEndDp.dp(), bar.paddingBottom + y)
                 bar.layoutParams = bar.layoutParams.apply { if (height > 0) height += y }
                 bar.setTag(R.id.tv_overscan_inset, true)
             }
