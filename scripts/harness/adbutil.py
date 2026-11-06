@@ -176,6 +176,11 @@ def disable_animations(serial: str) -> None:
         shell(serial, f"settings put global {k} 0")
 
 
+def grant_notifications(serial: str) -> None:
+    """Stops the Android 13+ notification prompt from covering screens."""
+    shell(serial, f"pm grant {APP} android.permission.POST_NOTIFICATIONS", check=False)
+
+
 def set_font_scale(serial: str, scale: float) -> None:
     shell(serial, f"settings put system font_scale {scale}")
 

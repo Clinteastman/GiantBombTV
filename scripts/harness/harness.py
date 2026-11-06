@@ -36,7 +36,8 @@ TV_SCREENS = [
     "tv_home", "tv_show_grid", "tv_detail", "tv_playback", "tv_search",
     "tv_downloads", "tv_settings", "tv_theme_picker", "tv_setup",
 ]
-MOBILE_SCREENS = ["phone_home", "phone_show_grid", "phone_detail", "phone_downloads"]
+# The phone app has no detail screen (a tap plays the video), so it gets playback.
+MOBILE_SCREENS = ["phone_home", "phone_show_grid", "phone_playback", "phone_downloads"]
 
 APP_DEBUG_APK = ROOT / "app/build/outputs/apk/debug/app-debug.apk"
 APP_BENCH_APK = ROOT / "app/build/outputs/apk/benchmarkRelease/app-benchmarkRelease.apk"
@@ -104,6 +105,7 @@ def cmd_setup(args) -> None:
         a.adb(s, "install", "-r", str(APP_DEBUG_APK))
         a.adb(s, "install", "-r", "-t", str(TEST_APK))
         a.disable_animations(s)
+        a.grant_notifications(s)
         if args.key_from:
             a.seed_key(args.key_from, s, "simple")
             log(f"{s}: key copied from {args.key_from} (fingerprint {a.key_fingerprint(s)})")
@@ -181,6 +183,7 @@ def cmd_capture(args) -> None:
         if args.screens:
             screens = [x for x in screens if x in args.screens.split(",")]
         a.disable_animations(s)
+        a.grant_notifications(s)
         a.set_font_scale(s, args.font_scale)
         try:
             for theme in themes:

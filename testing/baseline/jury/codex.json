@@ -1,0 +1,80 @@
+{
+  "score": 6.1,
+  "criteria": {
+    "sofa_readability": 6.2,
+    "focus_clarity": 6.9,
+    "hierarchy": 6.6,
+    "spacing_alignment": 5.5,
+    "consistency": 6.0,
+    "image_text_contrast": 6.2,
+    "information_density": 6.0,
+    "polish": 4.9
+  },
+  "pages": {
+    "tv-home": 6.3,
+    "tv-show-grid": 6.2,
+    "tv-detail": 7.3,
+    "tv-playback": 6.8,
+    "tv-search": 6.5,
+    "tv-downloads": 7.8,
+    "tv-settings": 4.8,
+    "tv-theme-picker": 7.5,
+    "phone-home": 6.5,
+    "phone-show-page": 1.8,
+    "phone-player": 7.2,
+    "phone-downloads": 7.8
+  },
+  "summary": "The main viewing screens are usable, but the broken phone show page, truncated settings and weak secondary-text contrast prevent this baseline from being ready to ship.",
+  "top_changes": [
+    {
+      "page": "phone-show-page",
+      "element": "Show heading and episode-card column",
+      "change": "Replace the fixed desktop positioning with a full-width phone layout: 16\u201324 dp side padding, cards filling the available width, two-line titles, and a heading below the system safe area.",
+      "why": "The heading overlaps the status bar, episode cards are severely clipped, and most of the screen provides no usable information.",
+      "impact": "high"
+    },
+    {
+      "page": "tv-settings",
+      "element": "Settings row cards and their title/subtitle labels",
+      "change": "Use wider tiles in two rows or a vertical list; show complete setting names and allow two subtitle lines instead of truncating almost every label.",
+      "why": "Labels such as 'Stream ...', 'Visual T...' and 'Customi...' hide what the controls do.",
+      "impact": "high"
+    },
+    {
+      "page": "tv-home",
+      "element": "Recent Videos and Browse Shows headers, plus video-card text panels",
+      "change": "Raise row-header contrast to approximately #B8B8B8 or brighter and use opaque dark card footers so backdrop lettering cannot show through titles.",
+      "why": "Dim section labels are difficult to read from a sofa, and background artwork competes with the focused card's title.",
+      "impact": "high"
+    },
+    {
+      "page": "tv-search",
+      "element": "Focused first result and adjacent result cards",
+      "change": "Reserve space for focus enlargement or reduce the scale so the focused card keeps at least a 24 px visible gap from its neighbour; allow two title lines in fixed-height footers.",
+      "why": "The enlarged first result crowds the second card, while long neighbouring titles lose their meaning through clipping.",
+      "impact": "medium"
+    },
+    {
+      "page": "tv-playback",
+      "element": "Transport-control focus state and bottom seek controls",
+      "change": "Give the remote-focused control a distinct outer ring or coloured background independent of its icon; inset the seek track and settings button at least 48 px from screen edges.",
+      "why": "The white Play icon does not clearly establish remote focus, and the seek thumb touches the left edge with little protection against TV overscan.",
+      "impact": "medium"
+    }
+  ],
+  "already_good": [
+    "TV detail has a clear title and a prominent, visibly focused Watch Now action.",
+    "Focused video cards generally stand out through an outline and enlargement.",
+    "Phone player correctly places readable details and Up Next below the video.",
+    "Downloads empty states explain how to save a video.",
+    "The theme picker uses large rows, readable descriptions and an explicit selection checkmark."
+  ],
+  "_meta": {
+    "judge": "codex",
+    "provider": "openai",
+    "model": "gpt-6.1-sol",
+    "started": "2026-11-06T18:17:45",
+    "finished": "2026-11-06T18:18:40",
+    "attempts": 1
+  }
+}

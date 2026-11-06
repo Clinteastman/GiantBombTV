@@ -11,9 +11,11 @@ import androidx.benchmark.macro.junit4.BaselineProfileRule
 import androidx.benchmark.macro.junit4.MacrobenchmarkRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Configurator
 import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -113,6 +115,14 @@ class BaselineProfileGenerator {
 class StartupAndScrollBenchmark {
     @get:Rule
     val rule = MacrobenchmarkRule()
+
+    // The upcoming cards' countdowns tick every second, so the UI never goes
+    // idle and each waitForIdle() would sit out the default 10 s timeout
+    // after every D-pad press.
+    @Before
+    fun shortIdleWait() {
+        Configurator.getInstance().waitForIdleTimeout = 500
+    }
 
     @Test
     fun coldStartup() = rule.measureRepeated(

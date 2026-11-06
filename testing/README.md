@@ -18,6 +18,23 @@ shots referenced from the release PR are in `testing/baseline/`.
 This lives in `testing/` rather than `docs/` because `docs/` is the public
 GitHub Pages site.
 
+The scripts are Python, not PowerShell or bash: they parse hierarchy XML and
+check pixels (Pillow), and the same files run from Git Bash, PowerShell or a
+Mac/Linux shell.
+
+## Baseline (6 Nov 2026, master `0abe53b`)
+
+`testing/baseline/` holds the first pass, for later runs to compare against:
+
+- `layout-report.md`: layout pass/fail for every device and theme (shot paths
+  point into the run folder, which is not in git)
+- `jury/`: the jury round card, the full tally and each judge's verdict JSON,
+  exactly as returned (Simple theme only)
+- a few screenshots: TV home (Simple and Neon), TV settings and phone show
+  page with layout problems boxed, phone home, tablet show page
+
+- `perf-results.md`: start-up, scroll frame timing and memory on the emulators
+
 ## What you need
 
 - Android SDK with `adb` and the emulator on the PATH, Python 3.10+ with
@@ -45,6 +62,20 @@ GitHub Pages site.
 
   Give each AVD `disk.dataPartition.size=8G` and `hw.ramSize=2048M` in its
   `config.ini`. Use `hw.gpu.mode=auto`; `host` hung the API 36 images here.
+
+  Known snags on this PC (Nov 2026):
+  - A fresh cold boot of the API 36.1 phone image crash-loops surfaceflinger
+    (`RegionSampling` abort), with any GPU mode. The baseline used a copy of
+    the existing `Medium_Phone_API_36.1` AVD, which boots from its saved
+    snapshot (copy the `.avd` folder and `.ini`, then fix the paths inside).
+  - Tablet: the baseline ran the phone AVD with `adb shell wm size 2560x1600`
+    and `wm density 320` (800 dp wide, like a 10 inch tablet), then
+    `wm size reset` / `wm density reset`. Pass `--device-label tablet`.
+  - 4K TV: Google TV caps the app UI at 1920 wide (`config_maxUiWidth`), so
+    the `tv_4k` AVD renders the same 1080p UI as real 4K Fire TVs and
+    Chromecasts. Capture it with `--device-label tv4k` to prove that.
+  - Android 13+ asks for notification permission on first playback; `setup`
+    and `capture` grant it so the prompt never covers a screen.
 
 - **An API key already saved on a device.** The harness never asks for one
   and never stores one. `setup --key-from <serial>` copies the key that is
@@ -126,17 +157,21 @@ Every screen starts from a cold app start and walks there with the D-pad
 | `tv_theme_picker` | Settings row, Visual Theme, OK | current theme |
 | `tv_setup` | Settings row, API Key, OK, keyboard closed | key field (hidden) |
 | `phone_home` | cold start, top of the list | none |
-| `phone_show_grid` | Shows tab, first show | none |
-| `phone_detail` | first Recent video | none |
+| `phone_show_grid` | Shows tab, first show (the show page) | none |
+| `phone_playback` | first Recent video card, 7 s of play, pause, tap for controls | none |
 | `phone_downloads` | Downloads tab | none |
+
+The phone app has no separate detail screen: tapping a video opens the
+player, with the details under the video. So the phone list has
+`phone_playback` where the TV list has `tv_detail`.
 
 The tablet uses the phone list. Content comes from the live API, so new
 videos change what is on screen between days; layout, focus and scroll stay
 fixed. Rows the user can hide or reorder are reset to defaults by `setup` and
 before each theme.
 
-**Side effect:** `tv_playback` plays the first Recent video for about 7
-seconds, which nudges that video's saved progress on the account whose key
+**Side effect:** `tv_playback` and `phone_playback` play the first Recent
+video for about 7 seconds, which nudges that video's saved progress on the account whose key
 is used. Skip it with `--screens` if that matters.
 
 Why the tour is UiAutomator, not `adb shell uiautomator dump`: the countdown

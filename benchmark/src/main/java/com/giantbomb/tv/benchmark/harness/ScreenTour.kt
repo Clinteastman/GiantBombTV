@@ -5,6 +5,7 @@ import android.view.KeyEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.BySelector
+import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
 import org.junit.Test
@@ -47,7 +48,9 @@ class ScreenTour {
             "tv_setup" -> { tvSettingsCard("API Key", open = true); hideKeyboard() }
             "phone_home" -> phoneHome()
             "phone_show_grid" -> phoneShowGrid()
-            "phone_detail" -> phoneDetail()
+            // The phone app has no detail screen: a tap on a video card opens
+            // the player straight away, so the phone list captures that.
+            "phone_playback" -> phonePlayback()
             "phone_downloads" -> phoneDownloads()
             else -> error("Unknown screen '$screen'")
         }
@@ -61,7 +64,12 @@ class ScreenTour {
     private fun launch() {
         d.executeShellCommand("am force-stop $PKG")
         d.executeShellCommand("am start -W -n $PKG/.MainActivity")
-        val ok = d.wait(Until.hasObject(resAny("video_title", "card_title", "card_thumbnail")), 25_000)
+        // Any loaded row: the top rows can be live/upcoming cards, with video
+        // cards further down.
+        val ok = d.wait(
+            Until.hasObject(resAny("video_title", "small_title", "card_title", "section_title", "upcoming_title")),
+            25_000
+        )
         check(ok) {
             "No video cards after launch. Is a working API key saved on this device? " +
                 "(scripts/harness/harness.py seed-key)"
@@ -223,16 +231,31 @@ class ScreenTour {
         pause(1_500)
         val first = d.findObject(res("show_poster")) ?: error("No show on the Shows tab")
         first.click()
-        waitFor(resAny("episode_title", "hero_title"), 15_000, "a show's episode grid")
+        // The show page is the same Leanback grid as on TV.
+        waitFor(res("browse_grid"), 15_000, "the show page")
+        waitFor(resAny("card_title", "card_thumbnail"), 15_000, "show episodes")
         pause(2_500)
     }
 
-    private fun phoneDetail() {
+    private fun phonePlayback() {
         launch()
-        val thumb = d.findObject(res("video_thumbnail")) ?: error("No video card")
-        thumb.click()
-        waitFor(By.clazz("android.widget.Button").pkg(PKG), 15_000, "the detail buttons")
-        pause(2_000)
+        // First full-size video card (Recent videos); rows above it vary.
+        var thumb = d.findObject(res("video_thumbnail"))
+        repeat(8) {
+            if (thumb == null) {
+                d.findObject(res("browse_recycler"))?.scroll(Direction.DOWN, 0.5f)
+                pause(700)
+                thumb = d.findObject(res("video_thumbnail"))
+            }
+        }
+        (thumb ?: error("No video card")).click()
+        waitFor(res("exo_content_frame"), 20_000, "the player")
+        pause(7_000) // first segments
+        key(KeyEvent.KEYCODE_MEDIA_PAUSE, 800) // freeze the frame
+        val w = d.displayWidth
+        val h = d.displayHeight
+        d.click(w / 2, h / 2) // show the controls overlay
+        pause(700)
     }
 
     private fun phoneDownloads() {
