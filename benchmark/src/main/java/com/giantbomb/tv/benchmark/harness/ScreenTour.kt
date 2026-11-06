@@ -22,8 +22,8 @@ private fun resAny(vararg ids: String): BySelector =
  * scratch, walks to one screen the same way every time, puts focus on a known
  * element and writes `<name>.png` + `<name>.xml` (see [HarnessIo]).
  *
- *   adb shell am instrument -w -e class com.giantbomb.tv.benchmark.harness.ScreenTour \
- *     -e screen tv_home -e name simple_tv_home \
+ *   adb shell am instrument -w -e class com.giantbomb.tv.benchmark.harness.ScreenTour#capture \
+ *     -e harness true -e screen tv_home -e name simple_tv_home \
  *     com.giantbomb.tv.benchmark/androidx.test.runner.AndroidJUnitRunner
  *
  * The theme, font scale and API key are set from the host before each call.
@@ -34,6 +34,7 @@ class ScreenTour {
 
     @Test
     fun capture() {
+        HarnessIo.assumeHarnessRun()
         val screen = HarnessIo.arg("screen") ?: error("Pass -e screen <name>")
         val name = HarnessIo.arg("name", screen)!!
         when (screen) {
@@ -64,6 +65,7 @@ class ScreenTour {
      */
     @Test
     fun browse() {
+        HarnessIo.assumeHarnessRun()
         launch()
         repeat(2) {
             if (d.hasObject(res("browse_recycler"))) {

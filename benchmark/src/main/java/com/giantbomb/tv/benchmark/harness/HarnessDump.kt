@@ -9,12 +9,13 @@ import org.junit.runner.RunWith
  * touching the app. Used by scripts/harness for ad-hoc captures and debugging:
  *
  *   adb shell am instrument -w -e class com.giantbomb.tv.benchmark.harness.HarnessDump \
- *     -e name my_shot com.giantbomb.tv.benchmark/androidx.test.runner.AndroidJUnitRunner
+ *     -e harness true -e name my_shot com.giantbomb.tv.benchmark/androidx.test.runner.AndroidJUnitRunner
  */
 @RunWith(AndroidJUnit4::class)
 class HarnessDump {
     @Test
     fun dump() {
+        HarnessIo.assumeHarnessRun()
         HarnessIo.capture(HarnessIo.arg("name", "dump")!!)
     }
 }

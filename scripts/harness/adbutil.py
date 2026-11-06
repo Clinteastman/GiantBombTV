@@ -208,7 +208,9 @@ def set_font_scale(serial: str, scale: float) -> None:
 
 
 def instrument(serial: str, cls: str, args: dict[str, str], timeout: float = 240) -> tuple[bool, str]:
-    cmd = ["shell", "am", "instrument", "-w", "-e", "class", cls]
+    # `harness true` unlocks the harness-only tests (they skip without it);
+    # the Macrobenchmark tests ignore it.
+    cmd = ["shell", "am", "instrument", "-w", "-e", "class", cls, "-e", "harness", "true"]
     for k, v in args.items():
         cmd += ["-e", k, v]
     cmd.append(RUNNER)

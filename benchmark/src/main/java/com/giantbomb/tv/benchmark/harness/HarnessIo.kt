@@ -9,6 +9,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.Configurator
 import androidx.test.uiautomator.UiDevice
+import org.junit.Assume
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -38,6 +39,18 @@ internal object HarnessIo {
 
     fun arg(name: String, default: String? = null): String? =
         InstrumentationRegistry.getArguments().getString(name) ?: default
+
+    /**
+     * Harness tests run only when scripts/harness asks for them
+     * (`-e harness true`). A plain run of the benchmark suite, e.g.
+     * `connectedBenchmarkReleaseAndroidTest`, skips them instead of failing.
+     */
+    fun assumeHarnessRun() {
+        Assume.assumeTrue(
+            "Harness-only test: run it through scripts/harness (-e harness true)",
+            arg("harness") == "true"
+        )
+    }
 
     /** Writes `<name>.png` and `<name>.xml` and returns the png file. */
     fun capture(name: String): File {
