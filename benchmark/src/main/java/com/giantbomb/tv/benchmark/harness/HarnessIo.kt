@@ -42,10 +42,12 @@ internal object HarnessIo {
     /** Writes `<name>.png` and `<name>.xml` and returns the png file. */
     fun capture(name: String): File {
         val dir = outDir()
-        val xml = dumpHierarchy()
-        File(dir, "$name.xml").writeText(redactXml(xml))
+        // Screenshot first: short-lived UI (the player controls hide after
+        // 3 s) must be in the picture; the dump that follows is slower.
         val shot = instrumentation.uiAutomation.takeScreenshot()
             ?: error("Screenshot failed for $name")
+        val xml = dumpHierarchy()
+        File(dir, "$name.xml").writeText(redactXml(xml))
         val masked = maskEditTexts(shot)
         FileOutputStream(File(dir, "$name.png")).use {
             masked.compress(Bitmap.CompressFormat.PNG, 100, it)

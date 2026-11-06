@@ -9,6 +9,7 @@ Run from the repo root. See docs/testing.md for the full guide.
   python scripts/harness/harness.py layout  --run harness-results/<run>
   python scripts/harness/harness.py perf    --serial emulator-5586 [--themes simple,frosted]
   python scripts/harness/harness.py dump    --serial emulator-5586 --name here
+  python scripts/harness/harness.py restore --serial emulator-5586
 
 Generated files go to harness-results/ (ignored by git).
 """
@@ -137,6 +138,8 @@ def save_manifest(run: Path, m: dict) -> None:
 def capture_one(serial: str, screen: str, dest: Path, retries: int) -> dict:
     """Runs one ScreenTour step and pulls its png/xml. Retries a flaky step."""
     name = dest.stem
+    # Clear old copies so a failed step can never pull last run's files.
+    a.shell(serial, f"rm -f {a.DEVICE_OUT}/{name}.png {a.DEVICE_OUT}/{name}.xml", check=False)
     since = a.logcat_now(serial)
     started = time.time()
     ok, out, attempt = False, "", 0
@@ -214,6 +217,14 @@ def cmd_capture(args) -> None:
     log(f"Done. Run folder: {run}")
 
 
+# ---------------------------------------------------------------- restore ---
+
+def cmd_restore(args) -> None:
+    for s in resolve_serials(args.serial):
+        ok = a.restore_prefs(s)
+        log(f"{s}: {'restored the prefs saved before the first harness change' if ok else 'no saved prefs to restore'}")
+
+
 # ------------------------------------------------------------------- dump ---
 
 def cmd_dump(args) -> None:
@@ -267,6 +278,10 @@ def main() -> None:
     pf.add_argument("--out", help="results folder (default: new run folder)")
     pf.add_argument("--iterations-note", default="")
     pf.set_defaults(func=lambda args: __import__("perf").main(args))
+
+    rs = sub.add_parser("restore", help="put back the prefs the device had before the harness")
+    rs.add_argument("--serial", action="append")
+    rs.set_defaults(func=cmd_restore)
 
     du = sub.add_parser("dump", help="screenshot + hierarchy of whatever is on screen")
     du.add_argument("--serial", action="append")

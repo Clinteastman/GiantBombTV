@@ -109,8 +109,30 @@ def read_prefs(serial: str) -> str:
     return adb_bytes(serial, "exec-out", f"run-as {APP} cat {PREFS}").decode("utf-8", "replace")
 
 
+BACKUP = "files/harness_prefs_backup.xml"
+
+
+def backup_prefs(serial: str) -> bool:
+    """Keeps the user's own prefs (pins, row order, settings) on the device,
+    inside the app's private folder, the first time the harness changes them.
+    `harness.py restore` puts them back. Never copied to the host: they hold
+    the key."""
+    out = shell(serial, f"run-as {APP} sh -c 'test -f {BACKUP} && echo has || "
+                        f"(test -f {PREFS} && mkdir -p files && cp {PREFS} {BACKUP} && echo saved)'",
+                check=False)
+    return "saved" in out
+
+
+def restore_prefs(serial: str) -> bool:
+    out = shell(serial, f"run-as {APP} sh -c 'test -f {BACKUP} && cp {BACKUP} {PREFS} "
+                        f"&& rm {BACKUP} && echo restored'", check=False)
+    shell(serial, "am force-stop " + APP, check=False)
+    return "restored" in out
+
+
 def write_prefs(serial: str, xml: str) -> None:
     shell(serial, "am force-stop " + APP)
+    backup_prefs(serial)
     shell(serial, f"run-as {APP} mkdir -p shared_prefs")
     adb(serial, "shell", f"run-as {APP} sh -c 'cat > {PREFS}'", input=xml.encode("utf-8"))
 
@@ -205,8 +227,11 @@ def pull(serial: str, remote: str, local: str) -> None:
 def crashed_since(serial: str, since: str) -> list[str]:
     """Crash buffer lines for the app since a logcat timestamp."""
     out = adb(serial, "logcat", "-d", "-b", "crash", "-T", since, check=False)
-    lines = [l for l in out.splitlines() if APP in l or "FATAL" in l]
-    return lines
+    # Only crashes of the app itself: Java ("Process: com.giantbomb.tv, PID")
+    # or native (">>> com.giantbomb.tv <<<"), not other processes or the
+    # harness test app (com.giantbomb.tv.benchmark).
+    mine = re.compile(rf"Process: {re.escape(APP)},|>>> {re.escape(APP)} <<<")
+    return [l for l in out.splitlines() if mine.search(l)]
 
 
 def logcat_now(serial: str) -> str:

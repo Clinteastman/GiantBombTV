@@ -105,6 +105,15 @@ Builds and installs the debug app plus the harness test app
 file: the saved key and premium flag, Simple theme, default rows (no pins,
 no custom order). Leave out `--key-from` if the device already has a key.
 
+The first time the harness changes a device's prefs it keeps a copy inside
+the app's private folder on that device (never on the PC, as it holds the
+key). On a real device, put the owner's pins, row order and settings back
+when you are done:
+
+```bash
+python scripts/harness/harness.py restore --serial 192.168.50.188:5555
+```
+
 ```bash
 python scripts/harness/harness.py capture --serial emulator-5580 --themes all --label baseline
 python scripts/harness/harness.py capture --serial emulator-5570 --run harness-results/<run> --themes all
