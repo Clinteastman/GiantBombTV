@@ -101,6 +101,9 @@ class DownloadsFragment : Fragment() {
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, 48.dp())
             visibility = View.GONE
+            // On TV something must hold focus, or the remote seems dead on an
+            // empty page; the empty state takes it (no highlight needed).
+            isFocusable = isTv
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.MATCH_PARENT
