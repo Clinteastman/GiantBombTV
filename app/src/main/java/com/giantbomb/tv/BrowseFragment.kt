@@ -1063,7 +1063,7 @@ class BrowseFragment : BrowseSupportFragment() {
     /**
      * Called on every focus change. Moves the focused row (if still empty)
      * and the next [ROWS_AHEAD] show rows to the front of the fill queue, and
-     * decodes the thumbnails about to come on screen: the next cards to the
+     * downloads the thumbnails about to come on screen: the next cards to the
      * right of [item], and the first cards of the row below.
      */
     private fun prefetchAround(row: ListRow, item: Any?) {
@@ -1074,22 +1074,24 @@ class BrowseFragment : BrowseSupportFragment() {
             (rows.get(i) as? ListRow)?.headerItem?.name?.takeIf { it in rowPaginationMap }
         }
         rowPrefetcher?.prioritize(listOfNotNull(keys[index]) + RowPrefetcher.ahead(keys, index, ROWS_AHEAD))
-
+        // Download (not decode) the thumbnails about to come on screen.
+        // Decoding them at card size here as well cost frame time while
+        // scrolling (harness scroll test, 6 Nov 2026), so leave the decode
+        // to the cards themselves; the disk copy already saves the network.
         val visible = visibleCardCount()
-        val thumbW = resources.getDimensionPixelSize(R.dimen.card_width)
-        val thumbH = resources.getDimensionPixelSize(R.dimen.card_thumb_height)
-        fun decode(card: Any?) {
-            val video = card as? Video ?: return
-            preloader().decode(video.thumbnailUrl ?: video.posterUrl, thumbW, thumbH, video.isFallbackThumb)
+        val urls = mutableListOf<String?>()
+        fun add(card: Any?) {
+            (card as? Video)?.let { urls.add(it.thumbnailUrl ?: it.posterUrl) }
         }
         (row.adapter as? ArrayObjectAdapter)?.let { cards ->
             val from = if (item != null) cards.indexOf(item) + 1 else 0
-            for (i in from until minOf(cards.size(), from + visible)) decode(cards.get(i))
+            for (i in from until minOf(cards.size(), from + visible)) add(cards.get(i))
         }
         val below = if (index + 1 < rows.size()) (rows.get(index + 1) as? ListRow)?.adapter else null
         if (below != null) {
-            for (i in 0 until minOf(below.size(), visible)) decode(below.get(i))
+            for (i in 0 until minOf(below.size(), visible)) add(below.get(i))
         }
+        preloader().warm(urls)
     }
 
     // ----------------------------------------------------------------------

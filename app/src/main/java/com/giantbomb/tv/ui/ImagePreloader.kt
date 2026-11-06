@@ -10,9 +10,9 @@ import com.bumptech.glide.RequestManager
  * on-screen cards always load first.
  *
  * [warm] only downloads into Glide's disk cache: no bitmap is kept, so it is
- * safe for many images. [decode] also decodes at the card's exact size so the
- * card gets a memory-cache hit; use it only for the few cards about to show.
- * On low-RAM devices [decode] falls back to [warm].
+ * safe for many images, and the card's own load then skips the network.
+ * [allowDecode] tells callers whether decoding ahead (which holds a bitmap)
+ * is sensible on this device: false on low-RAM devices.
  */
 class ImagePreloader(context: Context, private val requests: RequestManager) {
 
@@ -41,21 +41,6 @@ class ImagePreloader(context: Context, private val requests: RequestManager) {
             if (url.isNullOrEmpty() || !firstTime("w:$url")) continue
             requests.downloadOnly().load(url).priority(Priority.LOW).preload()
         }
-    }
-
-    /**
-     * Decodes [url] at [width] x [height] with the same transformation the card
-     * uses (centre crop, or fit centre for show-poster fallbacks).
-     */
-    fun decode(url: String?, width: Int, height: Int, fitCenter: Boolean = false) {
-        if (url.isNullOrEmpty()) return
-        if (!allowDecode) {
-            warm(listOf(url))
-            return
-        }
-        if (!firstTime("d:$width:$height:$fitCenter:$url")) return
-        val request = requests.load(url).priority(Priority.LOW)
-        (if (fitCenter) request.fitCenter() else request.centerCrop()).preload(width, height)
     }
 
     private companion object {
