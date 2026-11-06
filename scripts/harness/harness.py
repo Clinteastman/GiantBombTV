@@ -177,8 +177,10 @@ def cmd_capture(args) -> None:
             sys.exit(f"{s}: no API key saved (run `setup --key-from <serial>` or enter one)")
         form = (args.device_label or info["form"]) + (f"-font{args.font_scale}" if args.font_scale != 1.0 else "")
         info["key_fingerprint"] = a.key_fingerprint(s)
-        m["devices"][form] = info
-        save_manifest(run, m)
+        fresh = load_manifest(run)
+        fresh.setdefault("git", m["git"])
+        fresh["devices"][form] = info
+        save_manifest(run, fresh)
         screens = TV_SCREENS if info["is_tv"] else MOBILE_SCREENS
         if args.screens:
             screens = [x for x in screens if x in args.screens.split(",")]
