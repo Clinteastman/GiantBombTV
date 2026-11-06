@@ -179,6 +179,10 @@ def cmd_capture(args) -> None:
         if not a.has_key(s):
             sys.exit(f"{s}: no API key saved (run `setup --key-from <serial>` or enter one)")
         form = (args.device_label or info["form"]) + (f"-font{args.font_scale}" if args.font_scale != 1.0 else "")
+        known = load_manifest(run)["devices"].get(form)
+        if known and known.get("serial") != s:
+            sys.exit(f"{s}: this run already has '{form}' from {known.get('serial')}. "
+                     f"Pass --device-label (e.g. firetv) so the two devices stay apart.")
         info["key_fingerprint"] = a.key_fingerprint(s)
         fresh = load_manifest(run)
         fresh.setdefault("git", m["git"])
@@ -276,7 +280,8 @@ def main() -> None:
     pf.add_argument("--themes", default="simple,frosted", help="themes for the scroll test")
     pf.add_argument("--no-build", action="store_true")
     pf.add_argument("--out", help="results folder (default: new run folder)")
-    pf.add_argument("--iterations-note", default="")
+    pf.add_argument("--device-label", help="name for this device in the results instead of the "
+                    "detected form, e.g. firetv")
     pf.set_defaults(func=lambda args: __import__("perf").main(args))
 
     rs = sub.add_parser("restore", help="put back the prefs the device had before the harness")

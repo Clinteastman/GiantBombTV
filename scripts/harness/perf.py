@@ -141,7 +141,10 @@ def main(args) -> None:
 
     for s in harness.resolve_serials(args.serial):
         info = a.device_info(s)
-        form = info["form"]
+        # Keyed by form plus serial, so an emulator and a real device of the
+        # same form (two TVs) keep separate results in one folder.
+        form = f"{args.device_label or info['form']} ({s})"
+        tag = re.sub(r"[^A-Za-z0-9._-]+", "_", form)
         results["devices"][form] = info
         if not (a.installed(s) and a.is_debuggable(s) and a.has_key(s)):
             sys.exit(f"{s}: needs the debug app with a key first (harness.py setup)")
@@ -160,7 +163,7 @@ def main(args) -> None:
                 if test == "memoryAfterBrowse":
                     summary = memory_after_browse(s)
                 else:
-                    summary = summarise(test, run_bench(s, test, raw_dir, f"{form}-{theme}-{test}"))
+                    summary = summarise(test, run_bench(s, test, raw_dir, f"{tag}-{theme}-{test}"))
                 row = {"device": form, "serial": s, "theme": theme, "test": test, **summary}
                 results["rows"] = [x for x in results["rows"]
                                    if not (x["device"] == form and x["theme"] == theme and x["test"] == test)]
