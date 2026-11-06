@@ -4,6 +4,7 @@ import android.view.KeyEvent
 import androidx.benchmark.macro.ExperimentalMetricApi
 import androidx.benchmark.macro.FrameTimingMetric
 import androidx.benchmark.macro.MacrobenchmarkScope
+import androidx.benchmark.macro.MemoryUsageMetric
 import androidx.benchmark.macro.StartupMode
 import androidx.benchmark.macro.StartupTimingMetric
 import androidx.benchmark.macro.junit4.BaselineProfileRule
@@ -123,6 +124,34 @@ class StartupAndScrollBenchmark {
     ) {
         startActivityAndWait()
         awaitBrowse()
+    }
+
+    @Test
+    fun warmStartup() = rule.measureRepeated(
+        packageName = TARGET_PACKAGE,
+        metrics = listOf(StartupTimingMetric()),
+        iterations = 5,
+        startupMode = StartupMode.WARM,
+        setupBlock = { pressHome() }
+    ) {
+        startActivityAndWait()
+        awaitBrowse()
+    }
+
+    /** Memory once the user has browsed the home rows (last value of the trace). */
+    @OptIn(ExperimentalMetricApi::class)
+    @Test
+    fun memoryAfterBrowse() = rule.measureRepeated(
+        packageName = TARGET_PACKAGE,
+        metrics = listOf(MemoryUsageMetric(MemoryUsageMetric.Mode.Last)),
+        iterations = 3,
+        startupMode = StartupMode.COLD,
+        setupBlock = { pressHome() }
+    ) {
+        startActivityAndWait()
+        val ui = awaitBrowse()
+        scrollBrowse(ui)
+        scrollBrowse(ui)
     }
 
     @OptIn(ExperimentalMetricApi::class)

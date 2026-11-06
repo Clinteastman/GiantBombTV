@@ -21,3 +21,6 @@ tmp_*.png
 tmp_*.json
 __pycache__/
 screenshots/phone_test.png
+# Test harness output (screenshots, dumps, perf JSON). A small curated set
+# lives in docs/testing/baseline/ instead.
+/harness-results/
