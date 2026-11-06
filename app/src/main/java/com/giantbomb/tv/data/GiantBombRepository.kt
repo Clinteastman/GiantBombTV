@@ -118,6 +118,10 @@ class GiantBombRepository private constructor(
         }
     }
 
+    /** True when this page of a show is cached, so fetching it costs no request. */
+    fun hasShowVideos(showId: Int, limit: Int, offset: Int = 0): Boolean =
+        cachedValue<List<Video>>("videos:show:$showId:$limit:$offset") != null
+
     suspend fun searchVideos(query: String, limit: Int = 30): Result<List<Video>> =
         api.getVideos(limit = limit, query = query)
 
