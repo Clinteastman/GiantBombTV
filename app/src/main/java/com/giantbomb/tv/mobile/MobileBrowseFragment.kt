@@ -1726,10 +1726,15 @@ class MobileBrowseFragment : Fragment() {
                 accentColor = TierBadge.glassTint(tierKind)
             )
             holder.title.text = video.title
-            holder.showName.text = video.showTitle ?: ""
-            // Keep the metadata line's space even when this video has no show
-            // name so every glass card in the row remains the same height.
-            holder.showName.visibility = if (video.showTitle.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
+            // Date first, then the show, like the TV cards.
+            val smallMeta = listOfNotNull(
+                video.publishDate.takeIf { it.isNotEmpty() }?.let(::formatDate),
+                video.showTitle?.takeIf { it.isNotEmpty() }
+            ).joinToString(" • ")
+            holder.showName.text = smallMeta
+            // Keep the metadata line's space even when this video has no date
+            // or show so every card in the row remains the same height.
+            holder.showName.visibility = if (smallMeta.isEmpty()) View.INVISIBLE else View.VISIBLE
             TierBadge.styleLabel(holder.premiumBadge, tierKind)
             holder.watched.visibility = if (video.watched) View.VISIBLE else View.GONE
 

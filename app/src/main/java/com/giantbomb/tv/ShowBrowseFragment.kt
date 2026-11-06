@@ -81,7 +81,7 @@ class ShowBrowseFragment : VerticalGridSupportFragment() {
             shadowEnabled = false
         }
 
-        gridAdapter = ArrayObjectAdapter(CardPresenter())
+        gridAdapter = ArrayObjectAdapter(CardPresenter(showShowName = false))
         adapter = gridAdapter
 
         onItemViewClickedListener = OnItemViewClickedListener { _, item, _, _ ->

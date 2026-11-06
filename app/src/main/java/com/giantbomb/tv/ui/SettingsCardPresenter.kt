@@ -18,6 +18,8 @@ class SettingsCardPresenter : Presenter() {
             isFocusableInTouchMode = true
             // Wide enough for "Customize Browse" and "Privacy Policy" on one
             // line; titles and descriptions may still wrap to a second line.
+            // At 200 dp the last whole card on a 1080p screen also ends clear
+            // of the right overscan band.
             setMainImageDimensions((CARD_WIDTH_DP * density).toInt(), (ICON_AREA_DP * density).toInt())
             setMainImageScaleType(ImageView.ScaleType.CENTER_INSIDE)
 
@@ -78,7 +80,7 @@ class SettingsCardPresenter : Presenter() {
     }
 
     private companion object {
-        const val CARD_WIDTH_DP = 216f
+        const val CARD_WIDTH_DP = 200f
         const val ICON_AREA_DP = 72f
         const val ICON_DP = 40f
         const val FOCUSED_SCALE = 1.06f

@@ -15,7 +15,11 @@ import com.giantbomb.tv.R
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.util.DateFormat
 
-class CardPresenter : Presenter() {
+/**
+ * @param showShowName false for rows and pages that already name the show
+ *   (a show's own page or row), so the meta line is not spent repeating it.
+ */
+class CardPresenter(private val showShowName: Boolean = true) : Presenter() {
 
     companion object {
         private const val TAG = "CardPresenter"
@@ -35,9 +39,11 @@ class CardPresenter : Presenter() {
 
         cardView.setTitle(video.title)
 
+        // Length first: with the date it is what a viewer chooses by.
         val meta = buildList {
+            DateFormat.formatLength(video.durationSeconds).takeIf { it.isNotEmpty() }?.let(::add)
             if (video.publishDate.isNotEmpty()) add(DateFormat.formatPublishDate(video.publishDate))
-            if (!video.showTitle.isNullOrEmpty()) add(video.showTitle)
+            if (showShowName && !video.showTitle.isNullOrEmpty()) add(video.showTitle)
         }.joinToString(" \u2022 ")
         cardView.setMeta(meta)
 

@@ -33,6 +33,7 @@ import androidx.activity.OnBackPressedCallback
 import com.giantbomb.tv.util.enableDarkEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
@@ -77,6 +78,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         /** TV overscan safe margin (5% of a 960 x 540 dp screen). */
         private const val TV_SAFE_X_DP = 48
         private const val TV_SAFE_Y_DP = 28
+        private const val PHONE_CONTROL_INSET_DP = 8
         const val EXTRA_VIDEO = "extra_video"
         const val EXTRA_LIVE_HLS_URL = "extra_live_hls_url"
         const val EXTRA_LIVE_TITLE = "extra_live_title"
@@ -548,13 +550,24 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             typeface = Typeface.DEFAULT_BOLD
             setPadding(16.dp(), 8.dp(), 16.dp(), 8.dp())
             GlassSurface.styleInteractive(this, cornerRadiusDp = 8f)
+            gravity = Gravity.CENTER
+            minHeight = 44.dp()
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 12.dp() }
+            )
             setOnClickListener { showQualityPicker() }
         }
-        contentLayout.addView(qualityBtn)
+        // Quality and Download sit side by side as one row of actions.
+        val actionRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 14.dp() }
+        }
+        actionRow.addView(qualityBtn)
+        contentLayout.addView(actionRow)
 
         // Download (offline) button — mobile's only entry to downloads, since
         // phone card taps go straight to the player (skipping DetailActivity).
@@ -566,14 +579,16 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             typeface = Typeface.DEFAULT_BOLD
             setPadding(16.dp(), 8.dp(), 16.dp(), 8.dp())
             GlassSurface.styleInteractive(this, cornerRadiusDp = 8f)
+            gravity = Gravity.CENTER
+            minHeight = 44.dp()
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 8.dp() }
+            ).apply { marginStart = 12.dp() }
             visibility = View.GONE
             setOnClickListener { onDownloadButtonClicked() }
         }
-        contentLayout.addView(downloadBtn)
+        actionRow.addView(downloadBtn)
 
         // Stream live download state into the button while the screen is open
         // (so it updates Download -> Downloading X% -> Downloaded in place).
@@ -603,6 +618,21 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         mobileContentScroll!!.addView(contentLayout)
         mainLayout.addView(mobileContentScroll)
+
+        // Edge to edge: start the player below the status bar (the cast
+        // button used to sit on the battery icon) and keep the last Up Next
+        // item above the navigation bar. Hidden bars (landscape fullscreen)
+        // report no inset, so the player fills the screen there.
+        val contentBottom = contentLayout.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(mainLayout) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(bars.left, bars.top, bars.right, 0)
+            contentLayout.setPadding(
+                contentLayout.paddingLeft, contentLayout.paddingTop,
+                contentLayout.paddingRight, contentBottom + bars.bottom
+            )
+            insets
+        }
 
         rootLayout.addView(mainLayout)
         setContentView(rootLayout)
@@ -1779,7 +1809,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // focus transform there scales the decoded frame from its top-left.
         val controllerRoot = pv.findViewById<View>(androidx.media3.ui.R.id.exo_controller)
         if (controllerRoot != null) walk(controllerRoot)
-        if (isTv) insetControlsForOverscan(pv)
+        // TV: clear of overscan. Phone: off the screen edge, where the
+        // settings gear touched it.
+        if (isTv) insetControls(pv, TV_SAFE_X_DP, TV_SAFE_Y_DP) else insetControls(pv, PHONE_CONTROL_INSET_DP, 0)
 
         // Time bar: always red so the played position reads as the YouTube /
         // standard media-app cue. Scrubber thumb stays default; the colour
@@ -1795,14 +1827,15 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     /**
      * Media3 runs the time bar and the bottom bar (times, settings) to the
-     * screen edges, where a TV's overscan can crop them. Pull both in by the
-     * 5% safe margin: the bottom bar by padding, so its dark strip still runs
-     * edge to edge, and the time bar by margins, lifted by the same amount the
-     * bar grew. Tagged once, so calling this on every controller show is safe.
+     * screen edges, where a TV's overscan can crop them. Pull both in by
+     * [xDp] at the sides and [yDp] at the bottom: the bottom bar by padding,
+     * so its dark strip still runs edge to edge, and the time bar by margins,
+     * lifted by the same amount the bar grew. Tagged once, so calling this on
+     * every controller show is safe.
      */
-    private fun insetControlsForOverscan(pv: PlayerView) {
-        val x = TV_SAFE_X_DP.dp()
-        val y = TV_SAFE_Y_DP.dp()
+    private fun insetControls(pv: PlayerView, xDp: Int, yDp: Int) {
+        val x = xDp.dp()
+        val y = yDp.dp()
         pv.findViewById<View>(androidx.media3.ui.R.id.exo_bottom_bar)?.let { bar ->
             if (bar.getTag(R.id.tv_overscan_inset) != true) {
                 bar.setPadding(bar.paddingLeft + x, bar.paddingTop, bar.paddingRight + x, bar.paddingBottom + y)

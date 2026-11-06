@@ -1003,7 +1003,7 @@ class BrowseFragment : BrowseSupportFragment() {
         val byId = shows.associateBy { it.id }
         val pinnedShows = pinnedIds.mapNotNull { byId[it] }
         for (s in pinnedShows) {
-            val listRowAdapter = ArrayObjectAdapter(CardPresenter())
+            val listRowAdapter = ArrayObjectAdapter(CardPresenter(showShowName = false))
             val rowTitle = "★ ${s.title}"
             val hid = headerIdCounter++
             headerContexts[hid] = HeaderContext.Show(s, pinned = true)
@@ -1047,7 +1047,7 @@ class BrowseFragment : BrowseSupportFragment() {
         // mirrors mobile's pinnable affordance: a quick visual signal that
         // this show can be pinned to the top via the header's long-press menu.
         for (s in activeNonPinned) {
-            val listRowAdapter = ArrayObjectAdapter(CardPresenter())
+            val listRowAdapter = ArrayObjectAdapter(CardPresenter(showShowName = false))
             val rowTitle = "☆ ${s.title}"
             val showHid = headerIdCounter++
             headerContexts[showHid] = HeaderContext.Show(s, pinned = false)

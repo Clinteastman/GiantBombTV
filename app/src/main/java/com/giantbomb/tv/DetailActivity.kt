@@ -189,7 +189,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             orientation = LinearLayout.VERTICAL
             gravity = if (isTv) Gravity.BOTTOM else Gravity.TOP
             if (isTv) {
-                setPadding(48.dp(), 30.dp(), 200.dp(), 40.dp())
+                setPadding(56.dp(), 30.dp(), 200.dp(), 40.dp())
             } else {
                 setPadding(16.dp(), 16.dp(), 16.dp(), 24.dp())
             }

@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
 class DownloadsFragment : Fragment() {
 
     private lateinit var adapter: DownloadAdapter
-    private lateinit var emptyView: TextView
+    private lateinit var emptyView: View
     private val items = mutableListOf<Download>()
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
@@ -75,7 +75,7 @@ class DownloadsFragment : Fragment() {
 
         val column = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            val h = if (isTv) 48.dp() else 16.dp()
+            val h = if (isTv) 56.dp() else 16.dp()
             // TV: keep the heading below the 27 dp overscan band.
             val top = if (isTv) 36.dp() else 24.dp()
             setPadding(h, top, h, 16.dp())
@@ -94,12 +94,38 @@ class DownloadsFragment : Fragment() {
         }
         column.addView(heading)
 
-        emptyView = TextView(ctx).apply {
-            text = "No downloads yet.\nOpen a video and tap Download to save it for offline viewing."
-            textSize = 15f
-            setTextColor(0xFFA0A0A0.toInt())
-            setLineSpacing(0f, 1.3f)
+        // Empty state: centred in the space below the heading, with an icon,
+        // a short title and how to add one ("select" with a remote).
+        emptyView = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 48.dp())
             visibility = View.GONE
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+            addView(ImageView(ctx).apply {
+                setImageResource(R.drawable.ic_settings_downloads)
+                imageTintList = android.content.res.ColorStateList.valueOf(0xFFC4C4C4.toInt())
+                layoutParams = LinearLayout.LayoutParams(64.dp(), 64.dp()).apply { bottomMargin = 16.dp() }
+            })
+            addView(TextView(ctx).apply {
+                text = "No downloads yet"
+                textSize = if (isTv) 22f else 20f
+                setTextColor(Color.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+            })
+            addView(TextView(ctx).apply {
+                text = if (isTv) "Open a video and select Download to watch it offline."
+                    else "Open a video and tap Download to watch it offline."
+                textSize = if (isTv) 17f else 15f
+                setTextColor(0xFFC4C4C4.toInt())
+                gravity = Gravity.CENTER
+                setLineSpacing(0f, 1.25f)
+                setPadding(24.dp(), 8.dp(), 24.dp(), 0)
+            })
         }
         column.addView(emptyView)
 
