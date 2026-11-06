@@ -29,6 +29,7 @@ import com.giantbomb.tv.playback.Downloads
 import com.giantbomb.tv.util.DeviceUtil
 import kotlinx.coroutines.CoroutineScope
 import com.giantbomb.tv.ui.BackdropRefractionHost
+import com.giantbomb.tv.ui.CardFocus
 import com.giantbomb.tv.ui.GlassSurface
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -260,6 +261,13 @@ class DownloadsFragment : Fragment() {
                 // Full-width rows: growing on focus would clip the ring's sides.
                 focusedScale = 1f
             )
+            // Same focus ring as the browse cards, without the lift.
+            val glassFocus = onFocusChangeListener
+            val focusRing = CardFocus.install(this, cornerRadiusDp = 10f, focusedScale = 1f)
+            setOnFocusChangeListener { v, hasFocus ->
+                glassFocus?.onFocusChange(v, hasFocus)
+                focusRing.update(hasFocus)
+            }
             layoutParams = RecyclerView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
