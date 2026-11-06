@@ -1886,7 +1886,20 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         )
         timeBar?.apply {
             setPlayedColor(red)
-            setScrubberColor(red)
+            setScrubberColor(if (isFocused) Color.WHITE else red)
+            // The bar has no focus look of its own, so from a sofa nothing
+            // seemed focused when the remote was on it: give it a light pill
+            // and a white scrubber while it has focus.
+            val focusPill = GradientDrawable().apply {
+                setColor(0x33FFFFFF)
+                setStroke(2.dp(), Color.WHITE)
+                cornerRadius = 999f
+            }
+            background = if (isFocused) focusPill else null
+            setOnFocusChangeListener { bar, focused ->
+                bar.background = if (focused) focusPill else null
+                setScrubberColor(if (focused) Color.WHITE else red)
+            }
         }
     }
 
