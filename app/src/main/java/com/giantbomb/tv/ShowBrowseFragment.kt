@@ -128,9 +128,17 @@ class ShowBrowseFragment : VerticalGridSupportFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        // Leanback's title is a thin 44 sp face on one line. Match the detail
-        // screen's bold title instead, and let a long show name wrap.
+        // Leanback's title is a thin 44 sp face on one line at the right.
+        // Match the detail screen's bold title instead, start it above the
+        // grid, and let a long show name wrap.
         view.findViewById<TextView>(androidx.leanback.R.id.title_text)?.apply {
+            (layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+                lp.width = FrameLayout.LayoutParams.MATCH_PARENT
+                lp.height = FrameLayout.LayoutParams.WRAP_CONTENT
+                lp.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                layoutParams = lp
+            }
+            gravity = Gravity.START
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, TITLE_SP)
             isSingleLine = false

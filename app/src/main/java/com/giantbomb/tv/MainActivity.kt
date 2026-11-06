@@ -263,8 +263,9 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope(), Backdrop
 
     private fun styleMobileBottomNav(nav: BottomNavigationView) {
         val (active, inactive, indicator) = when (GlassSurface.theme) {
+            // Lighter than brand red so the active label clears 4:1 on the bar.
             GlassSurface.Theme.SIMPLE -> Triple(
-                0xFFFF2035.toInt(), 0xC8FFFFFF.toInt(), 0x28FFFFFF
+                0xFFFF6B76.toInt(), 0xC8FFFFFF.toInt(), 0x28FFFFFF
             )
             GlassSurface.Theme.FROSTED -> Triple(
                 Color.WHITE, 0xC8DFE3EA.toInt(), 0x38FFFFFF

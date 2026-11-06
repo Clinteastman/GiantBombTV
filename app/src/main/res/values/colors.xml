@@ -27,6 +27,11 @@
     <color name="gb_show_header">#F01A1A20</color>
     <color name="gb_show_deck">#D0D0D0</color>
 
+    <!-- Leanback search field: the typed query was 50% grey, hard to read
+         from a sofa. Overrides the library colours of the same names. -->
+    <color name="lb_search_bar_text">#F2FFFFFF</color>
+    <color name="lb_search_bar_hint">#FFB0B0B0</color>
+
     <!-- Accent colors -->
     <color name="gb_gold">#FFD700</color>
     <color name="gb_gold_dark">#C5A600</color>

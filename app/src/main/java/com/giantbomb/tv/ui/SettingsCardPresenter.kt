@@ -26,12 +26,13 @@ class SettingsCardPresenter : Presenter() {
         }
 
         // ImageCardView keeps the title and description to one ellipsized
-        // line each. Give both two lines, with fixed heights so every card in
-        // the row is the same size.
+        // line each. Every settings title fits one line at this width, but a
+        // long one may wrap; the description always gets a fixed two lines so
+        // the cards in the row stay the same height.
         cardView.findViewById<TextView>(androidx.leanback.R.id.title_text)?.apply {
             isSingleLine = false
+            minLines = 1
             maxLines = 2
-            setLines(2)
             ellipsize = TextUtils.TruncateAt.END
             VectorFont.applyIfNeon(this)
         }
@@ -44,7 +45,9 @@ class SettingsCardPresenter : Presenter() {
         }
 
         // Focus: lift, ring and brighten glass
-        val focusRing = CardFocus.install(cardView)
+        // A smaller lift than the video cards: these are wider, and the full
+        // 1.10 lift pushed the first card into the left overscan band.
+        val focusRing = CardFocus.install(cardView, focusedScale = FOCUSED_SCALE)
         cardView.setOnFocusChangeListener { v, hasFocus ->
             focusRing.update(hasFocus)
             GlassSurface.applyState(v, GlassSurface.Emphasis.CARD, hasFocus)
@@ -75,9 +78,10 @@ class SettingsCardPresenter : Presenter() {
     }
 
     private companion object {
-        const val CARD_WIDTH_DP = 200f
-        const val ICON_AREA_DP = 96f
-        const val ICON_DP = 44f
+        const val CARD_WIDTH_DP = 216f
+        const val ICON_AREA_DP = 72f
+        const val ICON_DP = 40f
+        const val FOCUSED_SCALE = 1.06f
         const val ICON_COLOUR = 0xFFFFFFFF.toInt()
         const val DESCRIPTION_COLOUR = 0xFFC4C4C4.toInt()
     }

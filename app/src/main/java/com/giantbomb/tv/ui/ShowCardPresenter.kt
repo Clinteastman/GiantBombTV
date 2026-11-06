@@ -25,7 +25,9 @@ class ShowCardPresenter(
         val cardView = ImageCardView(parent.context).apply {
             isFocusable = true
             isFocusableInTouchMode = true
-            setMainImageDimensions(240, 240)
+            // 256 px so the last whole card on screen ends clear of the
+            // overscan band instead of inside it.
+            setMainImageDimensions(256, 256)
             setMainImageScaleType(ImageView.ScaleType.FIT_CENTER)
 
             GlassSurface.applyState(this, GlassSurface.Emphasis.CARD, focused = false)
