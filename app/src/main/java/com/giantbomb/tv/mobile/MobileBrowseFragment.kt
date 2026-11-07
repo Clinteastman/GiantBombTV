@@ -108,6 +108,11 @@ class MobileBrowseFragment : Fragment() {
     // chip-bar quick-jump and any other "scroll to section X" affordance.
     private var sectionStartIndices: Map<String, Int> = emptyMap()
 
+    // Fills every lazy show row in the background, in feed order, and jumps
+    // the rows about to scroll into view to the front of the queue.
+    private var rowPrefetcher: com.giantbomb.tv.data.RowPrefetcher<BrowseItem.LazyShowRow>? = null
+    private var imagePreloader: com.giantbomb.tv.ui.ImagePreloader? = null
+
     companion object {
         private const val SETTINGS_REFRESH = 2
         private const val SETTINGS_SETUP = 3
@@ -120,6 +125,15 @@ class MobileBrowseFragment : Fragment() {
         private const val SETTINGS_NEON_PARTICLES = 10
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
+        // Show-row requests at once (the repository caps show requests at 3).
+        private const val ROW_PREFETCH_CONCURRENCY = 3
+        // Lazy rows past the screen edge, in the scroll direction, that jump
+        // the background queue.
+        private const val ROWS_AHEAD = 3
+        // Placeholder cards in a show row that is still loading, and the
+        // thumbnails downloaded ahead for each loaded row (about one screen).
+        private const val SKELETON_CARDS = 4
+        private const val WARM_THUMBNAILS_PER_ROW = 3
         private const val RECENT_VERTICAL_COUNT = 5
         private const val BACKDROP_DELAY_MS = 160L
         private const val BACKDROP_CROSSFADE_MS = 600L
@@ -147,7 +161,13 @@ class MobileBrowseFragment : Fragment() {
         data class VerticalVideo(val video: Video) : BrowseItem()
         data class SettingRow(val item: SettingsItem) : BrowseItem()
         data class UpcomingRow(val streams: List<UpcomingStream>, val liveNow: UpcomingStream?) : BrowseItem()
-        class LazyShowRow(val show: Show, var videos: List<Video>? = null, var isLoading: Boolean = false) : BrowseItem()
+        class LazyShowRow(
+            val show: Show,
+            var videos: List<Video>? = null,
+            var isLoading: Boolean = false,
+            // Last fetch failed: show the row empty, as before, not loading.
+            var failed: Boolean = false
+        ) : BrowseItem()
         // Used when a section is intentionally rendered with a friendly message
         // instead of being hidden — e.g. an empty watchlist after a fresh install.
         data class EmptyStateRow(val message: String) : BrowseItem()
@@ -208,6 +228,7 @@ class MobileBrowseFragment : Fragment() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 updateActiveChip()
                 scheduleBackdropFromVisibleCard()
+                prefetchRowsAhead(dy)
             }
 
             override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
@@ -509,6 +530,7 @@ class MobileBrowseFragment : Fragment() {
                 }
 
                 browseAdapter.submit(items)
+                startRowPrefetch(repo, items)
                 updateChipBar()
                 recyclerView.post { scheduleBackdropFromVisibleCard(immediate = true) }
 
@@ -1139,7 +1161,8 @@ class MobileBrowseFragment : Fragment() {
                     val old = oldItems[oldPos]
                     val new = newItems[newPos]
                     return if (old is BrowseItem.LazyShowRow && new is BrowseItem.LazyShowRow) {
-                        old.show == new.show && old.videos == new.videos && old.isLoading == new.isLoading
+                        old.show == new.show && old.videos == new.videos &&
+                            old.isLoading == new.isLoading && old.failed == new.failed
                     } else old == new
                 }
             })
@@ -1648,24 +1671,112 @@ class MobileBrowseFragment : Fragment() {
                 return
             }
             // A holder may have been recycled from a previously loaded show.
-            // Clear that adapter immediately; the model-level completion below
-            // will rebind whichever holder currently owns this item.
-            horizontalRecycler.adapter = null
-            if (item.isLoading) return
-            val repo = repository ?: return
-            item.isLoading = true
-            viewLifecycleOwner.lifecycleScope.launch {
-                val result = repo.getShowVideos(item.show.id, limit = ROW_PAGE_SIZE)
-                result.onSuccess { videos ->
-                    item.videos = videos
-                    item.isLoading = false
-                    notifyLazyRowChangedWhenIdle(item)
-                }
-                result.onFailure {
-                    item.isLoading = false
-                }
+            // Show placeholder cards straight away (this also keeps the row's
+            // height, so the feed doesn't jump when the videos arrive); the
+            // model-level completion rebinds whichever holder owns this item.
+            if (item.failed) {
+                horizontalRecycler.adapter = null
+            } else if (horizontalRecycler.adapter !is SkeletonRowAdapter) {
+                horizontalRecycler.adapter = SkeletonRowAdapter()
+            }
+            // On screen now: first in line (no-op if loading or loaded; a
+            // failed row gets another try, up to the prefetcher's limit).
+            rowPrefetcher?.prioritize(listOf(item))
+        }
+    }
+
+    private fun startRowPrefetch(repo: GiantBombRepository, items: List<BrowseItem>) {
+        rowPrefetcher?.cancel()
+        val prefetcher = com.giantbomb.tv.data.RowPrefetcher<BrowseItem.LazyShowRow>(
+            scope = viewLifecycleOwner.lifecycleScope,
+            maxConcurrent = ROW_PREFETCH_CONCURRENCY,
+            // A loaded or cached row costs no request.
+            isCached = { item -> item.videos != null || repo.hasShowVideos(item.show.id, ROW_PAGE_SIZE) }
+        ) { item -> fetchLazyRow(repo, item) }
+        rowPrefetcher = prefetcher
+        prefetcher.enqueue(items.filterIsInstance<BrowseItem.LazyShowRow>())
+    }
+
+    private suspend fun fetchLazyRow(
+        repo: GiantBombRepository,
+        item: BrowseItem.LazyShowRow
+    ): com.giantbomb.tv.data.RowPrefetcher.Outcome {
+        if (item.videos != null || item.isLoading) return com.giantbomb.tv.data.RowPrefetcher.Outcome.DONE
+        item.isLoading = true
+        val result = try {
+            repo.getShowVideos(item.show.id, limit = ROW_PAGE_SIZE)
+        } finally {
+            item.isLoading = false
+        }
+        val videos = result.getOrElse { e ->
+            if (com.giantbomb.tv.data.RowPrefetcher.isRateLimited(e)) {
+                return com.giantbomb.tv.data.RowPrefetcher.Outcome.RATE_LIMITED
+            }
+            item.failed = true
+            notifyLazyRowChangedWhenIdle(item)
+            return com.giantbomb.tv.data.RowPrefetcher.Outcome.FAILED
+        }
+        item.failed = false
+        item.videos = videos
+        notifyLazyRowChangedWhenIdle(item)
+        if (isAdded) {
+            // Download (not decode) the first thumbnails, so a fling finds
+            // them on disk instead of waiting on the network.
+            val preloader = imagePreloader
+                ?: com.giantbomb.tv.ui.ImagePreloader(requireContext(), Glide.with(this))
+                    .also { imagePreloader = it }
+            preloader.warm(videos.take(WARM_THUMBNAILS_PER_ROW).map { it.thumbnailUrl })
+        }
+        return com.giantbomb.tv.data.RowPrefetcher.Outcome.DONE
+    }
+
+    /**
+     * Moves the next [ROWS_AHEAD] lazy rows beyond the screen edge, in the
+     * scroll direction, to the front of the fill queue.
+     */
+    private fun prefetchRowsAhead(dy: Int) {
+        val prefetcher = rowPrefetcher ?: return
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val items = browseItems
+        val ahead = mutableListOf<BrowseItem.LazyShowRow>()
+        if (dy >= 0) {
+            var i = lm.findLastVisibleItemPosition() + 1
+            while (i in items.indices && ahead.size < ROWS_AHEAD) {
+                (items[i] as? BrowseItem.LazyShowRow)?.let { if (it.videos == null) ahead.add(it) }
+                i++
+            }
+        } else {
+            var i = lm.findFirstVisibleItemPosition() - 1
+            while (i in items.indices && ahead.size < ROWS_AHEAD) {
+                (items[i] as? BrowseItem.LazyShowRow)?.let { if (it.videos == null) ahead.add(it) }
+                i--
             }
         }
+        if (ahead.isNotEmpty()) prefetcher.prioritize(ahead)
+    }
+
+    /** Placeholder cards for a show row whose videos are still loading. */
+    private inner class SkeletonRowAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+        override fun getItemCount() = SKELETON_CARDS
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            // The real card layout, emptied, so the row has its final size.
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_mobile_video_small, parent, false)
+            GlassSurface.applyState(view, GlassSurface.Emphasis.CARD, focused = false, cornerRadiusDp = 10f)
+            view.findViewById<ImageView>(R.id.small_thumbnail)
+                .setImageResource(R.drawable.bg_loading_skeleton)
+            listOf(R.id.small_title, R.id.small_show_name, R.id.small_watchlist_btn)
+                .forEach { view.findViewById<View>(it).visibility = View.INVISIBLE }
+            listOf(R.id.small_watched, R.id.small_premium_badge, R.id.small_progress_track, R.id.small_progress_bar)
+                .forEach { view.findViewById<View>(it).visibility = View.GONE }
+            view.isClickable = false
+            view.isFocusable = false
+            view.contentDescription = parent.context.getString(R.string.loading)
+            return object : RecyclerView.ViewHolder(view) {}
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) = Unit
     }
 
     private fun notifyLazyRowChangedWhenIdle(item: BrowseItem.LazyShowRow) {
