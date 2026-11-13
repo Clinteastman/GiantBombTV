@@ -97,16 +97,40 @@ object CardFocus {
         view.getLocationOnScreen(loc)
         // Location already includes any current lift; undo it.
         val left = loc[0] + view.pivotX * (view.scaleX - 1f)
+        view.pivotX = liftPivotX(left, w, view.paddingLeft, view.paddingRight, scale, screenW, safe)
+    }
+
+    /**
+     * The pivot (in [width]-wide view coordinates) for a view at screen x
+     * [left] that will scale by [scale], keeping it out of the [safe] band on
+     * each side of a [screenW]-wide screen. Pure so it can be unit tested.
+     *
+     * The visible card sits inside the view's horizontal padding (video and
+     * upcoming cards pad their outer view by card_margin), so the band is
+     * checked against the visible edges, not the padded ones. Measuring the
+     * padded edges pushed the first card's growth to the right, into its
+     * neighbour.
+     */
+    internal fun liftPivotX(
+        left: Float,
+        width: Int,
+        paddingLeft: Int,
+        paddingRight: Int,
+        scale: Float,
+        screenW: Int,
+        safe: Float
+    ): Float {
+        val w = width
         val right = left + w
-        if (left < 0 || right > screenW) {
-            view.pivotX = w / 2f
-            return
-        }
+        if (left < 0 || right > screenW) return w / 2f
         val grow = scale - 1f
-        // Left edge after scaling = left - pivot * grow; right = right + (w - pivot) * grow.
-        val maxPivot = ((left - safe) / grow).coerceAtLeast(0f)
-        val minPivot = (w - (screenW - safe - right) / grow).coerceAtMost(w.toFloat())
-        view.pivotX = (w / 2f).coerceAtMost(maxPivot).coerceAtLeast(minPivot).coerceIn(0f, w.toFloat())
+        // A point x in the view lands at left + pivot + (x - pivot) * scale, so the
+        // visible left edge (x = paddingLeft) and right edge (x = w - paddingRight)
+        // stay inside the band while pivot is between minPivot and maxPivot.
+        val maxPivot = ((left + paddingLeft * scale - safe) / grow).coerceAtLeast(0f)
+        val minPivot = ((left + (w - paddingRight) * scale - (screenW - safe)) / grow)
+            .coerceAtMost(w.toFloat())
+        return (w / 2f).coerceAtMost(maxPivot).coerceAtLeast(minPivot).coerceIn(0f, w.toFloat())
     }
 
     /** Ring colour per theme: white on glass and Simple, hot pink on Neon. */
