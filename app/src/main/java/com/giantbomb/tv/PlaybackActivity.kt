@@ -129,6 +129,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private lateinit var repository: GiantBombRepository
     /** Phone portrait only: the Watchlist toggle under the video. */
     private var mobileWatchlistBtn: TextView? = null
+    /** Bumped by each watchlist read or toggle, so only the newest result applies. */
+    private var watchlistGeneration = 0
     private var video: Video? = null
     private var videoDuration: Double = 0.0
     private var isTv = false
@@ -667,12 +669,18 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     /** Shows whether [v] is on the watchlist on the phone player's button. */
     private fun refreshMobileWatchlist(v: Video) {
         val btn = mobileWatchlistBtn ?: return
+        // Disabled until the state is known: a tap on an unknown state would
+        // send an add for a video that is already on the list. A newer read
+        // or toggle bumps the generation, so a stale result is dropped.
+        val gen = ++watchlistGeneration
         btn.tag = null
         btn.text = WATCHLIST_ADD
+        btn.isEnabled = false
         launch {
-            val onList = repository.getWatchlist().getOrNull()?.any { it.id == v.id } == true
-            if (video?.id != v.id) return@launch
-            setMobileWatchlistState(onList)
+            val list = repository.getWatchlist().getOrNull()
+            if (gen != watchlistGeneration || video?.id != v.id || list == null) return@launch
+            setMobileWatchlistState(list.any { it.id == v.id })
+            btn.isEnabled = true
         }
     }
 
@@ -686,10 +694,13 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private fun toggleMobileWatchlist() {
         val v = video ?: return
         val btn = mobileWatchlistBtn ?: return
-        val onList = btn.tag == true
+        val onList = btn.tag as? Boolean ?: return
+        val gen = ++watchlistGeneration
         btn.isEnabled = false
         launch {
             val result = if (onList) repository.removeFromWatchlist(v.id) else repository.addToWatchlist(v)
+            // The video changed while this ran (autoplay): its refresh owns the button.
+            if (gen != watchlistGeneration) return@launch
             btn.isEnabled = true
             result.onSuccess {
                 setMobileWatchlistState(!onList)

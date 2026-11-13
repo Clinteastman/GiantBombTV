@@ -3,6 +3,7 @@ package com.giantbomb.tv.mobile
 import android.content.Intent
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -10,6 +11,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
@@ -50,6 +52,7 @@ class MobileShowFragment : Fragment() {
     private var isLoading = false
     private var hasMore = true
     private var offset = 0
+    private var lastFailureAt = Long.MIN_VALUE / 2
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
         inflater.inflate(R.layout.fragment_mobile_show, container, false)
@@ -121,6 +124,7 @@ class MobileShowFragment : Fragment() {
     private fun loadPage() {
         val s = show ?: return
         if (isLoading) return
+        if (SystemClock.elapsedRealtime() - lastFailureAt < RETRY_PAUSE_MS) return
         isLoading = true
         viewLifecycleOwner.lifecycleScope.launch {
             val result = repository.getShowVideos(s.id, limit = PAGE_SIZE, offset = offset)
@@ -133,8 +137,15 @@ class MobileShowFragment : Fragment() {
                 if (adapter.itemCount == 0) showEmpty("No videos for this show yet.")
             }
             result.onFailure { e ->
-                hasMore = false
-                if (adapter.itemCount == 0) showEmpty(GiantBombApi.friendlyErrorMessage(e))
+                // Keep hasMore and the offset: a failed page is retried on the
+                // next scroll (after a short pause), not taken as the end of
+                // the catalogue.
+                lastFailureAt = SystemClock.elapsedRealtime()
+                if (adapter.itemCount == 0) {
+                    showEmpty(GiantBombApi.friendlyErrorMessage(e))
+                } else {
+                    Toast.makeText(requireContext(), "Couldn't load more videos. Scroll to try again.", Toast.LENGTH_SHORT).show()
+                }
             }
             isLoading = false
         }
@@ -258,6 +269,7 @@ class MobileShowFragment : Fragment() {
     companion object {
         private const val PAGE_SIZE = 40
         private const val LOAD_MORE_THRESHOLD = 6
+        private const val RETRY_PAUSE_MS = 3_000L
         private const val MIN_CARD_WIDTH_DP = 340
         /** A date such as 11/02/2026 or 5/8/26 inside an episode title. */
         private val TITLE_DATE = Regex("""\b\d{1,2}/\d{1,2}/\d{2,4}\b""")
