@@ -42,6 +42,7 @@ import com.giantbomb.tv.ui.ShowCardPresenter
 import com.giantbomb.tv.ui.SkeletonCard
 import com.giantbomb.tv.ui.SkeletonCardPresenter
 import com.giantbomb.tv.ui.UpcomingCardPresenter
+import com.giantbomb.tv.util.afterLayoutScope
 import kotlinx.coroutines.*
 
 class BrowseFragment : BrowseSupportFragment() {
@@ -894,41 +895,42 @@ class BrowseFragment : BrowseSupportFragment() {
         val key = prefs.apiKey ?: ""
         val repository = GiantBombRepository.get(key)
 
-        viewLifecycleOwner.lifecycleScope.launch {
-            try {
-                val result = repository.getShowVideos(pagination.showId, limit = ROW_PAGE_SIZE, offset = pagination.offset)
-                result.onSuccess { videos ->
-                    if (videos.size < ROW_PAGE_SIZE) pagination.hasMore = false
-                    pagination.offset += videos.size
+        // Called from the item-selected listener, so this must not touch the
+        // row adapter inline: see afterLayoutScope.
+        afterLayoutScope(viewLifecycleOwner.lifecycleScope).launch {
+            val result = repository.getShowVideos(pagination.showId, limit = ROW_PAGE_SIZE, offset = pagination.offset)
+            result.onSuccess { videos ->
+                if (videos.size < ROW_PAGE_SIZE) pagination.hasMore = false
+                pagination.offset += videos.size
 
-                    // Repository progress is cached briefly, so this is usually
-                    // free; it keeps badges current after returning from playback.
-                    repository.getProgress().getOrNull()?.let { entries ->
-                        progressByVideoId = entries.associateBy { it.videoId }
-                    }
+                // Repository progress is cached briefly, so this is usually
+                // free; it keeps badges current after returning from playback.
+                repository.getProgress().getOrNull()?.let { entries ->
+                    progressByVideoId = entries.associateBy { it.videoId }
+                }
 
-                    videos.forEach { video ->
-                        val entry = progressByVideoId[video.id]
-                        val v = when {
-                            entry != null && entry.percentComplete >= 95 -> video.copy(watched = true)
-                            entry != null && entry.percentComplete in 1..94 -> video.copy(progressPercent = entry.percentComplete)
-                            else -> video
-                        }
-                        pagination.adapter.add(v)
+                videos.forEach { video ->
+                    val entry = progressByVideoId[video.id]
+                    val v = when {
+                        entry != null && entry.percentComplete >= 95 -> video.copy(watched = true)
+                        entry != null && entry.percentComplete in 1..94 -> video.copy(progressPercent = entry.percentComplete)
+                        else -> video
                     }
+                    pagination.adapter.add(v)
                 }
-                result.onFailure { e ->
-                    // A 429 is temporary: keep the row pageable and try
-                    // again after the pause. Anything else ends the row.
-                    if (RowPrefetcher.isRateLimited(e)) {
-                        rateLimitedUntilMs = System.currentTimeMillis() + RATE_LIMIT_PAUSE_MS
-                    } else {
-                        pagination.hasMore = false
-                    }
-                }
-            } finally {
-                pagination.isLoading = false
             }
+            result.onFailure { e ->
+                // A 429 is temporary: keep the row pageable and try
+                // again after the pause. Anything else ends the row.
+                if (RowPrefetcher.isRateLimited(e)) {
+                    rateLimitedUntilMs = System.currentTimeMillis() + RATE_LIMIT_PAUSE_MS
+                } else {
+                    pagination.hasMore = false
+                }
+            }
+        }.invokeOnCompletion {
+            // Also runs if the view goes before the posted work starts.
+            pagination.isLoading = false
         }
     }
 
@@ -981,7 +983,9 @@ class BrowseFragment : BrowseSupportFragment() {
         rowPrefetcher?.cancel()
         val firstScreen = firstScreenCardCount()
         val prefetcher = RowPrefetcher<String>(
-            scope = viewLifecycleOwner.lifecycleScope,
+            // prioritize() runs from the item-selected listener, and a
+            // cached row fills without suspending: see afterLayoutScope.
+            scope = afterLayoutScope(viewLifecycleOwner.lifecycleScope),
             maxConcurrent = ROW_PREFETCH_CONCURRENCY,
             // A row with no pagination, or already cached, costs no request.
             isCached = { title ->

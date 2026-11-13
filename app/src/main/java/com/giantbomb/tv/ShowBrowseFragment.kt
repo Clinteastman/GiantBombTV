@@ -21,6 +21,7 @@ import com.giantbomb.tv.model.Show
 import com.giantbomb.tv.model.Video
 import com.giantbomb.tv.ui.CardPresenter
 import com.giantbomb.tv.util.DeviceUtil
+import com.giantbomb.tv.util.afterLayoutScope
 import kotlinx.coroutines.*
 
 /**
@@ -171,7 +172,9 @@ class ShowBrowseFragment : VerticalGridSupportFragment() {
     private fun loadMore() {
         val s = show ?: return
         isLoading = true
-        lifecycleScope.launch { loadPage(s) }
+        // Called from the item-selected listener, so a cached page must not
+        // reach the grid adapter inline: see afterLayoutScope.
+        afterLayoutScope(lifecycleScope).launch { loadPage(s) }
     }
 
     private suspend fun loadPage(s: Show) {
