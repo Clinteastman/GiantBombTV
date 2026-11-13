@@ -4,10 +4,10 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.giantbomb.tv.model.Membership
 
-class PrefsManager(context: Context) {
+class PrefsManager internal constructor(private val prefs: SharedPreferences) {
 
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences("giantbomb_tv", Context.MODE_PRIVATE)
+    constructor(context: Context) :
+        this(context.getSharedPreferences("giantbomb_tv", Context.MODE_PRIVATE))
 
     var apiKey: String?
         get() = prefs.getString("api_key", null)
