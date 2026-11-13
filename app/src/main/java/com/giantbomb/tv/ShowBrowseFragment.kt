@@ -71,6 +71,9 @@ class ShowBrowseFragment : VerticalGridSupportFragment() {
         gridPresenter = object : VerticalGridPresenter(FocusHighlight.ZOOM_FACTOR_NONE, false) {
             override fun initializeGridViewHolder(vh: ViewHolder) {
                 super.initializeGridViewHolder(vh)
+                // ZOOM_FACTOR_NONE alone leaves leanback's focus animator on,
+                // writing scale 1.0 over the card's own lift.
+                vh.itemBridgeAdapter.removeItemFocusHighlight()
                 val grid = vh.gridView
                 (grid.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
                     lp.gravity = Gravity.START or Gravity.TOP

@@ -7,6 +7,7 @@ import androidx.leanback.widget.ListRowPresenter
 import androidx.leanback.widget.Presenter
 import androidx.leanback.widget.RowHeaderPresenter
 import androidx.leanback.widget.RowPresenter
+import androidx.leanback.widget.removeItemFocusHighlight
 
 /**
  * The row presenter shared by the TV home rows and the search results, so
@@ -30,8 +31,11 @@ object TvRowPresenter {
         object : ListRowPresenter(FocusHighlight.ZOOM_FACTOR_NONE) {
             override fun initializeRowViewHolder(holder: RowPresenter.ViewHolder) {
                 super.initializeRowViewHolder(holder)
+                // ZOOM_FACTOR_NONE alone leaves leanback's focus animator on,
+                // writing scale 1.0 over the card's own lift.
+                (holder as ViewHolder).bridgeAdapter.removeItemFocusHighlight()
                 if (extraStartPaddingDp <= 0) return
-                val grid = (holder as ViewHolder).gridView
+                val grid = holder.gridView
                 val extra = (extraStartPaddingDp * grid.resources.displayMetrics.density).toInt()
                 grid.setPadding(grid.paddingLeft + extra, grid.paddingTop, grid.paddingRight, grid.paddingBottom)
             }
