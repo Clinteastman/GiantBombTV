@@ -5,4 +5,7 @@
     <dimen name="card_thumb_height">100dp</dimen>
     <dimen name="card_margin">4dp</dimen>
     <dimen name="card_vpadding">4dp</dimen>
+    <!-- Leanback's own default (leanback 1.0.0 res/values). Declared here so the
+         values-television override has a base value. Keep in step with the library. -->
+    <dimen name="lb_search_bar_items_margin_start">70dp</dimen>
 </resources>
