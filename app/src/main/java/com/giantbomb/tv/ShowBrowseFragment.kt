@@ -42,7 +42,10 @@ class ShowBrowseFragment : VerticalGridSupportFragment() {
 
     companion object {
         private const val PAGE_SIZE = 40
-        private const val LOAD_MORE_THRESHOLD = 5
+        // Fetch the next page when focus is this many grid rows from the end.
+        // One row (the old 5 cards) left too little time on a slow network;
+        // three rows still asks only once per 40-card page.
+        private const val LOAD_MORE_ROWS_AHEAD = 3
         private const val MIN_COLUMNS = 2
         private const val MAX_COLUMNS = 5
         private const val TITLE_SP = 34f
@@ -98,7 +101,7 @@ class ShowBrowseFragment : VerticalGridSupportFragment() {
             if (item is Video && !isLoading && hasMore) {
                 val a = gridAdapter ?: return@setOnItemViewSelectedListener
                 val position = a.indexOf(item)
-                if (position >= a.size() - LOAD_MORE_THRESHOLD) {
+                if (position >= a.size() - gridPresenter.numberOfColumns * LOAD_MORE_ROWS_AHEAD) {
                     loadMore()
                 }
             }

@@ -26,6 +26,7 @@ import com.bumptech.glide.request.transition.Transition
 import com.giantbomb.tv.data.GiantBombApi
 import com.giantbomb.tv.data.GiantBombRepository
 import com.giantbomb.tv.data.PrefsManager
+import com.giantbomb.tv.data.RowPrefetcher
 import com.giantbomb.tv.data.toggleTwitchChatPref
 import com.giantbomb.tv.model.ProgressEntry
 import com.giantbomb.tv.model.SettingsItem
@@ -35,8 +36,11 @@ import com.giantbomb.tv.data.TwitchExtractor
 import com.giantbomb.tv.model.UpcomingStream
 import com.giantbomb.tv.ui.CardPresenter
 import com.giantbomb.tv.ui.GlassSurface
+import com.giantbomb.tv.ui.ImagePreloader
 import com.giantbomb.tv.ui.SettingsCardPresenter
 import com.giantbomb.tv.ui.ShowCardPresenter
+import com.giantbomb.tv.ui.SkeletonCard
+import com.giantbomb.tv.ui.SkeletonCardPresenter
 import com.giantbomb.tv.ui.UpcomingCardPresenter
 import kotlinx.coroutines.*
 
@@ -61,6 +65,13 @@ class BrowseFragment : BrowseSupportFragment() {
     private var upcomingRefreshRunnable: Runnable? = null
     private var progressByVideoId: Map<Int, ProgressEntry> = emptyMap()
 
+    // Fills every show row's first cards in the background, in row order,
+    // and jumps the focused row and the rows just below it to the front.
+    private var rowPrefetcher: RowPrefetcher<String>? = null
+    private var imagePreloader: ImagePreloader? = null
+    // After a 429, row paging waits this long before asking again.
+    private var rateLimitedUntilMs = 0L
+
     companion object {
         const val SETTINGS_REFRESH = 2
         const val SETTINGS_SETUP = 3
@@ -78,13 +89,24 @@ class BrowseFragment : BrowseSupportFragment() {
         private const val BACKDROP_ALPHA = 0.36f
         private const val INITIAL_VIDEO_LIMIT = 100
         private const val ROW_PAGE_SIZE = 40
+        // Focus within this many cards of a row's end fetches the next page.
+        // Against a 40-card page that is about five screens of warning on a
+        // 1080p TV (three cards per screen), so paging finishes well before
+        // the user can reach the end with the D-pad.
         private const val LOAD_MORE_THRESHOLD = 15
-        // Number of cards eagerly populated into each show row at startup.
-        // Users only ever see about three cards before scrolling/focusing, so
-        // prefetching this many makes the first peek feel populated. Focus then
-        // triggers loadMoreForRow to fetch the rest of the page.
-        private const val SHOW_ROW_PREFETCH = 3
-        private const val INITIAL_SHOW_ROW_PREFETCH_COUNT = 3
+        // Every show row gets its first screen of cards at startup: the cards
+        // that fit across the screen plus a few for the first D-pad presses
+        // right. Focus then fetches the rest of the page via loadMoreForRow.
+        private const val FIRST_SCREEN_EXTRA_CARDS = 4
+        private const val FIRST_SCREEN_MIN_CARDS = 6
+        private const val FIRST_SCREEN_MAX_CARDS = 10
+        // Show-row requests at once. The repository caps show requests at 3
+        // too; the catalog endpoint is lighter than the per-user ones, but a
+        // home screen has 30+ show rows, so keep the burst small.
+        private const val ROW_PREFETCH_CONCURRENCY = 3
+        // Rows below the focused one that jump the background queue.
+        private const val ROWS_AHEAD = 2
+        private const val RATE_LIMIT_PAUSE_MS = 10_000L
         // How often to re-poll the upcoming/live feed while the screen is foregrounded.
         // Twitch's preview thumbnail also refreshes ~every minute, so this aligns nicely.
         // Match the mobile interval (was 60s). Together with the failure
@@ -438,18 +460,17 @@ class BrowseFragment : BrowseSupportFragment() {
 
         // Debounced backdrop update on item focus + per-row pagination
         onItemViewSelectedListener = OnItemViewSelectedListener { _, item, _, row ->
-            // Lazy-load empty show rows when they receive focus
+            // Make sure this row and the next ones are loaded (or next in line)
+            // and their first thumbnails are on their way.
             val header = (row as? ListRow)?.headerItem?.name
-            if (header != null) {
-                val pagination = rowPaginationMap[header]
-                if (pagination != null && !pagination.isLoading && pagination.hasMore && pagination.offset == 0) {
-                    loadMoreForRow(pagination)
-                }
-            }
+            (row as? ListRow)?.let { prefetchAround(it, item) }
 
             when (item) {
                 is Video -> {
-                    updateBackdropDebounced(item.thumbnailUrl ?: item.posterUrl)
+                    updateBackdropDebounced(
+                        item.thumbnailUrl ?: item.posterUrl,
+                        nextBackdropUrl(row as? ListRow, item)
+                    )
                     // Check if we need to load more for this row
                     if (header != null) {
                         val pagination = rowPaginationMap[header]
@@ -492,7 +513,28 @@ class BrowseFragment : BrowseSupportFragment() {
         })
     }
 
-    private fun updateBackdropDebounced(imageUrl: String?) {
+    /** The backdrop request, shared by the real load and the neighbour preload. */
+    private fun backdropRequest(imageUrl: String): com.bumptech.glide.RequestBuilder<Drawable> {
+        val request = Glide.with(requireContext()).load(imageUrl).override(960, 540)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            request.centerCrop()
+        } else {
+            request.transform(
+                com.bumptech.glide.load.resource.bitmap.CenterCrop(),
+                com.giantbomb.tv.ui.BlurTransformation(radius = 2, passes = 2)
+            )
+        }
+    }
+
+    /** The card to the right of [item]: the most likely next focus. */
+    private fun nextBackdropUrl(row: ListRow?, item: Video): String? {
+        val cards = row?.adapter as? ArrayObjectAdapter ?: return null
+        val index = cards.indexOf(item)
+        val next = if (index in 0 until cards.size() - 1) cards.get(index + 1) as? Video else null
+        return next?.let { it.thumbnailUrl ?: it.posterUrl }
+    }
+
+    private fun updateBackdropDebounced(imageUrl: String?, nextUrl: String? = null) {
         backdropRunnable?.let { handler.removeCallbacks(it) }
         if (imageUrl == currentBackdropUrl) return
         backdropRunnable = Runnable {
@@ -513,16 +555,8 @@ class BrowseFragment : BrowseSupportFragment() {
             }
 
             // Load new image into the hidden "next" layer
-            val backdropRequest = Glide.with(requireContext())
-                .load(imageUrl)
-                .override(960, 540)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                backdropRequest.centerCrop()
-            } else {
-                backdropRequest.transform(
-                    com.bumptech.glide.load.resource.bitmap.CenterCrop(),
-                    com.giantbomb.tv.ui.BlurTransformation(radius = 2, passes = 2)
-                )
+            val backdropRequest = backdropRequest(imageUrl)
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
                 // The displayed backdrop is pre-blurred on these versions, so
                 // give the glass its own unblurred copy: Extreme's clear lens
                 // needs the detail that the blur removes.
@@ -580,6 +614,12 @@ class BrowseFragment : BrowseSupportFragment() {
                         next.setImageDrawable(null)
                     }
                 })
+            // The user has settled on this card, so decode the next card's
+            // backdrop now; moving right then crossfades without a wait.
+            // Only here, after the debounce, so a fast scroll costs nothing.
+            if (nextUrl != null && nextUrl != imageUrl && preloader().allowDecode) {
+                backdropRequest(nextUrl).priority(com.bumptech.glide.Priority.LOW).preload()
+            }
         }
         handler.postDelayed(backdropRunnable!!, BACKDROP_DELAY_MS)
     }
@@ -666,6 +706,8 @@ class BrowseFragment : BrowseSupportFragment() {
             // Show pagination map drives lazy-loading of per-show video rows on
             // focus. Reset before each render so the new ListRows own their
             // adapters.
+            rowPrefetcher?.cancel()
+            rowPrefetcher = null
             rowPaginationMap.clear()
             headerContexts.clear()
 
@@ -694,33 +736,10 @@ class BrowseFragment : BrowseSupportFragment() {
             adapter = rowsAdapter
             title = null
 
-            // Eagerly prefetch the first few cards for every show row. Users
-            // never see more than ~3 cards before they focus a row, so making
-            // those three appear immediately makes the page feel "loaded"
-            // without us having to fetch every show's full page upfront.
-            // We mark each pagination as loading first so the focus listener
-            // doesn't race with the prefetch and end up firing a duplicate
-            // GET before the prefetch completes.
-            val initialRows = rowPaginationMap.values.take(INITIAL_SHOW_ROW_PREFETCH_COUNT)
-            for (pagination in initialRows) {
-                pagination.isLoading = true
-            }
-            for (pagination in initialRows) {
-                viewLifecycleOwner.lifecycleScope.launch {
-                    val result = repository.getShowVideos(
-                        showId = pagination.showId,
-                        limit = SHOW_ROW_PREFETCH,
-                        offset = 0
-                    )
-                    val videos = result.getOrNull()
-                    if (videos != null && isAdded) {
-                        videos.forEach { pagination.adapter.add(it.withProgress()) }
-                        pagination.offset = videos.size
-                        if (videos.size < SHOW_ROW_PREFETCH) pagination.hasMore = false
-                    }
-                    pagination.isLoading = false
-                }
-            }
+            // Fill the first screen of every show row in the background, in
+            // row order, so rows are ready before the user scrolls to them.
+            // Each row shows skeleton cards until then.
+            startRowPrefetch(repository) { it.withProgress() }
             } finally {
                 loadingSpinner?.visibility = View.GONE
                 isLoading = false
@@ -870,6 +889,7 @@ class BrowseFragment : BrowseSupportFragment() {
     }
 
     private fun loadMoreForRow(pagination: RowPagination) {
+        if (System.currentTimeMillis() < rateLimitedUntilMs) return
         pagination.isLoading = true
         val key = prefs.apiKey ?: ""
         val repository = GiantBombRepository.get(key)
@@ -897,13 +917,156 @@ class BrowseFragment : BrowseSupportFragment() {
                         pagination.adapter.add(v)
                     }
                 }
-                result.onFailure {
-                    pagination.hasMore = false
+                result.onFailure { e ->
+                    // A 429 is temporary: keep the row pageable and try
+                    // again after the pause. Anything else ends the row.
+                    if (RowPrefetcher.isRateLimited(e)) {
+                        rateLimitedUntilMs = System.currentTimeMillis() + RATE_LIMIT_PAUSE_MS
+                    } else {
+                        pagination.hasMore = false
+                    }
                 }
             } finally {
                 pagination.isLoading = false
             }
         }
+    }
+
+    private fun preloader(): ImagePreloader =
+        imagePreloader ?: ImagePreloader(requireContext(), Glide.with(this)).also { imagePreloader = it }
+
+    /** Cards that fit across the screen at once (about three on a 1080p TV). */
+    private fun visibleCardCount(): Int {
+        val res = resources
+        val card = res.getDimensionPixelSize(R.dimen.card_width) +
+            res.getDimensionPixelSize(R.dimen.card_margin) * 2
+        if (card <= 0) return 3
+        return (res.displayMetrics.widthPixels + card - 1) / card
+    }
+
+    private fun firstScreenCardCount(): Int =
+        (visibleCardCount() + FIRST_SCREEN_EXTRA_CARDS)
+            .coerceIn(FIRST_SCREEN_MIN_CARDS, FIRST_SCREEN_MAX_CARDS)
+
+    /** A show row's adapter, holding skeleton cards until its videos arrive. */
+    private fun newShowRowAdapter(): ArrayObjectAdapter {
+        val selector = ClassPresenterSelector()
+            // A show row is headed by the show name, so cards skip repeating it.
+            .addClassPresenter(Video::class.java, CardPresenter(showShowName = false))
+            .addClassPresenter(SkeletonCard::class.java, SkeletonCardPresenter())
+        return ArrayObjectAdapter(selector).apply {
+            repeat(visibleCardCount() + 1) { add(SkeletonCard(it)) }
+        }
+    }
+
+    private fun skeletonCount(adapter: ArrayObjectAdapter): Int {
+        var n = 0
+        while (n < adapter.size() && adapter.get(n) is SkeletonCard) n++
+        return n
+    }
+
+    /**
+     * Swaps a row's skeleton cards for its first videos in place, so a card
+     * that already has focus keeps it.
+     */
+    private fun showFirstVideos(adapter: ArrayObjectAdapter, videos: List<Video>) {
+        val skeletons = skeletonCount(adapter)
+        val swapped = minOf(skeletons, videos.size)
+        for (i in 0 until swapped) adapter.replace(i, videos[i])
+        if (skeletons > swapped) adapter.removeItems(swapped, skeletons - swapped)
+        if (videos.size > swapped) adapter.addAll(swapped, videos.subList(swapped, videos.size))
+    }
+
+    private fun startRowPrefetch(repository: GiantBombRepository, decorate: (Video) -> Video) {
+        rowPrefetcher?.cancel()
+        val firstScreen = firstScreenCardCount()
+        val prefetcher = RowPrefetcher<String>(
+            scope = viewLifecycleOwner.lifecycleScope,
+            maxConcurrent = ROW_PREFETCH_CONCURRENCY,
+            // A row with no pagination, or already cached, costs no request.
+            isCached = { title ->
+                rowPaginationMap[title]?.let { repository.hasShowVideos(it.showId, firstScreen) } ?: true
+            }
+        ) { title ->
+            val pagination = rowPaginationMap[title]
+                ?: return@RowPrefetcher RowPrefetcher.Outcome.DONE
+            fetchFirstScreen(repository, title, pagination, firstScreen, decorate)
+        }
+        rowPrefetcher = prefetcher
+        // rowPaginationMap keeps insertion order, which is the row order.
+        prefetcher.enqueue(rowPaginationMap.keys.toList())
+    }
+
+    private suspend fun fetchFirstScreen(
+        repository: GiantBombRepository,
+        title: String,
+        pagination: RowPagination,
+        count: Int,
+        decorate: (Video) -> Video
+    ): RowPrefetcher.Outcome {
+        // Already filled, or a page load is running: nothing to do.
+        if (pagination.offset > 0 || !pagination.hasMore || pagination.isLoading) {
+            return RowPrefetcher.Outcome.DONE
+        }
+        pagination.isLoading = true
+        try {
+            val result = repository.getShowVideos(pagination.showId, limit = count, offset = 0)
+            if (!isAdded) return RowPrefetcher.Outcome.DONE
+            val videos = result.getOrElse { e ->
+                if (RowPrefetcher.isRateLimited(e)) {
+                    rateLimitedUntilMs = System.currentTimeMillis() + RATE_LIMIT_PAUSE_MS
+                    return RowPrefetcher.Outcome.RATE_LIMITED
+                }
+                // Same as before this change: a row that can't load stays empty.
+                val skeletons = skeletonCount(pagination.adapter)
+                if (skeletons > 0) pagination.adapter.removeItems(0, skeletons)
+                return RowPrefetcher.Outcome.FAILED
+            }.map(decorate)
+            showFirstVideos(pagination.adapter, videos)
+            pagination.offset = videos.size
+            if (videos.size < count) pagination.hasMore = false
+            android.util.Log.d("RowPrefetch", "filled '$title' with ${videos.size}")
+            // Download (not decode) the thumbnails that show first, so a fast
+            // scroll down finds them on disk instead of on the network.
+            preloader().warm(videos.take(visibleCardCount()).map { it.thumbnailUrl ?: it.posterUrl })
+            return RowPrefetcher.Outcome.DONE
+        } finally {
+            pagination.isLoading = false
+        }
+    }
+
+    /**
+     * Called on every focus change. Moves the focused row (if still empty)
+     * and the next [ROWS_AHEAD] show rows to the front of the fill queue, and
+     * downloads the thumbnails about to come on screen: the next cards to the
+     * right of [item], and the first cards of the row below.
+     */
+    private fun prefetchAround(row: ListRow, item: Any?) {
+        val rows = rowsAdapterRef ?: return
+        val index = rows.indexOf(row)
+        if (index < 0) return
+        val keys = (0 until rows.size()).map { i ->
+            (rows.get(i) as? ListRow)?.headerItem?.name?.takeIf { it in rowPaginationMap }
+        }
+        rowPrefetcher?.prioritize(listOfNotNull(keys[index]) + RowPrefetcher.ahead(keys, index, ROWS_AHEAD))
+        // Download (not decode) the thumbnails about to come on screen.
+        // Decoding them at card size here as well cost frame time while
+        // scrolling (harness scroll test, 6 Nov 2026), so leave the decode
+        // to the cards themselves; the disk copy already saves the network.
+        val visible = visibleCardCount()
+        val urls = mutableListOf<String?>()
+        fun add(card: Any?) {
+            (card as? Video)?.let { urls.add(it.thumbnailUrl ?: it.posterUrl) }
+        }
+        (row.adapter as? ArrayObjectAdapter)?.let { cards ->
+            val from = if (item != null) cards.indexOf(item) + 1 else 0
+            for (i in from until minOf(cards.size(), from + visible)) add(cards.get(i))
+        }
+        val below = if (index + 1 < rows.size()) (rows.get(index + 1) as? ListRow)?.adapter else null
+        if (below != null) {
+            for (i in 0 until minOf(below.size(), visible)) add(below.get(i))
+        }
+        preloader().warm(urls)
     }
 
     // ----------------------------------------------------------------------
@@ -1003,7 +1166,7 @@ class BrowseFragment : BrowseSupportFragment() {
         val byId = shows.associateBy { it.id }
         val pinnedShows = pinnedIds.mapNotNull { byId[it] }
         for (s in pinnedShows) {
-            val listRowAdapter = ArrayObjectAdapter(CardPresenter(showShowName = false))
+            val listRowAdapter = newShowRowAdapter()
             val rowTitle = "★ ${s.title}"
             val hid = headerIdCounter++
             headerContexts[hid] = HeaderContext.Show(s, pinned = true)
@@ -1047,7 +1210,7 @@ class BrowseFragment : BrowseSupportFragment() {
         // mirrors mobile's pinnable affordance: a quick visual signal that
         // this show can be pinned to the top via the header's long-press menu.
         for (s in activeNonPinned) {
-            val listRowAdapter = ArrayObjectAdapter(CardPresenter(showShowName = false))
+            val listRowAdapter = newShowRowAdapter()
             val rowTitle = "☆ ${s.title}"
             val showHid = headerIdCounter++
             headerContexts[showHid] = HeaderContext.Show(s, pinned = false)
