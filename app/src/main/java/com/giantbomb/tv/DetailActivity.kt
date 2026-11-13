@@ -321,6 +321,9 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             contentDescription = "Watch ${video.title}"
             if (isTv) {
                 setPadding(32.dp(), 10.dp(), 32.dp(), 10.dp())
+                // Nothing sits above Watch, so Up would jump sideways to Watchlist.
+                id = View.generateViewId()
+                nextFocusUpId = id
             } else {
                 setPadding(24.dp(), 12.dp(), 24.dp(), 12.dp())
                 layoutParams = LinearLayout.LayoutParams(
