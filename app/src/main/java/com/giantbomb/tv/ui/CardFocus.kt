@@ -63,24 +63,34 @@ object CardFocus {
 
         private fun keepInsideSafeArea() = pivotFor(liftView, focusedScale)
 
+        /**
+         * One animator drives the ring and the lift together, so they can
+         * never disagree. Not liftView.animate(): when a row scrolled a card
+         * away mid-animation, its ViewPropertyAnimator stopped part way and
+         * the reused card kept that part lift (1.005 to 1.10 seen on the
+         * emulator once leanback's own scale writes were removed).
+         */
         fun update(focused: Boolean) {
-            val scale = if (focused) focusedScale else 1f
             if (focused) keepInsideSafeArea()
-            liftView.animate()
-                .scaleX(scale)
-                .scaleY(scale)
-                .setDuration(DURATION_MS)
-                .setInterpolator(EASE)
-                .start()
             animator?.cancel()
             animator = ValueAnimator.ofFloat(drawable.progress, if (focused) 1f else 0f).apply {
                 duration = DURATION_MS
                 interpolator = EASE
-                addUpdateListener { drawable.progress = it.animatedValue as Float }
+                addUpdateListener {
+                    val progress = it.animatedValue as Float
+                    drawable.progress = progress
+                    val lift = liftScale(progress, focusedScale)
+                    liftView.scaleX = lift
+                    liftView.scaleY = lift
+                }
                 start()
             }
         }
     }
+
+    /** The lift for ring [progress] (0 = resting, 1 = focused). Pure so it can be unit tested. */
+    internal fun liftScale(progress: Float, focusedScale: Float): Float =
+        1f + (focusedScale - 1f) * progress
 
     /**
      * Scaling from the centre pushes the first card in a row (and the last
