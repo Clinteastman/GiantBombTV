@@ -65,7 +65,7 @@ object GlassSurface {
     enum class Theme { SIMPLE, FROSTED, EXTREME, NEON }
 
     @Volatile
-    var theme: Theme = Theme.FROSTED
+    var theme: Theme = Theme.SIMPLE
         private set
 
     val usesBackdropRefraction: Boolean
@@ -73,10 +73,10 @@ object GlassSurface {
 
     fun configure(themeValue: String) {
         theme = when (themeValue) {
-            PrefsManager.THEME_SIMPLE -> Theme.SIMPLE
+            PrefsManager.THEME_FROSTED -> Theme.FROSTED
             PrefsManager.THEME_EXTREME -> Theme.EXTREME
             PrefsManager.THEME_NEON -> Theme.NEON
-            else -> Theme.FROSTED
+            else -> Theme.SIMPLE
         }
     }
 
