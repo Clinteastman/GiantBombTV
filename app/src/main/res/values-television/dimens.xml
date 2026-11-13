@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <dimen name="card_width">320dp</dimen>
-    <dimen name="card_height">240dp</dimen>
+    <dimen name="card_height">260dp</dimen>
     <dimen name="card_thumb_height">180dp</dimen>
     <dimen name="card_margin">8dp</dimen>
     <dimen name="card_vpadding">8dp</dimen>
+    <!-- Leanback search bar: 12 dp from the voice button to the query field
+         (the library default left a 70 dp gap). Overrides the library dimen. -->
+    <dimen name="lb_search_bar_items_margin_start">12dp</dimen>
 </resources>

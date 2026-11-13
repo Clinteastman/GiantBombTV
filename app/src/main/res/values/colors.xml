@@ -18,6 +18,19 @@
     <color name="gb_text_primary">#F1F1F1</color>
     <color name="gb_text_secondary">#A0A0A0</color>
     <color name="gb_text_tertiary">#999999</color>
+    <!-- Card date / show line: brighter than tertiary so it reads from a sofa -->
+    <color name="gb_card_meta">#C4C4C4</color>
+    <!-- Row titles and the detail eyebrow: at least 4.5:1 on the dark background -->
+    <color name="gb_row_header">#D9D9D9</color>
+    <color name="gb_eyebrow_red">#FF6B76</color>
+    <!-- Phone show page header panel and its description text -->
+    <color name="gb_show_header">#F01A1A20</color>
+    <color name="gb_show_deck">#D0D0D0</color>
+
+    <!-- Leanback search field: the typed query was 50% grey, hard to read
+         from a sofa. Overrides the library colours of the same names. -->
+    <color name="lb_search_bar_text">#F2FFFFFF</color>
+    <color name="lb_search_bar_hint">#FFB0B0B0</color>
 
     <!-- Accent colors -->
     <color name="gb_gold">#FFD700</color>

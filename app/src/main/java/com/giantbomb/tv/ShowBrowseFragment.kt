@@ -1,7 +1,14 @@
 package com.giantbomb.tv
 
 import android.content.Intent
+import android.graphics.Typeface
 import android.os.Bundle
+import android.text.TextUtils
+import android.util.TypedValue
+import android.view.Gravity
+import android.view.View
+import android.widget.FrameLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.leanback.app.VerticalGridSupportFragment
 import androidx.lifecycle.lifecycleScope
@@ -41,6 +48,7 @@ class ShowBrowseFragment : VerticalGridSupportFragment() {
         private const val LOAD_MORE_ROWS_AHEAD = 3
         private const val MIN_COLUMNS = 2
         private const val MAX_COLUMNS = 5
+        private const val TITLE_SP = 34f
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,18 +60,31 @@ class ShowBrowseFragment : VerticalGridSupportFragment() {
         @Suppress("DEPRECATION")
         show = requireActivity().intent.getSerializableExtra(ShowActivity.EXTRA_SHOW) as? Show
 
-        show?.let {
-            title = if (it.deck.isNotEmpty()) "${it.title} — ${it.deck}" else it.title
-        }
+        // The show name alone: with the description joined on, the title was
+        // always cut off mid-sentence.
+        show?.let { title = it.title }
 
         // Grid presenter. Card views provide their own focus scaling, so the
-        // presenter's zoom is disabled to avoid a double zoom.
-        gridPresenter = VerticalGridPresenter(FocusHighlight.ZOOM_FACTOR_NONE, false).apply {
+        // presenter's zoom is disabled to avoid a double zoom. Leanback
+        // centres the grid; start it under the title instead.
+        gridPresenter = object : VerticalGridPresenter(FocusHighlight.ZOOM_FACTOR_NONE, false) {
+            override fun initializeGridViewHolder(vh: ViewHolder) {
+                super.initializeGridViewHolder(vh)
+                val grid = vh.gridView
+                (grid.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+                    lp.gravity = Gravity.START or Gravity.TOP
+                    grid.layoutParams = lp
+                }
+                val start = resources.getDimensionPixelSize(androidx.leanback.R.dimen.lb_browse_padding_start) -
+                    resources.getDimensionPixelSize(R.dimen.card_margin)
+                grid.setPadding(start, grid.paddingTop, grid.paddingRight, grid.paddingBottom)
+            }
+        }.apply {
             numberOfColumns = computeColumns()
             shadowEnabled = false
         }
 
-        gridAdapter = ArrayObjectAdapter(CardPresenter())
+        gridAdapter = ArrayObjectAdapter(CardPresenter(showShowName = false))
         adapter = gridAdapter
 
         onItemViewClickedListener = OnItemViewClickedListener { _, item, _, _ ->
@@ -106,6 +127,28 @@ class ShowBrowseFragment : VerticalGridSupportFragment() {
         val usable = res.displayMetrics.widthPixels - sidePadding
         val fit = usable / cardTotal
         return fit.coerceIn(minColumns, MAX_COLUMNS)
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        // Leanback's title is a thin 44 sp face on one line at the right.
+        // Match the detail screen's bold title instead, start it above the
+        // grid, and let a long show name wrap.
+        view.findViewById<TextView>(androidx.leanback.R.id.title_text)?.apply {
+            (layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+                lp.width = FrameLayout.LayoutParams.MATCH_PARENT
+                lp.height = FrameLayout.LayoutParams.WRAP_CONTENT
+                lp.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                layoutParams = lp
+            }
+            gravity = Gravity.START
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, TITLE_SP)
+            isSingleLine = false
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+            setShadowLayer(8f, 0f, 2f, 0xCC000000.toInt())
+        }
     }
 
     private fun loadContent() {

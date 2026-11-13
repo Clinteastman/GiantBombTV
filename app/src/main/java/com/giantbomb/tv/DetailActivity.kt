@@ -23,7 +23,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.enableEdgeToEdge
+import com.giantbomb.tv.util.enableDarkEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.bumptech.glide.Glide
@@ -106,7 +106,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         val isTv = DeviceUtil.isTv(this)
         if (!isTv) {
-            enableEdgeToEdge()
+            enableDarkEdgeToEdge()
         }
 
         @Suppress("DEPRECATION")
@@ -189,7 +189,7 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             orientation = LinearLayout.VERTICAL
             gravity = if (isTv) Gravity.BOTTOM else Gravity.TOP
             if (isTv) {
-                setPadding(48.dp(), 30.dp(), 200.dp(), 40.dp())
+                setPadding(56.dp(), 30.dp(), 200.dp(), 40.dp())
             } else {
                 setPadding(16.dp(), 16.dp(), 16.dp(), 24.dp())
             }
@@ -208,7 +208,8 @@ class DetailActivity : FragmentActivity(), CoroutineScope by MainScope() {
             val showTag = TextView(this@DetailActivity).apply {
                 text = video.showTitle.uppercase()
                 textSize = 13f
-                setTextColor(0xFFE3192C.toInt())
+                // Lighter than brand red so the label keeps 4.5:1 on the backdrop.
+                setTextColor(getColor(R.color.gb_eyebrow_red))
                 typeface = Typeface.DEFAULT_BOLD
                 letterSpacing = 0.1f
                 setPadding(0, 0, 0, 6.dp())

@@ -121,7 +121,7 @@ class MobileGridAdapter(
         private val thumb: ImageView = view.findViewById(R.id.episode_thumb)
         private val title: TextView = view.findViewById(R.id.episode_title)
         init {
-            GlassSurface.applyState(itemView, GlassSurface.Emphasis.CARD, focused = false, cornerRadiusDp = 10f)
+            GlassSurface.applyState(itemView, GlassSurface.Emphasis.CARD, focused = false, cornerRadiusDp = GlassSurface.CARD_CORNER_DP)
         }
         fun bind(video: Video) {
             title.text = video.title
@@ -138,7 +138,7 @@ class MobileGridAdapter(
             .also(VectorFont::applyIfNeon)
         private val pinBadge: ImageView = view.findViewById(R.id.show_pin_badge)
         init {
-            GlassSurface.applyState(itemView, GlassSurface.Emphasis.CARD, focused = false, cornerRadiusDp = 10f)
+            GlassSurface.applyState(itemView, GlassSurface.Emphasis.CARD, focused = false, cornerRadiusDp = GlassSurface.CARD_CORNER_DP)
         }
         fun bind(show: Show, pinned: Boolean) {
             title.text = show.title

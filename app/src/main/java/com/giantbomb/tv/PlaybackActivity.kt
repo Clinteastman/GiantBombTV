@@ -30,9 +30,10 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.enableEdgeToEdge
+import com.giantbomb.tv.util.enableDarkEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
@@ -74,6 +75,14 @@ import kotlinx.coroutines.*
 class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
     companion object {
+        /** TV overscan safe margins (5% of a 960 x 540 dp screen). */
+        private const val TV_SAFE_X_DP = 48
+        private const val TV_SAFE_Y_DP = 28
+        /** TV left keyline shared with home, search and settings (clears the 48 dp overscan band). */
+        private const val TV_KEYLINE_DP = 56
+        private const val PHONE_CONTROL_INSET_DP = 8
+        private const val WATCHLIST_ADD = "+ Watchlist"
+        private const val WATCHLIST_ON = "✓ Watchlist"
         const val EXTRA_VIDEO = "extra_video"
         const val EXTRA_LIVE_HLS_URL = "extra_live_hls_url"
         const val EXTRA_LIVE_TITLE = "extra_live_title"
@@ -118,6 +127,10 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
     private lateinit var playerView: PlayerView
     private lateinit var rootLayout: FrameLayout
     private lateinit var repository: GiantBombRepository
+    /** Phone portrait only: the Watchlist toggle under the video. */
+    private var mobileWatchlistBtn: TextView? = null
+    /** Bumped by each watchlist read or toggle, so only the newest result applies. */
+    private var watchlistGeneration = 0
     private var video: Video? = null
     private var videoDuration: Double = 0.0
     private var isTv = false
@@ -206,7 +219,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         isTv = DeviceUtil.isTv(this)
 
         if (!isTv) {
-            enableEdgeToEdge()
+            enableDarkEdgeToEdge()
         }
 
         prefs = PrefsManager(this)
@@ -324,7 +337,9 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                     FrameLayout.LayoutParams.WRAP_CONTENT,
                     Gravity.BOTTOM or Gravity.START
                 ).apply {
-                    setMargins(40.dp(), 0, 40.dp(), 90.dp())
+                    // Clear of the TV overscan band (48 dp each side) and
+                    // above the time bar once it is lifted out of the band.
+                    setMargins(TV_KEYLINE_DP.dp(), 0, TV_KEYLINE_DP.dp(), (90 + TV_SAFE_Y_DP).dp())
                 }
             }
             rootLayout.addView(tvTitleOverlay)
@@ -543,13 +558,35 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             typeface = Typeface.DEFAULT_BOLD
             setPadding(16.dp(), 8.dp(), 16.dp(), 8.dp())
             GlassSurface.styleInteractive(this, cornerRadiusDp = 8f)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 12.dp() }
+            gravity = Gravity.CENTER
+            minHeight = 48.dp()
+            layoutParams = actionButtonParams(first = false)
             setOnClickListener { showQualityPicker() }
         }
-        contentLayout.addView(qualityBtn)
+        // Watchlist, Download and Quality share one row of equal buttons,
+        // in the same order as the TV detail screen.
+        val actionRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 14.dp() }
+        }
+        mobileWatchlistBtn = TextView(this).apply {
+            text = WATCHLIST_ADD
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            minHeight = 48.dp()
+            setPadding(12.dp(), 8.dp(), 12.dp(), 8.dp())
+            GlassSurface.styleInteractive(this, cornerRadiusDp = 8f)
+            layoutParams = actionButtonParams(first = true)
+            contentDescription = "Add to watchlist"
+            setOnClickListener { toggleMobileWatchlist() }
+        }
+        actionRow.addView(mobileWatchlistBtn)
+        contentLayout.addView(actionRow)
 
         // Download (offline) button — mobile's only entry to downloads, since
         // phone card taps go straight to the player (skipping DetailActivity).
@@ -561,14 +598,14 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             typeface = Typeface.DEFAULT_BOLD
             setPadding(16.dp(), 8.dp(), 16.dp(), 8.dp())
             GlassSurface.styleInteractive(this, cornerRadiusDp = 8f)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 8.dp() }
+            gravity = Gravity.CENTER
+            minHeight = 48.dp()
+            layoutParams = actionButtonParams(first = false)
             visibility = View.GONE
             setOnClickListener { onDownloadButtonClicked() }
         }
-        contentLayout.addView(downloadBtn)
+        actionRow.addView(downloadBtn)
+        actionRow.addView(qualityBtn)
 
         // Stream live download state into the button while the screen is open
         // (so it updates Download -> Downloading X% -> Downloaded in place).
@@ -599,6 +636,21 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         mobileContentScroll!!.addView(contentLayout)
         mainLayout.addView(mobileContentScroll)
 
+        // Edge to edge: start the player below the status bar (the cast
+        // button used to sit on the battery icon) and keep the last Up Next
+        // item above the navigation bar. Hidden bars (landscape fullscreen)
+        // report no inset, so the player fills the screen there.
+        val contentBottom = contentLayout.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(mainLayout) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(bars.left, bars.top, bars.right, 0)
+            contentLayout.setPadding(
+                contentLayout.paddingLeft, contentLayout.paddingTop,
+                contentLayout.paddingRight, contentBottom + bars.bottom
+            )
+            insets
+        }
+
         rootLayout.addView(mainLayout)
         setContentView(rootLayout)
 
@@ -607,6 +659,65 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
 
         // Populate title / meta / description + "Up Next" for the current video.
         bindVideoMetadata(v)
+    }
+
+    /** Equal-width button in the phone player's action row, 12 dp apart. */
+    private fun actionButtonParams(first: Boolean) = LinearLayout.LayoutParams(
+        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+    ).apply { if (!first) marginStart = 12.dp() }
+
+    /** Shows whether [v] is on the watchlist on the phone player's button. */
+    private fun refreshMobileWatchlist(v: Video) {
+        val btn = mobileWatchlistBtn ?: return
+        // Disabled until the state is known: a tap on an unknown state would
+        // send an add for a video that is already on the list. A newer read
+        // or toggle bumps the generation, so a stale result is dropped.
+        val gen = ++watchlistGeneration
+        btn.tag = null
+        btn.text = WATCHLIST_ADD
+        btn.isEnabled = false
+        launch {
+            val list = repository.getWatchlist().getOrNull()
+            if (gen != watchlistGeneration || video?.id != v.id || list == null) return@launch
+            setMobileWatchlistState(list.any { it.id == v.id })
+            btn.isEnabled = true
+        }
+    }
+
+    private fun setMobileWatchlistState(onList: Boolean) {
+        val btn = mobileWatchlistBtn ?: return
+        btn.tag = onList
+        btn.text = if (onList) WATCHLIST_ON else WATCHLIST_ADD
+        btn.contentDescription = if (onList) "Remove from watchlist" else "Add to watchlist"
+    }
+
+    private fun toggleMobileWatchlist() {
+        val v = video ?: return
+        val btn = mobileWatchlistBtn ?: return
+        val onList = btn.tag as? Boolean ?: return
+        val gen = ++watchlistGeneration
+        btn.isEnabled = false
+        launch {
+            val result = if (onList) repository.removeFromWatchlist(v.id) else repository.addToWatchlist(v)
+            // The video changed while this ran (autoplay): its refresh owns the button.
+            if (gen != watchlistGeneration) return@launch
+            btn.isEnabled = true
+            result.onSuccess {
+                setMobileWatchlistState(!onList)
+                Toast.makeText(
+                    this@PlaybackActivity,
+                    if (onList) "Removed from watchlist" else "Added to watchlist",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            result.onFailure {
+                Toast.makeText(
+                    this@PlaybackActivity,
+                    if (onList) "Failed to remove" else "Failed to add",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
     }
 
     /**
@@ -641,6 +752,8 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
                 dv.visibility = View.VISIBLE
             }
         }
+
+        refreshMobileWatchlist(v)
 
         // Only the mobile layout has an "Up Next" list; skip the fetch otherwise.
         if (relatedRecycler != null) loadRelatedVideos(v)
@@ -1774,6 +1887,20 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         // focus transform there scales the decoded frame from its top-left.
         val controllerRoot = pv.findViewById<View>(androidx.media3.ui.R.id.exo_controller)
         if (controllerRoot != null) walk(controllerRoot)
+        // TV: clear of overscan. Phone: off the screen edge, where the
+        // settings gear touched it.
+        // On TV the numbers put the title, the time bar's start and the
+        // time text on one 56 dp keyline (the bar and the times carry their
+        // own inner padding of 8 and 14 dp).
+        // The right edge keeps the full 48 dp so the settings gear stays out
+        // of the overscan band.
+        if (isTv) insetControls(
+            pv, barStartDp = TV_KEYLINE_DP - 14, barEndDp = TV_SAFE_X_DP,
+            timeBarXDp = TV_KEYLINE_DP - 8, yDp = TV_SAFE_Y_DP
+        ) else insetControls(
+            pv, barStartDp = PHONE_CONTROL_INSET_DP, barEndDp = PHONE_CONTROL_INSET_DP,
+            timeBarXDp = PHONE_CONTROL_INSET_DP, yDp = 0
+        )
 
         // Time bar: always red so the played position reads as the YouTube /
         // standard media-app cue. Scrubber thumb stays default; the colour
@@ -1783,7 +1910,54 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
         )
         timeBar?.apply {
             setPlayedColor(red)
-            setScrubberColor(red)
+            setScrubberColor(if (isFocused) Color.WHITE else red)
+            // The bar has no focus look of its own, so from a sofa nothing
+            // seemed focused when the remote was on it: give it a light pill
+            // and a white scrubber while it has focus.
+            // The bar's view is a 48 dp touch target that reaches up under
+            // the title; keep the pill to a 16 dp band around the track.
+            val focusPill = android.graphics.drawable.InsetDrawable(
+                GradientDrawable().apply {
+                    setColor(0x33FFFFFF)
+                    setStroke(2.dp(), Color.WHITE)
+                    cornerRadius = 999f
+                },
+                0, 16.dp(), 0, 16.dp()
+            )
+            background = if (isFocused) focusPill else null
+            setOnFocusChangeListener { bar, focused ->
+                bar.background = if (focused) focusPill else null
+                setScrubberColor(if (focused) Color.WHITE else red)
+            }
+        }
+    }
+
+    /**
+     * Media3 runs the time bar and the bottom bar (times, settings) to the
+     * screen edges, where a TV's overscan can crop them. Pull them in at the
+     * sides ([barStartDp], [barEndDp], [timeBarXDp]) and by [yDp] at the bottom: the bottom bar by padding,
+     * so its dark strip still runs edge to edge, and the time bar by margins,
+     * lifted by the same amount the bar grew. Tagged once, so calling this on
+     * every controller show is safe.
+     */
+    private fun insetControls(pv: PlayerView, barStartDp: Int, barEndDp: Int, timeBarXDp: Int, yDp: Int) {
+        val y = yDp.dp()
+        pv.findViewById<View>(androidx.media3.ui.R.id.exo_bottom_bar)?.let { bar ->
+            if (bar.getTag(R.id.tv_overscan_inset) != true) {
+                bar.setPadding(bar.paddingLeft + barStartDp.dp(), bar.paddingTop, bar.paddingRight + barEndDp.dp(), bar.paddingBottom + y)
+                bar.layoutParams = bar.layoutParams.apply { if (height > 0) height += y }
+                bar.setTag(R.id.tv_overscan_inset, true)
+            }
+        }
+        pv.findViewById<View>(androidx.media3.ui.R.id.exo_progress)?.let { bar ->
+            val lp = bar.layoutParams as? android.view.ViewGroup.MarginLayoutParams ?: return@let
+            if (bar.getTag(R.id.tv_overscan_inset) != true) {
+                lp.leftMargin += timeBarXDp.dp()
+                lp.rightMargin += timeBarXDp.dp()
+                lp.bottomMargin += y
+                bar.layoutParams = lp
+                bar.setTag(R.id.tv_overscan_inset, true)
+            }
         }
     }
 
@@ -1893,6 +2067,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             val thumbnail: ImageView = view.findViewById(R.id.related_thumbnail)
             val title: TextView = view.findViewById(R.id.related_title)
             val meta: TextView = view.findViewById(R.id.related_meta)
+            val badge: TextView = view.findViewById(R.id.related_premium_badge)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -1907,6 +2082,7 @@ class PlaybackActivity : FragmentActivity(), CoroutineScope by MainScope() {
             val video = videos[position]
             holder.title.text = video.title
             holder.meta.text = if (video.publishDate.isNotEmpty()) DateFormat.formatPublishDate(video.publishDate) else ""
+            com.giantbomb.tv.ui.TierBadge.styleLabel(holder.badge, com.giantbomb.tv.ui.TierBadge.kindOf(video))
 
             if (!video.thumbnailUrl.isNullOrEmpty()) {
                 Glide.with(holder.thumbnail)

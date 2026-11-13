@@ -260,9 +260,9 @@ class ScreenTour {
         pause(1_500)
         val first = d.findObject(res("show_poster")) ?: error("No show on the Shows tab")
         first.click()
-        // The show page is the same Leanback grid as on TV.
-        waitFor(res("browse_grid"), 15_000, "the show page")
-        waitFor(resAny("card_title", "card_thumbnail"), 15_000, "show episodes")
+        // Phones and tablets have their own show page (MobileShowFragment).
+        waitFor(res("show_grid"), 15_000, "the show page")
+        waitFor(resAny("video_title", "video_thumbnail"), 15_000, "show episodes")
         pause(2_500)
     }
 

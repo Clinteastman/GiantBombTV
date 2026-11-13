@@ -11,9 +11,10 @@
     </style>
 
     <style name="GiantBomb.RowHeader" parent="Widget.Leanback.Row.Header">
-        <item name="android:textColor">@color/gb_text_secondary</item>
+        <item name="android:textColor">@color/gb_row_header</item>
         <item name="android:textAllCaps">true</item>
         <item name="android:letterSpacing">0.08</item>
-        <item name="android:textSize">13sp</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
     </style>
 </resources>

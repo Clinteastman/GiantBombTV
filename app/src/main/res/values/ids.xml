@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- View tag: the player control already carries the TV overscan inset. -->
+    <item name="tv_overscan_inset" type="id" />
+</resources>

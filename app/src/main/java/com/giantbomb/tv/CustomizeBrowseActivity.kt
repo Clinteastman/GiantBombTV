@@ -10,7 +10,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
+import com.giantbomb.tv.util.enableDarkEdgeToEdge
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.ItemTouchHelper
@@ -34,7 +34,7 @@ class CustomizeBrowseActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableDarkEdgeToEdge()
         prefs = PrefsManager(this)
 
         val order = prefs.getSectionOrder()

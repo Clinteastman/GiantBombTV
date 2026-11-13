@@ -25,7 +25,6 @@ import com.giantbomb.tv.data.PrefsManager
  */
 object ThemePickerDialog {
 
-    private const val ACCENT_RED = 0xFFE3192C.toInt()
     private const val NEON_PINK = 0xFFFF43E6.toInt()
     private const val NEON_CYAN = 0xFF42F5FF.toInt()
 
@@ -41,7 +40,9 @@ object ThemePickerDialog {
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
         val neon = current == PrefsManager.THEME_NEON
-        val focusAccent = if (neon) NEON_PINK else ACCENT_RED
+        // Same focus colour as the cards behind the dialog: white, or the
+        // Neon pink.
+        val focusAccent = if (neon) NEON_PINK else Color.WHITE
 
         val dialog = Dialog(context)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -50,7 +51,8 @@ object ThemePickerDialog {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(22), dp(24), dp(18))
             background = GradientDrawable().apply {
-                setColor(0xF2141620.toInt())
+                // Opaque: the settings cards showed through the rows.
+                setColor(0xFF141620.toInt())
                 cornerRadius = 22f * density
                 setStroke(dp(1), if (neon) 0x6642F5FF else 0x33FFFFFF)
             }
@@ -106,7 +108,10 @@ object ThemePickerDialog {
             row.addView(TextView(context).apply {
                 text = if (selected) "✓" else ""
                 textSize = 20f
-                setTextColor(focusAccent)
+                // White: the old accent-red tick measured about 1.4:1 on
+                // the focused row.
+                setTextColor(Color.WHITE)
+                setTypeface(typeface, Typeface.BOLD)
                 setPadding(dp(12), 0, 0, 0)
             })
             panel.addView(row)
@@ -135,7 +140,7 @@ object ThemePickerDialog {
             setStroke((strokeDp * density).toInt().coerceAtLeast(1), stroke)
         }
         val idle = shape(if (selected) 0x22FFFFFF else 0x10FFFFFF, if (selected) 0x40FFFFFF else 0x14FFFFFF, 1f)
-        val active = shape(0x30FFFFFF, accent, 2f)
+        val active = shape(0x30FFFFFF, accent, 3f)
         return StateListDrawable().apply {
             addState(intArrayOf(android.R.attr.state_focused), active)
             addState(intArrayOf(android.R.attr.state_pressed), active)

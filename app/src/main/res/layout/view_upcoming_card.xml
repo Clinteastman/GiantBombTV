@@ -2,19 +2,19 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/upcoming_card_root"
     android:layout_width="320dp"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:focusable="false">
 
     <!-- Glass container drawn by code -->
     <FrameLayout
         android:id="@+id/upcoming_glass_bg"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:clipChildren="false">
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:orientation="vertical">
 
             <!-- Thumbnail area (same as video card) -->
@@ -229,9 +229,13 @@
             <LinearLayout
                 android:id="@+id/upcoming_text_area"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center_vertical"
                 android:orientation="vertical"
-                android:padding="12dp">
+                android:paddingHorizontal="12dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp">
 
                 <TextView
                     android:id="@+id/upcoming_title"
@@ -246,11 +250,12 @@
                     android:id="@+id/upcoming_time"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/gb_text_tertiary"
+                    android:textColor="@color/gb_card_meta"
                     android:textSize="12sp"
                     android:maxLines="1"
                     android:ellipsize="end"
-                    android:paddingTop="4dp" />
+                    android:paddingTop="4dp"
+                    android:paddingBottom="2dp" />
             </LinearLayout>
         </LinearLayout>
     </FrameLayout>

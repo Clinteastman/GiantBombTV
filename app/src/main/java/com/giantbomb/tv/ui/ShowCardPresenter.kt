@@ -25,7 +25,9 @@ class ShowCardPresenter(
         val cardView = ImageCardView(parent.context).apply {
             isFocusable = true
             isFocusableInTouchMode = true
-            setMainImageDimensions(240, 240)
+            // 256 px so the last whole card on screen ends clear of the
+            // overscan band instead of inside it.
+            setMainImageDimensions(256, 256)
             setMainImageScaleType(ImageView.ScaleType.FIT_CENTER)
 
             GlassSurface.applyState(this, GlassSurface.Emphasis.CARD, focused = false)
@@ -33,23 +35,23 @@ class ShowCardPresenter(
         }
 
         // Shows without artwork are identifiable only by their title, but
-        // ImageCardView truncates it to one ellipsized line. Marquee the
-        // title so the full name scrolls while the card is focused.
+        // ImageCardView truncates it to one ellipsized line. Give it two
+        // lines (fixed, so every card in the row is the same height).
         val titleView = cardView.findViewById<TextView>(androidx.leanback.R.id.title_text)
         titleView?.let(VectorFont::applyIfNeon)
         titleView?.apply {
-            ellipsize = TextUtils.TruncateAt.MARQUEE
-            marqueeRepeatLimit = -1
-            isSingleLine = true
+            isSingleLine = false
+            maxLines = 2
+            setLines(2)
+            ellipsize = TextUtils.TruncateAt.END
+            // Same face as the video card titles (Leanback uses a condensed one).
+            if (!VectorFont.isVector(this)) typeface = android.graphics.Typeface.DEFAULT
         }
 
         val focusRing = CardFocus.install(cardView)
         cardView.setOnFocusChangeListener { v, hasFocus ->
             focusRing.update(hasFocus)
             GlassSurface.applyState(v, GlassSurface.Emphasis.CARD, hasFocus)
-            // Marquee only animates while the view is "selected"; tie that to
-            // focus so the focused card scrolls its full title.
-            titleView?.isSelected = hasFocus
         }
 
         return ViewHolder(cardView)

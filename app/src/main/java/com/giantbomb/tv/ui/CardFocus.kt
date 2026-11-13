@@ -24,6 +24,8 @@ import androidx.core.graphics.ColorUtils
  */
 object CardFocus {
     const val FOCUSED_SCALE = 1.10f
+    /** TV overscan band on each side, as a fraction of the screen width. */
+    private const val SAFE_X_FRACTION = 0.05f
     private const val DURATION_MS = 150L
     private val EASE = DecelerateInterpolator()
 
@@ -38,7 +40,7 @@ object CardFocus {
      */
     fun install(
         target: View,
-        cornerRadiusDp: Float = 28f,
+        cornerRadiusDp: Float = GlassSurface.CARD_CORNER_DP,
         focusedScale: Float = FOCUSED_SCALE,
         liftView: View = target
     ): Ring {
@@ -59,8 +61,11 @@ object CardFocus {
     ) {
         private var animator: ValueAnimator? = null
 
+        private fun keepInsideSafeArea() = pivotFor(liftView, focusedScale)
+
         fun update(focused: Boolean) {
             val scale = if (focused) focusedScale else 1f
+            if (focused) keepInsideSafeArea()
             liftView.animate()
                 .scaleX(scale)
                 .scaleY(scale)
@@ -75,6 +80,33 @@ object CardFocus {
                 start()
             }
         }
+    }
+
+    /**
+     * Scaling from the centre pushes the first card in a row (and the last
+     * whole one) past the 5% TV overscan band. Move the pivot so the lifted
+     * card grows away from a screen edge it would otherwise cross. Cards that
+     * are already partly off screen (scrolled rows) are left alone.
+     */
+    private fun Ring.pivotFor(view: View, scale: Float) {
+        val w = view.width
+        if (w <= 0 || scale <= 1f) return
+        val screenW = view.resources.displayMetrics.widthPixels
+        val safe = SAFE_X_FRACTION * screenW
+        val loc = IntArray(2)
+        view.getLocationOnScreen(loc)
+        // Location already includes any current lift; undo it.
+        val left = loc[0] + view.pivotX * (view.scaleX - 1f)
+        val right = left + w
+        if (left < 0 || right > screenW) {
+            view.pivotX = w / 2f
+            return
+        }
+        val grow = scale - 1f
+        // Left edge after scaling = left - pivot * grow; right = right + (w - pivot) * grow.
+        val maxPivot = ((left - safe) / grow).coerceAtLeast(0f)
+        val minPivot = (w - (screenW - safe - right) / grow).coerceAtMost(w.toFloat())
+        view.pivotX = (w / 2f).coerceAtMost(maxPivot).coerceAtLeast(minPivot).coerceIn(0f, w.toFloat())
     }
 
     /** Ring colour per theme: white on glass and Simple, hot pink on Neon. */
@@ -160,11 +192,14 @@ object CardFocus {
 
         private companion object {
             const val VEIL_ALPHA = 0x40
-            const val RING_DP = 4f
-            const val EDGE_LINE_DP = 1.5f
-            const val EDGE_LINE_ALPHA = 0xA0
-            const val GLOW_STEP_DP = 2.5f
-            val GLOW = intArrayOf(0x80, 0x48, 0x1C)
+            // A lighter ring than the first pass (4 dp plus a 3-step glow read
+            // as heavy); the 1.10 lift and the veil on the other cards still
+            // make the focused card obvious from a sofa.
+            const val RING_DP = 2.5f
+            const val EDGE_LINE_DP = 1f
+            const val EDGE_LINE_ALPHA = 0x90
+            const val GLOW_STEP_DP = 2f
+            val GLOW = intArrayOf(0x50, 0x20)
         }
     }
 }

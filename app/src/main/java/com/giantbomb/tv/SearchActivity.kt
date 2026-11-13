@@ -1,7 +1,7 @@
 package com.giantbomb.tv
 
 import android.os.Bundle
-import androidx.activity.enableEdgeToEdge
+import com.giantbomb.tv.util.enableDarkEdgeToEdge
 import androidx.fragment.app.FragmentActivity
 import com.giantbomb.tv.mobile.MobileSearchFragment
 import com.giantbomb.tv.util.DeviceUtil
@@ -16,7 +16,7 @@ class SearchActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
 
         if (!isTv) {
-            enableEdgeToEdge()
+            enableDarkEdgeToEdge()
         }
 
         setContentView(R.layout.activity_search)

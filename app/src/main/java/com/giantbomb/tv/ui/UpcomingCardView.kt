@@ -51,7 +51,7 @@ class UpcomingCardView(context: Context) : FrameLayout(context) {
         val vPaddingPx = res.getDimensionPixelSize(R.dimen.card_vpadding)
         cardWidthPx = res.getDimensionPixelSize(R.dimen.card_width) + hPadding * 2
         cardHeightPx = res.getDimensionPixelSize(R.dimen.card_height) + vPaddingPx * 2
-        val cornerRadius = 28f * density
+        val cornerRadius = GlassSurface.CARD_CORNER_DP * density
 
         setPadding(hPadding, vPaddingPx, hPadding, vPaddingPx)
         clipChildren = false

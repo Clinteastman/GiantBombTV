@@ -31,4 +31,15 @@ object DateFormat {
             dateStr
         }
     }
+
+    /**
+     * A video's length as "1h 12m" or "12m", the same style as the detail
+     * screen. Empty for an unknown length; under a minute reads "1m".
+     */
+    fun formatLength(seconds: Int): String {
+        if (seconds <= 0) return ""
+        val h = seconds / 3600
+        val m = ((seconds % 3600) / 60).coerceAtLeast(if (h == 0) 1 else 0)
+        return if (h > 0) "${h}h ${m}m" else "${m}m"
+    }
 }

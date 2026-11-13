@@ -52,6 +52,14 @@ interface BackdropRefractionHost
  * Older devices retain a lightweight translucent-gradient fallback.
  */
 object GlassSurface {
+    /**
+     * Corner radius shared by every card (video, show, upcoming, settings,
+     * phone cards) and their focus ring. 28 dp read as a pill and crowded the
+     * title and date lines; 12 dp keeps a soft corner without eating the text
+     * area.
+     */
+    const val CARD_CORNER_DP = 12f
+
     enum class Shape { ROUNDED, PILL, CIRCLE }
     enum class Emphasis { CARD, BUTTON, PLAYER_CONTROL }
     enum class Theme { SIMPLE, FROSTED, EXTREME, NEON }
@@ -533,7 +541,7 @@ object GlassSurface {
         emphasis: Emphasis,
         focused: Boolean = false,
         shape: Shape = Shape.ROUNDED,
-        cornerRadiusDp: Float = 28f,
+        cornerRadiusDp: Float = CARD_CORNER_DP,
         accentColor: Int? = null,
         owner: View? = null
     ): Drawable {
@@ -583,6 +591,9 @@ object GlassSurface {
         accentColor: Int?,
         activeTheme: Theme
     ): Drawable {
+        if (activeTheme == Theme.SIMPLE && emphasis == Emphasis.CARD) {
+            return simpleCardFill(radius, focused)
+        }
         val fill = accentColor?.let { accent ->
             if (focused) {
                 intArrayOf(
@@ -620,6 +631,20 @@ object GlassSurface {
             cornerRadius = radius
         }
     }
+
+    /**
+     * Simple theme cards are one flat, opaque surface, so backdrop artwork
+     * never shows through a card's title and every card looks the same. A
+     * paid video is marked by its Premium pill, not by tinting the card.
+     */
+    private fun simpleCardFill(radius: Float, focused: Boolean): Drawable =
+        GradientDrawable().apply {
+            setColor(if (focused) SIMPLE_CARD_FOCUSED else SIMPLE_CARD)
+            cornerRadius = radius
+        }
+
+    private const val SIMPLE_CARD = 0xFF20232A.toInt()
+    private const val SIMPLE_CARD_FOCUSED = 0xFF30343D.toInt()
 
     private fun neonDrawable(
         context: Context,
@@ -841,7 +866,7 @@ object GlassSurface {
         emphasis: Emphasis,
         focused: Boolean,
         shape: Shape = Shape.ROUNDED,
-        cornerRadiusDp: Float = 28f,
+        cornerRadiusDp: Float = CARD_CORNER_DP,
         accentColor: Int? = null
     ) {
         view.background = drawable(
@@ -874,16 +899,8 @@ object GlassSurface {
                 Theme.FROSTED, Theme.EXTREME -> RuntimeGlassOverlayDrawable(
                     radius, focused, accentColor, theme
                 )
-                Theme.SIMPLE -> {
-                    val rim = simpleRimDrawable(view.context, radius, focused, accentColor)
-                    accentColor?.let { accent ->
-                        val tint = GradientDrawable().apply {
-                            setColor(ColorUtils.setAlphaComponent(accent, 0x24))
-                            cornerRadius = radius
-                        }
-                        LayerDrawable(arrayOf(tint, rim))
-                    } ?: rim
-                }
+                // No accent tint in Simple: see simpleCardFill.
+                Theme.SIMPLE -> simpleRimDrawable(view.context, radius, focused, null)
                 Theme.NEON -> neonRimDrawable(
                     view.context,
                     radius,

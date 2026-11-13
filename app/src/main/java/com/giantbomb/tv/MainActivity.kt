@@ -25,7 +25,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.enableEdgeToEdge
+import com.giantbomb.tv.util.enableDarkEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
@@ -154,7 +154,7 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope(), Backdrop
         GlassSurface.configure(visualPrefs.visualTheme)
 
         if (!isTv) {
-            enableEdgeToEdge()
+            enableDarkEdgeToEdge()
         }
 
         setContentView(R.layout.activity_main)
@@ -263,8 +263,9 @@ class MainActivity : FragmentActivity(), CoroutineScope by MainScope(), Backdrop
 
     private fun styleMobileBottomNav(nav: BottomNavigationView) {
         val (active, inactive, indicator) = when (GlassSurface.theme) {
+            // Lighter than brand red so the active label clears 4:1 on the bar.
             GlassSurface.Theme.SIMPLE -> Triple(
-                0xFFFF2035.toInt(), 0xC8FFFFFF.toInt(), 0x28FFFFFF
+                0xFFFF6B76.toInt(), 0xC8FFFFFF.toInt(), 0x28FFFFFF
             )
             GlassSurface.Theme.FROSTED -> Triple(
                 Color.WHITE, 0xC8DFE3EA.toInt(), 0x38FFFFFF

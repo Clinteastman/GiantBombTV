@@ -1,7 +1,7 @@
 package com.giantbomb.tv
 
 import android.os.Bundle
-import androidx.activity.enableEdgeToEdge
+import com.giantbomb.tv.util.enableDarkEdgeToEdge
 import androidx.fragment.app.FragmentActivity
 import com.giantbomb.tv.util.DeviceUtil
 
@@ -14,7 +14,7 @@ class DownloadsActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!DeviceUtil.isTv(this)) enableEdgeToEdge()
+        if (!DeviceUtil.isTv(this)) enableDarkEdgeToEdge()
         // The fragment's root view fills the screen and carries the gradient
         // background, so hosting it in android.R.id.content needs no layout.
         if (savedInstanceState == null) {

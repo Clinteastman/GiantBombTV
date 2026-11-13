@@ -1,28 +1,59 @@
 package com.giantbomb.tv.ui
 
+import android.graphics.Typeface
+import android.text.TextUtils
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.leanback.widget.ImageCardView
 import androidx.leanback.widget.Presenter
-import com.giantbomb.tv.R
 import com.giantbomb.tv.model.SettingsItem
 
 class SettingsCardPresenter : Presenter() {
 
     override fun onCreateViewHolder(parent: ViewGroup): ViewHolder {
+        val density = parent.resources.displayMetrics.density
         val cardView = ImageCardView(parent.context).apply {
             isFocusable = true
             isFocusableInTouchMode = true
-            setMainImageDimensions(160, 160)
+            // Wide enough for "Customize Browse" and "Privacy Policy" on one
+            // line; titles and descriptions may still wrap to a second line.
+            // At 200 dp the last whole card on a 1080p screen also ends clear
+            // of the right overscan band.
+            setMainImageDimensions((CARD_WIDTH_DP * density).toInt(), (ICON_AREA_DP * density).toInt())
             setMainImageScaleType(ImageView.ScaleType.CENTER_INSIDE)
 
             GlassSurface.applyState(this, GlassSurface.Emphasis.CARD, focused = false)
             setInfoAreaBackgroundColor(0x00000000)
         }
 
+        // ImageCardView keeps the title and description to one ellipsized
+        // line each. Every settings title fits one line at this width, but a
+        // long one may wrap; the description always gets a fixed two lines so
+        // the cards in the row stay the same height.
+        cardView.findViewById<TextView>(androidx.leanback.R.id.title_text)?.apply {
+            isSingleLine = false
+            minLines = 1
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+            // Same face as the video card titles (Leanback uses a condensed one).
+            typeface = Typeface.DEFAULT
+            VectorFont.applyIfNeon(this)
+        }
+        cardView.findViewById<TextView>(androidx.leanback.R.id.content_text)?.apply {
+            isSingleLine = false
+            maxLines = 2
+            setLines(2)
+            ellipsize = TextUtils.TruncateAt.END
+            setTextColor(DESCRIPTION_COLOUR)
+            typeface = Typeface.DEFAULT
+        }
+
         // Focus: lift, ring and brighten glass
-        val focusRing = CardFocus.install(cardView)
+        // A smaller lift than the video cards: these are wider, and the full
+        // 1.10 lift pushed the first card into the left overscan band.
+        val focusRing = CardFocus.install(cardView, focusedScale = FOCUSED_SCALE)
         cardView.setOnFocusChangeListener { v, hasFocus ->
             focusRing.update(hasFocus)
             GlassSurface.applyState(v, GlassSurface.Emphasis.CARD, hasFocus)
@@ -36,11 +67,32 @@ class SettingsCardPresenter : Presenter() {
         val cardView = viewHolder.view as ImageCardView
         cardView.titleText = settings.title
         cardView.contentText = settings.description
+        // One icon colour across the row (the source icons mix red and white).
         cardView.mainImage = ContextCompat.getDrawable(viewHolder.view.context, settings.iconResId)
+            ?.mutate()
+            ?.apply { setTint(ICON_COLOUR) }
+        // Icon on the same left edge as the title and description below it.
+        cardView.mainImageView?.apply {
+            val density = resources.displayMetrics.density
+            val pad = ((ICON_AREA_DP - ICON_DP) / 2f * density).toInt()
+            setPadding((TEXT_START_DP * density).toInt(), pad, 0, pad)
+            scaleType = ImageView.ScaleType.FIT_START
+        }
     }
 
     override fun onUnbindViewHolder(viewHolder: ViewHolder) {
         val cardView = viewHolder.view as ImageCardView
         cardView.mainImage = null
+    }
+
+    private companion object {
+        const val CARD_WIDTH_DP = 200f
+        const val ICON_AREA_DP = 72f
+        const val ICON_DP = 40f
+        const val FOCUSED_SCALE = 1.06f
+        /** Leanback's ImageCardView info area text inset. */
+        const val TEXT_START_DP = 11f
+        const val ICON_COLOUR = 0xFFFFFFFF.toInt()
+        const val DESCRIPTION_COLOUR = 0xFFC4C4C4.toInt()
     }
 }

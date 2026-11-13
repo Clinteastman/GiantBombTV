@@ -1447,13 +1447,9 @@ class MobileBrowseFragment : Fragment() {
                 itemView,
                 GlassSurface.Emphasis.CARD,
                 focused = false,
-                cornerRadiusDp = 14f
+                cornerRadiusDp = GlassSurface.CARD_CORNER_DP
             )
 
-            // Premium is expressed by the card's champagne glass tint. The
-            // label is intentionally just an identifier, not a sticker.
-            premiumBadge.background = null
-            premiumBadge.setShadowLayer(4f * density, 0f, 1f * density, 0xE0000000.toInt())
             // Watched badge styling
             watchedBadge.background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -1476,7 +1472,7 @@ class MobileBrowseFragment : Fragment() {
                 itemView,
                 GlassSurface.Emphasis.CARD,
                 focused = false,
-                cornerRadiusDp = 14f,
+                cornerRadiusDp = GlassSurface.CARD_CORNER_DP,
                 accentColor = TierBadge.glassTint(tierKind)
             )
 
@@ -1505,9 +1501,7 @@ class MobileBrowseFragment : Fragment() {
             metaView.text = meta
             metaView.visibility = if (meta.isEmpty()) View.GONE else View.VISIBLE
 
-            premiumBadge.text = TierBadge.label(tierKind)
-            premiumBadge.setTextColor(TierBadge.labelTextColor(tierKind))
-            premiumBadge.visibility = if (tierKind != TierBadge.Kind.NONE) View.VISIBLE else View.GONE
+            TierBadge.styleLabel(premiumBadge, tierKind)
             watchedBadge.visibility = if (video.watched) View.VISIBLE else View.GONE
 
             // Duration
@@ -1587,7 +1581,7 @@ class MobileBrowseFragment : Fragment() {
             GlassSurface.styleInteractive(
                 itemView,
                 GlassSurface.Emphasis.CARD,
-                cornerRadiusDp = 14f,
+                cornerRadiusDp = GlassSurface.CARD_CORNER_DP,
                 focusedScale = 1.01f
             )
             GlassSurface.applyState(
@@ -1803,7 +1797,8 @@ class MobileBrowseFragment : Fragment() {
             val thumbnail: ImageView = view.findViewById(R.id.small_thumbnail)
             val title: TextView = view.findViewById<TextView>(R.id.small_title)
                 .also(com.giantbomb.tv.ui.VectorFont::applyIfNeon)
-            val showName: TextView = view.findViewById(R.id.small_show_name)
+            val showName: TextView = view.findViewById<TextView>(R.id.small_show_name)
+                .apply { setLines(2) }
             val progressTrack: View = view.findViewById(R.id.small_progress_track)
             val progressBar: View = view.findViewById(R.id.small_progress_bar)
             val watched: TextView = view.findViewById(R.id.small_watched)
@@ -1815,7 +1810,7 @@ class MobileBrowseFragment : Fragment() {
                     itemView,
                     GlassSurface.Emphasis.CARD,
                     focused = false,
-                    cornerRadiusDp = 10f
+                    cornerRadiusDp = GlassSurface.CARD_CORNER_DP
                 )
                 watched.background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
@@ -1839,17 +1834,22 @@ class MobileBrowseFragment : Fragment() {
                 holder.itemView,
                 GlassSurface.Emphasis.CARD,
                 focused = false,
-                cornerRadiusDp = 10f,
+                cornerRadiusDp = GlassSurface.CARD_CORNER_DP,
                 accentColor = TierBadge.glassTint(tierKind)
             )
             holder.title.text = video.title
-            holder.showName.text = video.showTitle ?: ""
-            // Keep the metadata line's space even when this video has no show
-            // name so every glass card in the row remains the same height.
-            holder.showName.visibility = if (video.showTitle.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
-            holder.premiumBadge.text = TierBadge.label(tierKind)
-            holder.premiumBadge.setTextColor(TierBadge.labelTextColor(tierKind))
-            holder.premiumBadge.visibility = if (tierKind != TierBadge.Kind.NONE) View.VISIBLE else View.GONE
+            // Date on one line, the show on the next, so neither is cut short
+            // on these narrow cards.
+            val smallMeta = listOfNotNull(
+                video.publishDate.takeIf { it.isNotEmpty() }?.let(::formatDate),
+                video.showTitle?.takeIf { it.isNotEmpty() }
+            ).joinToString("\n")
+            holder.showName.text = smallMeta
+            // Two lines are always kept (setLines in the holder), even when
+            // this video has no date or show, so every card in the row
+            // remains the same height.
+            holder.showName.visibility = if (smallMeta.isEmpty()) View.INVISIBLE else View.VISIBLE
+            TierBadge.styleLabel(holder.premiumBadge, tierKind)
             holder.watched.visibility = if (video.watched) View.VISIBLE else View.GONE
 
             // Progress
@@ -1899,7 +1899,7 @@ class MobileBrowseFragment : Fragment() {
                     itemView,
                     GlassSurface.Emphasis.CARD,
                     focused = false,
-                    cornerRadiusDp = 10f
+                    cornerRadiusDp = GlassSurface.CARD_CORNER_DP
                 )
             }
         }
@@ -1969,7 +1969,7 @@ class MobileBrowseFragment : Fragment() {
                     cardBg,
                     GlassSurface.Emphasis.CARD,
                     focused = false,
-                    cornerRadiusDp = 12f
+                    cornerRadiusDp = GlassSurface.CARD_CORNER_DP
                 )
                 cardBg.outlineProvider = object : android.view.ViewOutlineProvider() {
                     override fun getOutline(view: View, outline: android.graphics.Outline) {
@@ -1984,9 +1984,6 @@ class MobileBrowseFragment : Fragment() {
                 )
 
                 view.findViewById<View>(R.id.upcoming_text_area).background = null
-
-                premiumBadge.background = null
-                premiumBadge.setShadowLayer(4f * density, 0f, 1f * density, 0xE0000000.toInt())
 
                 liveBadge.background = GradientDrawable().apply {
                     setColor(0xFFE3192C.toInt())
@@ -2008,11 +2005,14 @@ class MobileBrowseFragment : Fragment() {
                 holder.cardBg,
                 GlassSurface.Emphasis.CARD,
                 focused = false,
-                cornerRadiusDp = 12f,
+                cornerRadiusDp = GlassSurface.CARD_CORNER_DP,
                 accentColor = if (stream.premium) PREMIUM_GLASS_TINT else null
             )
             holder.title.text = stream.title
-            holder.premiumBadge.visibility = if (stream.premium) View.VISIBLE else View.GONE
+            TierBadge.styleLabel(
+                holder.premiumBadge,
+                if (stream.premium) TierBadge.Kind.PREMIUM else TierBadge.Kind.NONE
+            )
 
             if (!stream.image.isNullOrEmpty()) {
                 Glide.with(holder.image.context).load(stream.image).centerCrop().into(holder.image)

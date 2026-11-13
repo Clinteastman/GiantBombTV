@@ -5,11 +5,12 @@ import android.graphics.Shader
 import android.os.Build
 import android.os.Bundle
 import android.widget.ImageView
-import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
 import com.bumptech.glide.Glide
+import com.giantbomb.tv.mobile.MobileShowFragment
 import com.giantbomb.tv.model.Show
 import com.giantbomb.tv.util.DeviceUtil
+import com.giantbomb.tv.util.enableDarkEdgeToEdge
 
 class ShowActivity : FragmentActivity() {
 
@@ -24,7 +25,7 @@ class ShowActivity : FragmentActivity() {
         }
         super.onCreate(savedInstanceState)
         if (!isTv) {
-            enableEdgeToEdge()
+            enableDarkEdgeToEdge()
         }
         setContentView(R.layout.activity_show)
 
@@ -46,8 +47,11 @@ class ShowActivity : FragmentActivity() {
         }
 
         if (savedInstanceState == null) {
+            // TV keeps the leanback grid; phones and tablets get a touch layout
+            // with a header, a back button and full-width cards.
+            val page = if (isTv) ShowBrowseFragment() else MobileShowFragment()
             supportFragmentManager.beginTransaction()
-                .replace(R.id.show_fragment_container, ShowBrowseFragment())
+                .replace(R.id.show_fragment_container, page)
                 .commit()
         }
     }
