@@ -49,6 +49,7 @@ class MobileShowFragment : Fragment() {
     private val adapter = EpisodeAdapter()
     private var show: Show? = null
     private var progressMap = emptyMap<Int, ProgressEntry>()
+    private var resumedOnce = false
     private var isLoading = false
     private var hasMore = true
     private var offset = 0
@@ -151,6 +152,25 @@ class MobileShowFragment : Fragment() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Back from the player: the saved positions have moved. Reload them
+        // so the cards and the next resume position are current; until that
+        // answers, pass no resume position and let the player look it up.
+        if (resumedOnce) refreshProgress() else resumedOnce = true
+    }
+
+    private fun refreshProgress() {
+        if (show == null) return
+        progressMap = emptyMap()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val list = repository.getProgress(force = true).getOrNull() ?: return@launch
+            if (!isAdded) return@launch
+            progressMap = list.associateBy { it.videoId }
+            adapter.reapplyProgress()
+        }
+    }
+
     private fun withProgress(video: Video): Video {
         val entry = progressMap[video.id] ?: return video
         return when {
@@ -176,6 +196,17 @@ class MobileShowFragment : Fragment() {
 
     private inner class EpisodeAdapter : RecyclerView.Adapter<EpisodeVH>() {
         private val videos = mutableListOf<Video>()
+
+        /** Re-reads each card's watched and progress state from [progressMap]. */
+        fun reapplyProgress() {
+            for (i in videos.indices) {
+                val fresh = withProgress(videos[i].copy(watched = false, progressPercent = 0))
+                if (fresh != videos[i]) {
+                    videos[i] = fresh
+                    notifyItemChanged(i)
+                }
+            }
+        }
 
         fun add(more: List<Video>) {
             val start = videos.size
