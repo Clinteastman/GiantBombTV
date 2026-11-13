@@ -40,11 +40,27 @@ class PrefsManager internal constructor(private val prefs: SharedPreferences) {
         get() = prefs.getBoolean("show_twitch_chat", true)
         set(value) = prefs.edit().putBoolean("show_twitch_chat", value).apply()
 
-    /** Visual treatment shared by phone and TV surfaces. */
+    /**
+     * Visual treatment shared by phone and TV surfaces.
+     *
+     * Simple is the default for new installs. Installs from before that change
+     * never saved a theme and were shown Frosted, so they keep Frosted. The
+     * first read with no saved theme tells the two apart by whether the prefs
+     * file holds anything else, then saves the answer so it never flips later
+     * (for example once a fresh install saves its API key). Cleared app data
+     * counts as a fresh install. Backup and device transfer are off in the
+     * manifest, so a restore cannot bring old prefs back.
+     */
     var visualTheme: String
-        get() = prefs.getString("visual_theme", THEME_FROSTED) ?: THEME_FROSTED
+        get() {
+            val saved = prefs.getString(KEY_VISUAL_THEME, null)
+            if (saved != null) return saved.takeIf { it in VISUAL_THEMES } ?: THEME_SIMPLE
+            val pinned = if (prefs.all.isEmpty()) THEME_SIMPLE else THEME_FROSTED
+            prefs.edit().putString(KEY_VISUAL_THEME, pinned).apply()
+            return pinned
+        }
         set(value) = prefs.edit()
-            .putString("visual_theme", value.takeIf { it in VISUAL_THEMES } ?: THEME_FROSTED)
+            .putString(KEY_VISUAL_THEME, value.takeIf { it in VISUAL_THEMES } ?: THEME_SIMPLE)
             .apply()
 
     /** Optional animated grid/particle layer used only by the Neon theme. */
@@ -136,6 +152,7 @@ class PrefsManager internal constructor(private val prefs: SharedPreferences) {
     }
 
     companion object {
+        private const val KEY_VISUAL_THEME = "visual_theme"
         const val THEME_SIMPLE = "simple"
         const val THEME_FROSTED = "frosted"
         const val THEME_EXTREME = "extreme"
@@ -147,7 +164,7 @@ class PrefsManager internal constructor(private val prefs: SharedPreferences) {
             THEME_FROSTED -> "Frosted Glass"
             THEME_EXTREME -> "Extreme Glass"
             THEME_NEON -> "Neon Grid"
-            else -> "Frosted Glass"
+            else -> "Simple"
         }
 
         val QUALITY_OPTIONS = listOf("auto", "1080p", "720p", "480p", "360p")
