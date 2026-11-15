@@ -1,6 +1,9 @@
 package com.giantbomb.tv.ui
 
+import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
@@ -10,6 +13,9 @@ import android.text.method.TransformationMethod
 import android.text.style.ReplacementSpan
 import android.view.View
 import android.widget.TextView
+import java.lang.ref.WeakReference
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 /**
  * Arcade vector lettering for the Neon theme, drawn as strokes like a vector
@@ -139,16 +145,19 @@ object VectorFont {
     fun isVector(view: TextView): Boolean = view.transformationMethod is Transformation
 
     // Spans draw on the UI thread only. About 60 glyphs at a handful of sizes.
-    private val outlines = GlyphOutlineCache<Path>(maxEntries = 512)
+    private val outlines = GlyphOutlineCache<FloatArray>(maxEntries = 512)
+    // Alpha-only, so one bitmap serves every glow colour. A few KB each.
+    private val glows = GlyphOutlineCache<Bitmap>(maxEntries = 1024)
 
     private object Transformation : TransformationMethod {
         override fun getTransformation(source: CharSequence?, view: View?): CharSequence? {
             if (source.isNullOrEmpty()) return source
             val out = SpannableString(source)
+            val owner = (view as? TextView)?.let { WeakReference(it) }
             for (i in source.indices) {
                 val c = source[i]
                 if (c != ' ' && glyphs.containsKey(c.uppercaseChar())) {
-                    out.setSpan(GlyphSpan(c.uppercaseChar()), i, i + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    out.setSpan(GlyphSpan(c.uppercaseChar(), owner), i, i + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
             }
             return out
@@ -159,8 +168,54 @@ object VectorFont {
         ) = Unit
     }
 
+    private val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.SQUARE
+    }
+    private val glowPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+
+    /**
+     * The glyph's glow, blurred once in software into an alpha bitmap. Drawing
+     * the glyph with the view's shadow layer instead made the GPU build a new
+     * blurred mask for every scale and sub-pixel position (card lift, row
+     * scroll), and those masks piled up in its cache.
+     */
+    private fun glowBitmap(
+        glyph: Char, strokes: List<FloatArray>, sx: Float, sy: Float,
+        strokeWidth: Float, radius: Float
+    ): Bitmap = glows.get(glyph, sy, (radius * 4f).roundToInt()) {
+        val pad = GlyphGeometry.glowPad(strokeWidth, radius)
+        val bitmap = Bitmap.createBitmap(
+            ceil(8f * sx).toInt() + pad * 2, ceil(8f * sy).toInt() + pad * 2,
+            Bitmap.Config.ALPHA_8
+        )
+        val path = Path()
+        for (stroke in strokes) {
+            path.moveTo(stroke[0] * sx, -stroke[1] * sy)
+            var i = 2
+            while (i + 1 < stroke.size) {
+                path.lineTo(stroke[i] * sx, -stroke[i + 1] * sy)
+                i += 2
+            }
+        }
+        Canvas(bitmap).apply {
+            translate(pad.toFloat(), pad + 8f * sy)
+            drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                this.strokeWidth = strokeWidth
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+                maskFilter = BlurMaskFilter(radius, BlurMaskFilter.Blur.NORMAL)
+            })
+        }
+        bitmap
+    }
+
     /** Draws one glyph as strokes in the current text colour (and its glow). */
-    private class GlyphSpan(private val glyph: Char) : ReplacementSpan() {
+    private class GlyphSpan(
+        private val glyph: Char,
+        private val owner: WeakReference<TextView>?
+    ) : ReplacementSpan() {
         // Letters are slightly condensed so titles stay a sensible length.
         private fun scaleY(paint: Paint) = paint.textSize * 0.68f / 8f
         private fun scaleX(paint: Paint) = scaleY(paint) * 0.7f
@@ -181,37 +236,30 @@ object VectorFont {
             val sx = scaleX(paint)
             val sy = scaleY(paint)
             val left = x + sx * 1.25f
-            // Built once per glyph and size at the origin, then moved into
-            // place. A path rebuilt on every draw is a new path to the GPU,
-            // so its caches miss and keep growing (worst on Nvidia, API 30).
-            val path = outlines.get(glyph, sy) {
-                Path().apply {
-                    for (stroke in strokes) {
-                        moveTo(stroke[0] * sx, -stroke[1] * sy)
-                        var i = 2
-                        while (i + 1 < stroke.size) {
-                            lineTo(stroke[i] * sx, -stroke[i + 1] * sy)
-                            i += 2
-                        }
-                    }
-                }
-            }
-            val oldStyle = paint.style
-            val oldWidth = paint.strokeWidth
-            val oldCap = paint.strokeCap
-            val oldJoin = paint.strokeJoin
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = paint.textSize * 0.1f
-            paint.strokeCap = Paint.Cap.ROUND
-            paint.strokeJoin = Paint.Join.ROUND
+            val strokeWidth = paint.textSize * 0.1f
             canvas.save()
             canvas.translate(left, y.toFloat())
-            canvas.drawPath(path, paint)
+            // The view's shadow layer is drawn here as a cached glow bitmap,
+            // not by the GPU (see glowBitmap).
+            val view = owner?.get()
+            val radius = view?.shadowRadius ?: 0f
+            if (radius > 0f) {
+                val shadow = view!!.shadowColor
+                glowPaint.color = shadow
+                glowPaint.alpha = Color.alpha(shadow) * paint.alpha / 255
+                val pad = GlyphGeometry.glowPad(strokeWidth, radius)
+                canvas.drawBitmap(
+                    glowBitmap(glyph, strokes, sx, sy, strokeWidth, radius),
+                    view.shadowDx - pad, view.shadowDy - 8f * sy - pad, glowPaint
+                )
+            }
+            // Plain square-capped lines: the GPU draws these as rectangles,
+            // with nothing to cache. Built once per glyph and size.
+            val lines = outlines.get(glyph, sy) { GlyphGeometry.segments(strokes, sx, sy) }
+            corePaint.color = paint.color
+            corePaint.strokeWidth = strokeWidth
+            canvas.drawLines(lines, corePaint)
             canvas.restore()
-            paint.style = oldStyle
-            paint.strokeWidth = oldWidth
-            paint.strokeCap = oldCap
-            paint.strokeJoin = oldJoin
         }
     }
 }

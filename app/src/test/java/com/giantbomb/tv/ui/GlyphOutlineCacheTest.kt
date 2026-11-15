@@ -32,6 +32,14 @@ class GlyphOutlineCacheTest {
     }
 
     @Test
+    fun differentGlowRadiusBuildsItsOwnEntry() {
+        val cache = GlyphOutlineCache<Any>(maxEntries = 8)
+        val plain = cache.get('A', 3f, variant = 24) { Any() }
+        assertSame(plain, cache.get('A', 3f, variant = 24) { Any() })
+        assertNotSame(plain, cache.get('A', 3f, variant = 40) { Any() })
+    }
+
+    @Test
     fun staysWithinItsLimit() {
         val cache = GlyphOutlineCache<Any>(maxEntries = 4)
         for (size in 1..20) cache.get('A', size.toFloat()) { Any() }
