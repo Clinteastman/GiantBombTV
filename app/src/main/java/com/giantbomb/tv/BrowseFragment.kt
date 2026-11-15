@@ -43,6 +43,7 @@ import com.giantbomb.tv.ui.SkeletonCard
 import com.giantbomb.tv.ui.SkeletonCardPresenter
 import com.giantbomb.tv.ui.UpcomingCardPresenter
 import com.giantbomb.tv.util.FocusRestore
+import com.giantbomb.tv.util.RowPaging
 import com.giantbomb.tv.util.afterLayoutScope
 import kotlinx.coroutines.*
 
@@ -961,10 +962,17 @@ class BrowseFragment : BrowseSupportFragment() {
         // Called from the item-selected listener, so this must not touch the
         // row adapter inline: see afterLayoutScope.
         afterLayoutScope(viewLifecycleOwner.lifecycleScope).launch {
-            val result = repository.getShowVideos(pagination.showId, limit = ROW_PAGE_SIZE, offset = pagination.offset)
-            result.onSuccess { videos ->
-                if (videos.size < ROW_PAGE_SIZE) pagination.hasMore = false
-                pagination.offset += videos.size
+            // The server pages by whole pages, so ask a page-aligned offset
+            // and drop what the row already shows: see RowPaging.
+            val request = RowPaging.next(pagination.offset, ROW_PAGE_SIZE)
+            val result = repository.getShowVideos(pagination.showId, limit = ROW_PAGE_SIZE, offset = request.offset)
+            result.onSuccess { page ->
+                val held = (0 until pagination.adapter.size())
+                    .mapNotNull { (pagination.adapter.get(it) as? Video)?.id }.toSet()
+                val step = RowPaging.take(request, page, ROW_PAGE_SIZE, held) { it.id }
+                val videos = step.items
+                if (!step.hasMore) pagination.hasMore = false
+                pagination.offset = step.offset
 
                 // Repository progress is cached briefly, so this is usually
                 // free; it keeps badges current after returning from playback.
