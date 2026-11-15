@@ -708,11 +708,14 @@ class BrowseFragment : BrowseSupportFragment() {
             // The new rows each get a new adapter, which Leanback starts at
             // the first card, so note the focused card to put focus back on
             // it (Back from the detail page). A focused show row keeps the
-            // cards it has loaded, or a card past its first screen is gone.
+            // cards it has loaded, or a card past its first screen is gone,
+            // but only while the repository still holds its first page: a
+            // show's pages expire together, so later pages then come from
+            // the same snapshot.
             val focusTarget = focusTarget()
             val keptShowRow = focusTarget?.takeIf { !forceRefresh }
                 ?.let { rowPaginationMap[it.rowTitle] }
-                ?.takeIf { it.offset > 0 }
+                ?.takeIf { it.offset > 0 && repository.hasShowVideos(it.showId, firstScreenCardCount()) }
             val keptVideos = keptShowRow?.adapter?.let { cards ->
                 (0 until cards.size()).mapNotNull { cards.get(it) as? Video }
             }
