@@ -42,6 +42,7 @@ import com.giantbomb.tv.ui.ShowCardPresenter
 import com.giantbomb.tv.ui.SkeletonCard
 import com.giantbomb.tv.ui.SkeletonCardPresenter
 import com.giantbomb.tv.ui.UpcomingCardPresenter
+import com.giantbomb.tv.util.FocusRestore
 import com.giantbomb.tv.util.afterLayoutScope
 import kotlinx.coroutines.*
 
@@ -704,6 +705,21 @@ class BrowseFragment : BrowseSupportFragment() {
             val pinnedIds = prefs.getPinnedShowIds()
             val hidden = prefs.getHiddenSections()
 
+            // The new rows each get a new adapter, which Leanback starts at
+            // the first card, so note the focused card to put focus back on
+            // it (Back from the detail page). A focused show row keeps the
+            // cards it has loaded, or a card past its first screen is gone,
+            // but only while the repository still holds its first page: a
+            // show's pages expire together, so later pages then come from
+            // the same snapshot.
+            val focusTarget = focusTarget()
+            val keptShowRow = focusTarget?.takeIf { !forceRefresh }
+                ?.let { rowPaginationMap[it.rowTitle] }
+                ?.takeIf { it.offset > 0 && repository.hasShowVideos(it.showId, firstScreenCardCount()) }
+            val keptVideos = keptShowRow?.adapter?.let { cards ->
+                (0 until cards.size()).mapNotNull { cards.get(it) as? Video }
+            }
+
             // Show pagination map drives lazy-loading of per-show video rows on
             // focus. Reset before each render so the new ListRows own their
             // adapters.
@@ -733,9 +749,21 @@ class BrowseFragment : BrowseSupportFragment() {
                 }
             }
 
+            if (focusTarget != null && keptShowRow != null && keptVideos != null) {
+                rowPaginationMap[focusTarget.rowTitle]?.let { row ->
+                    // Badges come from the progress just fetched.
+                    showFirstVideos(row.adapter, keptVideos.map {
+                        it.copy(progressPercent = 0, watched = false).withProgress()
+                    })
+                    row.offset = keptShowRow.offset
+                    row.hasMore = keptShowRow.hasMore
+                }
+            }
+
                         // Set adapter last so show rows (appended lazily as they load) are present.
             adapter = rowsAdapter
             title = null
+            focusTarget?.let { restoreFocus(rowsAdapter, it) }
 
             // Fill the first screen of every show row in the background, in
             // row order, so rows are ready before the user scrolls to them.
@@ -750,6 +778,41 @@ class BrowseFragment : BrowseSupportFragment() {
                 }
             }
         }
+    }
+
+    /** A card's identity across a rebuild; a reloaded Video can differ in progress. */
+    private fun cardKey(card: Any?): Any? = when (card) {
+        is Video -> "video:${card.id}"
+        is Show -> "show:${card.id}"
+        else -> card
+    }
+
+    /** The focused card in the current rows, or null if there is none. */
+    private fun focusTarget(): FocusRestore.Target? {
+        val rows = adapter as? ArrayObjectAdapter ?: return null
+        val rowIndex = selectedPosition
+        if (rowIndex !in 0 until rows.size()) return null
+        val row = rows.get(rowIndex) as? ListRow ?: return null
+        val title = row.headerItem?.name ?: return null
+        val cardIndex = (selectedRowViewHolder as? ListRowPresenter.ViewHolder)?.selectedPosition
+            ?: return null
+        val cards = row.adapter
+        val card = if (cardIndex in 0 until cards.size()) cards.get(cardIndex) else null
+        return FocusRestore.Target(title, cardKey(card), cardIndex)
+    }
+
+    /** Selects [target]'s card in the new [rows], with no scroll animation. */
+    private fun restoreFocus(rows: ArrayObjectAdapter, target: FocusRestore.Target) {
+        val layout = (0 until rows.size()).map { i ->
+            val row = rows.get(i) as? ListRow
+            val cards = row?.adapter
+            row?.headerItem?.name to
+                (0 until (cards?.size() ?: 0)).map { cardKey(cards?.get(it)) }
+        }
+        val (rowIndex, cardIndex) = FocusRestore.find(layout, target) ?: return
+        val selectCard = ListRowPresenter.SelectItemViewHolderTask(cardIndex)
+        selectCard.isSmoothScroll = false
+        setSelectedPosition(rowIndex, false, selectCard)
     }
 
     private var hasBeenVisible = false
