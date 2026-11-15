@@ -83,9 +83,13 @@ class NeonGridView @JvmOverloads constructor(
         strokeWidth = 1.3f * density
         strokeCap = Paint.Cap.ROUND
     }
+    // Sparks use square caps, never round. Skia draws a square or butt capped
+    // line as a plain rectangle, but a round capped one becomes a new GPU path
+    // for every spark on every frame. On Nvidia (Shield, API 30) those paths
+    // pile up in native memory until the device runs out.
     private val particlePaint = Paint().apply {
         strokeWidth = 1.7f * density
-        strokeCap = Paint.Cap.ROUND
+        strokeCap = Paint.Cap.SQUARE
     }
     private val bloomGridSourcePaint = Paint().apply {
         color = 0xB01E30FF.toInt()
@@ -93,7 +97,7 @@ class NeonGridView @JvmOverloads constructor(
         style = Paint.Style.STROKE
     }
     private val bloomParticleSourcePaint = Paint().apply {
-        strokeCap = Paint.Cap.ROUND
+        strokeCap = Paint.Cap.SQUARE
         style = Paint.Style.STROKE
     }
     private val particleHotCorePaint = Paint().apply {
