@@ -39,6 +39,14 @@ class FocusRestoreTest {
     }
 
     @Test
+    fun `keeps the opened copy when a row holds the same card twice`() {
+        // Seen on a show row: card 7 was the same video as card 0.
+        val target = FocusRestore.Target("☆ Some Show", cardKey = 31, cardIndex = 4)
+        val dupes = listOf("☆ Some Show" to listOf<Any?>(31, 32, 33, 34, 31, 35))
+        assertEquals(0 to 4, FocusRestore.find(dupes, target))
+    }
+
+    @Test
     fun `keeps the position when the card has left its row`() {
         // A finished video drops out of Continue Watching.
         val target = FocusRestore.Target("Continue Watching", cardKey = 99, cardIndex = 1)
