@@ -138,6 +138,9 @@ object VectorFont {
 
     fun isVector(view: TextView): Boolean = view.transformationMethod is Transformation
 
+    // Spans draw on the UI thread only. About 60 glyphs at a handful of sizes.
+    private val outlines = GlyphOutlineCache<Path>(maxEntries = 512)
+
     private object Transformation : TransformationMethod {
         override fun getTransformation(source: CharSequence?, view: View?): CharSequence? {
             if (source.isNullOrEmpty()) return source
@@ -158,8 +161,6 @@ object VectorFont {
 
     /** Draws one glyph as strokes in the current text colour (and its glow). */
     private class GlyphSpan(private val glyph: Char) : ReplacementSpan() {
-        private val path = Path()
-
         // Letters are slightly condensed so titles stay a sensible length.
         private fun scaleY(paint: Paint) = paint.textSize * 0.68f / 8f
         private fun scaleX(paint: Paint) = scaleY(paint) * 0.7f
@@ -180,13 +181,19 @@ object VectorFont {
             val sx = scaleX(paint)
             val sy = scaleY(paint)
             val left = x + sx * 1.25f
-            path.reset()
-            for (stroke in strokes) {
-                path.moveTo(left + stroke[0] * sx, y - stroke[1] * sy)
-                var i = 2
-                while (i + 1 < stroke.size) {
-                    path.lineTo(left + stroke[i] * sx, y - stroke[i + 1] * sy)
-                    i += 2
+            // Built once per glyph and size at the origin, then moved into
+            // place. A path rebuilt on every draw is a new path to the GPU,
+            // so its caches miss and keep growing (worst on Nvidia, API 30).
+            val path = outlines.get(glyph, sy) {
+                Path().apply {
+                    for (stroke in strokes) {
+                        moveTo(stroke[0] * sx, -stroke[1] * sy)
+                        var i = 2
+                        while (i + 1 < stroke.size) {
+                            lineTo(stroke[i] * sx, -stroke[i + 1] * sy)
+                            i += 2
+                        }
+                    }
                 }
             }
             val oldStyle = paint.style
@@ -197,7 +204,10 @@ object VectorFont {
             paint.strokeWidth = paint.textSize * 0.1f
             paint.strokeCap = Paint.Cap.ROUND
             paint.strokeJoin = Paint.Join.ROUND
+            canvas.save()
+            canvas.translate(left, y.toFloat())
             canvas.drawPath(path, paint)
+            canvas.restore()
             paint.style = oldStyle
             paint.strokeWidth = oldWidth
             paint.strokeCap = oldCap
