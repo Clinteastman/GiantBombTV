@@ -858,13 +858,17 @@ class BrowseFragment : BrowseSupportFragment() {
 
     private val sameCard = object : DiffCallback<Any>() {
         override fun areItemsTheSame(oldItem: Any, newItem: Any) = cardKey(oldItem) == cardKey(newItem)
+        // Every card (Video, Show, SettingsItem, UpcomingStream, SkeletonCard)
+        // is a data class, so == compares contents.
+        @android.annotation.SuppressLint("DiffUtilEquals")
         override fun areContentsTheSame(oldItem: Any, newItem: Any) = oldItem == newItem
     }
 
     // A row on screen is only ever itself: its views are bound to its cards.
     private val sameRow = object : DiffCallback<Any>() {
         override fun areItemsTheSame(oldItem: Any, newItem: Any) = oldItem === newItem
-        override fun areContentsTheSame(oldItem: Any, newItem: Any) = oldItem === newItem
+        // Only called for the same row, which has not changed.
+        override fun areContentsTheSame(oldItem: Any, newItem: Any) = true
     }
 
     /**
