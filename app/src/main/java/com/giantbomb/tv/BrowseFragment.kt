@@ -43,6 +43,7 @@ import com.giantbomb.tv.ui.SkeletonCard
 import com.giantbomb.tv.ui.SkeletonCardPresenter
 import com.giantbomb.tv.ui.UpcomingCardPresenter
 import com.giantbomb.tv.util.FocusRestore
+import com.giantbomb.tv.util.HomeRefresh
 import com.giantbomb.tv.util.RowPaging
 import com.giantbomb.tv.util.afterLayoutScope
 import kotlinx.coroutines.*
@@ -74,6 +75,22 @@ class BrowseFragment : BrowseSupportFragment() {
     private var imagePreloader: ImagePreloader? = null
     // After a 429, row paging waits this long before asking again.
     private var rateLimitedUntilMs = 0L
+
+    // One presenter of each kind for the life of the fragment. Leanback
+    // gives every presenter object its own view type in a view pool shared
+    // by all rows and keeps them until the view is made again, so new
+    // presenters on every load left a new set of views behind each time.
+    private val rowPresenter = com.giantbomb.tv.ui.TvRowPresenter.create()
+    private val videoCards = SinglePresenterSelector(CardPresenter())
+    // A show row is headed by the show name, so cards skip repeating it.
+    private val showRowCards = ClassPresenterSelector()
+        .addClassPresenter(Video::class.java, CardPresenter(showShowName = false))
+        .addClassPresenter(SkeletonCard::class.java, SkeletonCardPresenter())
+    private val upcomingCards = SinglePresenterSelector(UpcomingCardPresenter())
+    private val settingsCards = SinglePresenterSelector(SettingsCardPresenter())
+    private val showCards = SinglePresenterSelector(ShowCardPresenter(onLongClick = { togglePin(it) }))
+    // What decided the rows on screen; see HomeRefresh.
+    private var shownSignature: Any? = null
 
     companion object {
         const val SETTINGS_REFRESH = 2
@@ -643,7 +660,7 @@ class BrowseFragment : BrowseSupportFragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             try {
             loadingSpinner?.visibility = View.VISIBLE
-            val rowPresenter = com.giantbomb.tv.ui.TvRowPresenter.create()
+            val shownRows = rowsAdapterRef?.takeIf { it === adapter }
             val rowsAdapter = ArrayObjectAdapter(rowPresenter)
             headerIdCounter = 0L
             // Reset row tracking — rowsAdapter is brand new and the upcoming row, if any,
@@ -706,6 +723,17 @@ class BrowseFragment : BrowseSupportFragment() {
             val pinnedIds = prefs.getPinnedShowIds()
             val hidden = prefs.getHiddenSections()
 
+            // With the same settings and shows, the rows on screen are
+            // updated where they are (Back from a video keeps every row on
+            // its card); anything else builds them again.
+            val signature = listOf(
+                key, prefs.visualTheme, prefs.getSectionOrder(), hidden, pinnedIds,
+                shows?.map { Triple(it.id, it.title, it.active) }
+            )
+            val inPlace = shownRows != null &&
+                !HomeRefresh.mustRebuild(forceRefresh, shownSignature, signature)
+            val shownPaging = LinkedHashMap(rowPaginationMap)
+
             // The new rows each get a new adapter, which Leanback starts at
             // the first card, so note the focused card to put focus back on
             // it (Back from the detail page). A focused show row keeps the
@@ -714,7 +742,7 @@ class BrowseFragment : BrowseSupportFragment() {
             // show's pages expire together, so later pages then come from
             // the same snapshot.
             val focusTarget = focusTarget()
-            val keptShowRow = focusTarget?.takeIf { !forceRefresh }
+            val keptShowRow = focusTarget?.takeIf { !forceRefresh && !inPlace }
                 ?.let { rowPaginationMap[it.rowTitle] }
                 ?.takeIf { it.offset > 0 && repository.hasShowVideos(it.showId, firstScreenCardCount()) }
             val keptVideos = keptShowRow?.adapter?.let { cards ->
@@ -761,10 +789,21 @@ class BrowseFragment : BrowseSupportFragment() {
                 }
             }
 
+            if (inPlace && shownRows != null) {
+                // Show rows keep their cards and paging, whatever the age
+                // of the show cache.
+                rowPaginationMap.clear()
+                rowPaginationMap.putAll(shownPaging)
+                updateRowsInPlace(shownRows, rowsAdapter) {
+                    it.copy(progressPercent = 0, watched = false).withProgress()
+                }
+            } else {
                         // Set adapter last so show rows (appended lazily as they load) are present.
-            adapter = rowsAdapter
-            title = null
-            focusTarget?.let { restoreFocus(rowsAdapter, it) }
+                adapter = rowsAdapter
+                title = null
+                focusTarget?.let { restoreFocus(rowsAdapter, it) }
+            }
+            shownSignature = signature
 
             // Fill the first screen of every show row in the background, in
             // row order, so rows are ready before the user scrolls to them.
@@ -785,6 +824,7 @@ class BrowseFragment : BrowseSupportFragment() {
     private fun cardKey(card: Any?): Any? = when (card) {
         is Video -> "video:${card.id}"
         is Show -> "show:${card.id}"
+        is SettingsItem -> "settings:${card.id}"
         else -> card
     }
 
@@ -814,6 +854,67 @@ class BrowseFragment : BrowseSupportFragment() {
         val selectCard = ListRowPresenter.SelectItemViewHolderTask(cardIndex)
         selectCard.isSmoothScroll = false
         setSelectedPosition(rowIndex, false, selectCard)
+    }
+
+    private val sameCard = object : DiffCallback<Any>() {
+        override fun areItemsTheSame(oldItem: Any, newItem: Any) = cardKey(oldItem) == cardKey(newItem)
+        // Every card (Video, Show, SettingsItem, UpcomingStream, SkeletonCard)
+        // is a data class, so == compares contents.
+        @android.annotation.SuppressLint("DiffUtilEquals")
+        override fun areContentsTheSame(oldItem: Any, newItem: Any) = oldItem == newItem
+    }
+
+    // A row on screen is only ever itself: its views are bound to its cards.
+    private val sameRow = object : DiffCallback<Any>() {
+        override fun areItemsTheSame(oldItem: Any, newItem: Any) = oldItem === newItem
+        // Only called for the same row, which has not changed.
+        override fun areContentsTheSame(oldItem: Any, newItem: Any) = true
+    }
+
+    /**
+     * Brings the rows on screen ([shown]) up to date with [fresh], just
+     * rendered from the same settings and shows, without replacing them:
+     * each row keeps its views and its place, and only changed cards are
+     * bound again. Show rows keep their cards, with [redecorate] putting
+     * the latest progress on them. Rows that come or go (Continue
+     * Watching, Upcoming) are added or removed on their own.
+     */
+    private fun updateRowsInPlace(
+        shown: ArrayObjectAdapter,
+        fresh: ArrayObjectAdapter,
+        redecorate: (Video) -> Video
+    ) {
+        fun rowsOf(rows: ArrayObjectAdapter) = (0 until rows.size()).mapNotNull { rows.get(it) as? ListRow }
+        fun keyOf(row: ListRow) = row.headerItem?.name to row.adapter.presenterSelector
+        val oldRows = rowsOf(shown)
+        val newRows = rowsOf(fresh)
+        val match = HomeRefresh.matchRows(oldRows.map(::keyOf), newRows.map(::keyOf))
+        // headerContexts was just filled for the fresh rows' header ids.
+        val freshContexts = headerContexts.toMap()
+        headerContexts.clear()
+        var nextHeaderId = (oldRows.maxOfOrNull { it.headerItem?.id ?: -1L } ?: -1L) + 1
+        val rows = newRows.mapIndexed { i, newRow ->
+            val row = match[i]?.let { oldRows[it] }
+            val kept = if (row != null) {
+                val cards = row.adapter as ArrayObjectAdapter
+                val items = if (row.headerItem?.name in rowPaginationMap) {
+                    (0 until cards.size()).map { (cards.get(it) as? Video)?.let(redecorate) ?: cards.get(it) }
+                } else {
+                    (0 until newRow.adapter.size()).map { newRow.adapter.get(it) }
+                }
+                cards.setItems(items, sameCard)
+                row
+            } else {
+                // A new id, as the fresh ids can repeat ones on screen.
+                ListRow(HeaderItem(nextHeaderId++, newRow.headerItem?.name), newRow.adapter)
+            }
+            freshContexts[newRow.headerItem?.id]?.let { headerContexts[kept.headerItem.id] = it }
+            kept
+        }
+        shown.setItems(rows, sameRow)
+        rowsAdapterRef = shown
+        upcomingRowIndex = rows.indexOfFirst { it.adapter.presenterSelector === upcomingCards }
+        upcomingRowAdapter = rows.getOrNull(upcomingRowIndex)?.adapter as? ArrayObjectAdapter
     }
 
     private var hasBeenVisible = false
@@ -881,7 +982,7 @@ class BrowseFragment : BrowseSupportFragment() {
                     // Preserve the existing HeaderItem.id so the row stays mapped
                     // in headerContexts; using a fresh id (or 0) would silently
                     // collide with another section and break the long-press menu.
-                    val newAdapter = ArrayObjectAdapter(UpcomingCardPresenter())
+                    val newAdapter = ArrayObjectAdapter(upcomingCards)
                     result.liveNow?.let { newAdapter.add(it) }
                     result.upcoming.forEach { newAdapter.add(it) }
                     val title = if (isLive) "🔴 Upcoming & Live" else "Upcoming"
@@ -1023,11 +1124,7 @@ class BrowseFragment : BrowseSupportFragment() {
 
     /** A show row's adapter, holding skeleton cards until its videos arrive. */
     private fun newShowRowAdapter(): ArrayObjectAdapter {
-        val selector = ClassPresenterSelector()
-            // A show row is headed by the show name, so cards skip repeating it.
-            .addClassPresenter(Video::class.java, CardPresenter(showShowName = false))
-            .addClassPresenter(SkeletonCard::class.java, SkeletonCardPresenter())
-        return ArrayObjectAdapter(selector).apply {
+        return ArrayObjectAdapter(showRowCards).apply {
             repeat(visibleCardCount() + 1) { add(SkeletonCard(it)) }
         }
     }
@@ -1160,7 +1257,7 @@ class BrowseFragment : BrowseSupportFragment() {
         val hasContent = upcoming.liveNow != null || upcoming.upcoming.isNotEmpty()
         if (!hasContent) return
         val headerTitle = if (upcoming.liveNow != null) "🔴 Upcoming & Live" else "Upcoming"
-        val adapter = ArrayObjectAdapter(UpcomingCardPresenter())
+        val adapter = ArrayObjectAdapter(upcomingCards)
         if (upcoming.liveNow != null) adapter.add(upcoming.liveNow)
         upcoming.upcoming.forEach { adapter.add(it) }
         upcomingRowIndex = rowsAdapter.size()
@@ -1186,7 +1283,7 @@ class BrowseFragment : BrowseSupportFragment() {
             .toSet()
         val continueVideos = recentVideos.filter { it.id in inProgressIds }
         if (continueVideos.isEmpty()) return
-        val adapter = ArrayObjectAdapter(CardPresenter())
+        val adapter = ArrayObjectAdapter(videoCards)
         continueVideos.forEach { adapter.add(it) }
         val hid = headerIdCounter++
         headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_CONTINUE)
@@ -1205,11 +1302,11 @@ class BrowseFragment : BrowseSupportFragment() {
         val hid = headerIdCounter++
         headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_WATCHLIST)
         if (watchlist.isNotEmpty()) {
-            val adapter = ArrayObjectAdapter(CardPresenter())
+            val adapter = ArrayObjectAdapter(videoCards)
             watchlist.forEach { adapter.add(it) }
             rowsAdapter.add(ListRow(HeaderItem(hid, "My Watchlist"), adapter))
         } else {
-            val hintAdapter = ArrayObjectAdapter(SettingsCardPresenter())
+            val hintAdapter = ArrayObjectAdapter(settingsCards)
             hintAdapter.add(SettingsItem(
                 -1,
                 "Your watchlist is empty",
@@ -1225,7 +1322,7 @@ class BrowseFragment : BrowseSupportFragment() {
         recentVideos: List<Video>?
     ) {
         if (recentVideos.isNullOrEmpty()) return
-        val adapter = ArrayObjectAdapter(CardPresenter())
+        val adapter = ArrayObjectAdapter(videoCards)
         recentVideos.forEach { adapter.add(it) }
         val hid = headerIdCounter++
         headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_RECENT)
@@ -1274,9 +1371,7 @@ class BrowseFragment : BrowseSupportFragment() {
         if (gridShows.isEmpty()) return
         // Browse Shows grid — the discovery surface for pin/unpin via
         // D-pad-centre long-press.
-        val showsAdapter = ArrayObjectAdapter(
-            ShowCardPresenter(onLongClick = { togglePin(it) })
-        )
+        val showsAdapter = ArrayObjectAdapter(showCards)
         gridShows.forEach { showsAdapter.add(it) }
         val browseHid = headerIdCounter++
         headerContexts[browseHid] = HeaderContext.Section(PrefsManager.SECTION_ACTIVE_SHOWS)
@@ -1307,7 +1402,7 @@ class BrowseFragment : BrowseSupportFragment() {
         if (recentVideos == null) return
         val premiumVideos = recentVideos.filter { it.premium }
         if (premiumVideos.size < 2) return
-        val adapter = ArrayObjectAdapter(CardPresenter())
+        val adapter = ArrayObjectAdapter(videoCards)
         premiumVideos.forEach { adapter.add(it) }
         val hid = headerIdCounter++
         headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_PREMIUM)
@@ -1329,7 +1424,7 @@ class BrowseFragment : BrowseSupportFragment() {
         val legacyNonPinned = legacyShows.filter { it.id !in pinnedSet }
         val gridShows = pinnedLegacy + legacyNonPinned
         if (gridShows.isEmpty()) return
-        val adapter = ArrayObjectAdapter(ShowCardPresenter(onLongClick = { togglePin(it) }))
+        val adapter = ArrayObjectAdapter(showCards)
         gridShows.forEach { adapter.add(it) }
         val hid = headerIdCounter++
         headerContexts[hid] = HeaderContext.Section(PrefsManager.SECTION_LEGACY)
@@ -1337,7 +1432,7 @@ class BrowseFragment : BrowseSupportFragment() {
     }
 
     private fun renderSettings(rowsAdapter: ArrayObjectAdapter) {
-        val utilAdapter = ArrayObjectAdapter(SettingsCardPresenter())
+        val utilAdapter = ArrayObjectAdapter(settingsCards)
         utilAdapter.add(SettingsItem(
             SETTINGS_REFRESH,
             getString(R.string.settings_refresh),
