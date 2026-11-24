@@ -45,6 +45,7 @@ import com.giantbomb.tv.ui.UpcomingCardPresenter
 import com.giantbomb.tv.util.FocusRestore
 import com.giantbomb.tv.util.HomeRefresh
 import com.giantbomb.tv.util.RowPaging
+import com.giantbomb.tv.util.RowTopUp
 import com.giantbomb.tv.util.afterLayoutScope
 import kotlinx.coroutines.*
 
@@ -173,6 +174,7 @@ class BrowseFragment : BrowseSupportFragment() {
         setupUIElements()
         setupListeners()
         setupVerticalGridPrefetch()
+        registerDebugReceiver()
         // setupKeyInterceptor() // TODO: re-enable when pin/unpin is fixed
 
         // First launch: redirect to setup if no API key
@@ -790,8 +792,8 @@ class BrowseFragment : BrowseSupportFragment() {
             }
 
             if (inPlace && shownRows != null) {
-                // Show rows keep their cards and paging, whatever the age
-                // of the show cache.
+                // Show rows keep their cards and paging; the prefetch below
+                // tops up any whose show cache has expired.
                 rowPaginationMap.clear()
                 rowPaginationMap.putAll(shownPaging)
                 updateRowsInPlace(shownRows, rowsAdapter) {
@@ -1063,43 +1065,50 @@ class BrowseFragment : BrowseSupportFragment() {
         // Called from the item-selected listener, so this must not touch the
         // row adapter inline: see afterLayoutScope.
         afterLayoutScope(viewLifecycleOwner.lifecycleScope).launch {
-            // The server pages by whole pages, so ask a page-aligned offset
-            // and drop what the row already shows: see RowPaging.
-            val request = RowPaging.next(pagination.offset, ROW_PAGE_SIZE)
-            val result = repository.getShowVideos(pagination.showId, limit = ROW_PAGE_SIZE, offset = request.offset)
-            result.onSuccess { page ->
-                val held = (0 until pagination.adapter.size())
-                    .mapNotNull { (pagination.adapter.get(it) as? Video)?.id }.toSet()
-                val step = RowPaging.take(request, page, ROW_PAGE_SIZE, held) { it.id }
-                val videos = step.items
-                if (!step.hasMore) pagination.hasMore = false
-                pagination.offset = step.offset
+            // A topped-up row pages again from the last card it could place
+            // (see RowTopUp), so a page can hold only cards the row has:
+            // then ask the next one.
+            do {
+                // The server pages by whole pages, so ask a page-aligned offset
+                // and drop what the row already shows: see RowPaging.
+                val request = RowPaging.next(pagination.offset, ROW_PAGE_SIZE)
+                var added = 0
+                val result = repository.getShowVideos(pagination.showId, limit = ROW_PAGE_SIZE, offset = request.offset)
+                result.onSuccess { page ->
+                    val held = (0 until pagination.adapter.size())
+                        .mapNotNull { (pagination.adapter.get(it) as? Video)?.id }.toSet()
+                    val step = RowPaging.take(request, page, ROW_PAGE_SIZE, held) { it.id }
+                    val videos = step.items
+                    added = videos.size
+                    if (!step.hasMore) pagination.hasMore = false
+                    pagination.offset = step.offset
 
-                // Repository progress is cached briefly, so this is usually
-                // free; it keeps badges current after returning from playback.
-                repository.getProgress().getOrNull()?.let { entries ->
-                    progressByVideoId = entries.associateBy { it.videoId }
-                }
-
-                videos.forEach { video ->
-                    val entry = progressByVideoId[video.id]
-                    val v = when {
-                        entry != null && entry.percentComplete >= 95 -> video.copy(watched = true)
-                        entry != null && entry.percentComplete in 1..94 -> video.copy(progressPercent = entry.percentComplete)
-                        else -> video
+                    // Repository progress is cached briefly, so this is usually
+                    // free; it keeps badges current after returning from playback.
+                    repository.getProgress().getOrNull()?.let { entries ->
+                        progressByVideoId = entries.associateBy { it.videoId }
                     }
-                    pagination.adapter.add(v)
+
+                    videos.forEach { video ->
+                        val entry = progressByVideoId[video.id]
+                        val v = when {
+                            entry != null && entry.percentComplete >= 95 -> video.copy(watched = true)
+                            entry != null && entry.percentComplete in 1..94 -> video.copy(progressPercent = entry.percentComplete)
+                            else -> video
+                        }
+                        pagination.adapter.add(v)
+                    }
                 }
-            }
-            result.onFailure { e ->
-                // A 429 is temporary: keep the row pageable and try
-                // again after the pause. Anything else ends the row.
-                if (RowPrefetcher.isRateLimited(e)) {
-                    rateLimitedUntilMs = System.currentTimeMillis() + RATE_LIMIT_PAUSE_MS
-                } else {
-                    pagination.hasMore = false
+                result.onFailure { e ->
+                    // A 429 is temporary: keep the row pageable and try
+                    // again after the pause. Anything else ends the row.
+                    if (RowPrefetcher.isRateLimited(e)) {
+                        rateLimitedUntilMs = System.currentTimeMillis() + RATE_LIMIT_PAUSE_MS
+                    } else {
+                        pagination.hasMore = false
+                    }
                 }
-            }
+            } while (result.isSuccess && added == 0 && pagination.hasMore)
         }.invokeOnCompletion {
             // Also runs if the view goes before the posted work starts.
             pagination.isLoading = false
@@ -1167,6 +1176,12 @@ class BrowseFragment : BrowseSupportFragment() {
         rowPrefetcher = prefetcher
         // rowPaginationMap keeps insertion order, which is the row order.
         prefetcher.enqueue(rowPaginationMap.keys.toList())
+        // On return to home focus stays where it was, so no focus move has
+        // put the focused row first: do it here, so a row the user is on
+        // tops up before the rows above it.
+        val rows = rowsAdapterRef
+        val focusedRow = rows?.takeIf { selectedPosition in 0 until it.size() }?.get(selectedPosition) as? ListRow
+        focusedRow?.let { prefetchAround(it, null) }
     }
 
     private suspend fun fetchFirstScreen(
@@ -1176,10 +1191,10 @@ class BrowseFragment : BrowseSupportFragment() {
         count: Int,
         decorate: (Video) -> Video
     ): RowPrefetcher.Outcome {
-        // Already filled, or a page load is running: nothing to do.
-        if (pagination.offset > 0 || !pagination.hasMore || pagination.isLoading) {
-            return RowPrefetcher.Outcome.DONE
-        }
+        // A page load is running, or the show has no videos: nothing to do.
+        if (pagination.isLoading) return RowPrefetcher.Outcome.DONE
+        if (pagination.offset > 0) return topUpShowRow(repository, title, pagination, count, decorate)
+        if (!pagination.hasMore) return RowPrefetcher.Outcome.DONE
         pagination.isLoading = true
         try {
             val result = repository.getShowVideos(pagination.showId, limit = count, offset = 0)
@@ -1201,6 +1216,54 @@ class BrowseFragment : BrowseSupportFragment() {
             // Download (not decode) the thumbnails that show first, so a fast
             // scroll down finds them on disk instead of on the network.
             preloader().warm(videos.take(visibleCardCount()).map { it.thumbnailUrl ?: it.posterUrl })
+            return RowPrefetcher.Outcome.DONE
+        } finally {
+            pagination.isLoading = false
+        }
+    }
+
+    /**
+     * A show row that has loaded before keeps its cards on return to home.
+     * Once the repository no longer holds its first page (the show cache
+     * expired), ask for it again and put any new videos at the front, with
+     * the paging offset moved to match: see RowTopUp. A fresh cache costs
+     * no request. Cards are only added, so the focused card keeps focus,
+     * unless the page holds none of the row's cards: then the row starts
+     * again from the page.
+     */
+    private suspend fun topUpShowRow(
+        repository: GiantBombRepository,
+        title: String,
+        pagination: RowPagination,
+        count: Int,
+        decorate: (Video) -> Video
+    ): RowPrefetcher.Outcome {
+        if (repository.hasShowVideos(pagination.showId, count)) return RowPrefetcher.Outcome.DONE
+        if (System.currentTimeMillis() < rateLimitedUntilMs) return RowPrefetcher.Outcome.RATE_LIMITED
+        pagination.isLoading = true
+        try {
+            val result = repository.getShowVideos(pagination.showId, limit = count, offset = 0)
+            if (!isAdded) return RowPrefetcher.Outcome.DONE
+            val page = result.getOrElse { e ->
+                if (RowPrefetcher.isRateLimited(e)) {
+                    rateLimitedUntilMs = System.currentTimeMillis() + RATE_LIMIT_PAUSE_MS
+                    return RowPrefetcher.Outcome.RATE_LIMITED
+                }
+                // The row keeps the cards it has.
+                return RowPrefetcher.Outcome.FAILED
+            }
+            val cards = pagination.adapter
+            val held = (0 until cards.size()).mapNotNull { (cards.get(it) as? Video)?.id }
+            val plan = RowTopUp.plan(held, page) { it.id } ?: return RowPrefetcher.Outcome.DONE
+            val videos = plan.insert.map(decorate)
+            if (plan.replace) {
+                cards.setItems(videos, sameCard)
+                pagination.hasMore = page.size >= count
+            } else {
+                cards.addAll(0, videos)
+            }
+            pagination.offset = plan.offset
+            android.util.Log.d("RowPrefetch", "topped up '$title' with ${videos.size}")
             return RowPrefetcher.Outcome.DONE
         } finally {
             pagination.isLoading = false
@@ -1555,9 +1618,49 @@ class BrowseFragment : BrowseSupportFragment() {
         startActivity(intent)
     }
 
+    // Debug builds only: lets an emulator check stand in for a new episode
+    // without waiting for one. Drop the first N cards of a loaded show row
+    // and expire that show's cache, then Back to home tops them up again:
+    //   adb shell "am broadcast -a com.giantbomb.tv.DEBUG_SHOW_ROW --es row 'Show Title' --ei drop 2"
+    // With no drop it only logs the row (tag RowDebug). --ez expire_all true
+    // expires every show's cache; --el pause_ms N starts a rate limit pause.
+    private var debugReceiver: android.content.BroadcastReceiver? = null
+
+    private fun registerDebugReceiver() {
+        if (!BuildConfig.DEBUG || debugReceiver != null) return
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, intent: Intent) {
+                val repository = GiantBombRepository.get(prefs.apiKey ?: "")
+                if (intent.getBooleanExtra("expire_all", false)) repository.invalidateShowVideos()
+                val pause = intent.getLongExtra("pause_ms", 0L)
+                if (pause > 0) rateLimitedUntilMs = System.currentTimeMillis() + pause
+                val name = intent.getStringExtra("row") ?: return
+                val row = rowPaginationMap.values.firstOrNull { it.showTitle == name } ?: return
+                val held = (0 until row.adapter.size()).count { row.adapter.get(it) is Video }
+                val drop = intent.getIntExtra("drop", 0).coerceAtMost(held - 1)
+                if (row.offset > 0 && held == row.adapter.size() && drop > 0) {
+                    row.adapter.removeItems(0, drop)
+                    row.offset -= drop
+                    repository.expireShowVideos(row.showId)
+                }
+                val ids = (0 until row.adapter.size()).mapNotNull { (row.adapter.get(it) as? Video)?.id }
+                android.util.Log.d("RowDebug", "'$name' shown ${ids.size} distinct ${ids.toSet().size} " +
+                    "offset ${row.offset} hasMore ${row.hasMore} first ${ids.take(6)}")
+            }
+        }
+        ContextCompat.registerReceiver(
+            requireContext(), receiver,
+            android.content.IntentFilter("com.giantbomb.tv.DEBUG_SHOW_ROW"),
+            ContextCompat.RECEIVER_EXPORTED
+        )
+        debugReceiver = receiver
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         backdropRunnable?.let { handler.removeCallbacks(it) }
         upcomingRefreshRunnable?.let { handler.removeCallbacks(it) }
+        debugReceiver?.let { context?.unregisterReceiver(it) }
+        debugReceiver = null
     }
 }

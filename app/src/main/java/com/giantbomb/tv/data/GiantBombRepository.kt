@@ -199,6 +199,12 @@ class GiantBombRepository private constructor(
         return (now + SHOW_VIDEOS_TTL_MS).also { showPageExpiry[showId] = it }
     }
 
+    /** Drops one show's cached pages as if they had expired (debug builds' row check). */
+    fun expireShowVideos(showId: Int) {
+        showPageExpiry.remove(showId)
+        dropShowPages(showId)
+    }
+
     private fun dropShowPages(showId: Int) {
         val prefix = "videos:show:$showId:"
         cache.keys.filter { it.startsWith(prefix) }.forEach { cache.remove(it) }
