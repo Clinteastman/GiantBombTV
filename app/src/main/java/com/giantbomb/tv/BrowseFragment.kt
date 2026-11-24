@@ -1176,6 +1176,12 @@ class BrowseFragment : BrowseSupportFragment() {
         rowPrefetcher = prefetcher
         // rowPaginationMap keeps insertion order, which is the row order.
         prefetcher.enqueue(rowPaginationMap.keys.toList())
+        // On return to home focus stays where it was, so no focus move has
+        // put the focused row first: do it here, so a row the user is on
+        // tops up before the rows above it.
+        val rows = rowsAdapterRef
+        val focusedRow = rows?.takeIf { selectedPosition in 0 until it.size() }?.get(selectedPosition) as? ListRow
+        focusedRow?.let { prefetchAround(it, null) }
     }
 
     private suspend fun fetchFirstScreen(
