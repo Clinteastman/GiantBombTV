@@ -17,10 +17,9 @@ object RowTopUp {
      * [held], in row order. Returns null when nothing changes.
      *
      * The videos ahead of the first held one are new and go to the front.
-     * The offset is measured from the last held video in the page: it now
-     * sits at its page index, and the row reaches as many places past it as
-     * it holds cards after it. That stays right when the row's old offset
-     * already counted a new video's place, or a held video was deleted.
+     * The offset stops at the last held video in the page: past it the row
+     * cannot tell what was added or deleted, so its next pages start there
+     * and [RowPaging.take] skips the cards it already holds.
      *
      * A page with nothing held may have more new videos behind it than it
      * shows, so the row starts again from the page.
@@ -32,7 +31,6 @@ object RowTopUp {
         if (anchor < 0) return Plan(page, page.size, replace = true)
         val head = page.takeWhile { key(it) !in heldAt }
         if (head.isEmpty()) return null
-        val anchorHeld = heldAt.getValue(key(page[anchor]))
-        return Plan(head, anchor + (held.size - anchorHeld))
+        return Plan(head, anchor + 1)
     }
 }

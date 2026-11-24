@@ -1065,43 +1065,50 @@ class BrowseFragment : BrowseSupportFragment() {
         // Called from the item-selected listener, so this must not touch the
         // row adapter inline: see afterLayoutScope.
         afterLayoutScope(viewLifecycleOwner.lifecycleScope).launch {
-            // The server pages by whole pages, so ask a page-aligned offset
-            // and drop what the row already shows: see RowPaging.
-            val request = RowPaging.next(pagination.offset, ROW_PAGE_SIZE)
-            val result = repository.getShowVideos(pagination.showId, limit = ROW_PAGE_SIZE, offset = request.offset)
-            result.onSuccess { page ->
-                val held = (0 until pagination.adapter.size())
-                    .mapNotNull { (pagination.adapter.get(it) as? Video)?.id }.toSet()
-                val step = RowPaging.take(request, page, ROW_PAGE_SIZE, held) { it.id }
-                val videos = step.items
-                if (!step.hasMore) pagination.hasMore = false
-                pagination.offset = step.offset
+            // A topped-up row pages again from the last card it could place
+            // (see RowTopUp), so a page can hold only cards the row has:
+            // then ask the next one.
+            do {
+                // The server pages by whole pages, so ask a page-aligned offset
+                // and drop what the row already shows: see RowPaging.
+                val request = RowPaging.next(pagination.offset, ROW_PAGE_SIZE)
+                var added = 0
+                val result = repository.getShowVideos(pagination.showId, limit = ROW_PAGE_SIZE, offset = request.offset)
+                result.onSuccess { page ->
+                    val held = (0 until pagination.adapter.size())
+                        .mapNotNull { (pagination.adapter.get(it) as? Video)?.id }.toSet()
+                    val step = RowPaging.take(request, page, ROW_PAGE_SIZE, held) { it.id }
+                    val videos = step.items
+                    added = videos.size
+                    if (!step.hasMore) pagination.hasMore = false
+                    pagination.offset = step.offset
 
-                // Repository progress is cached briefly, so this is usually
-                // free; it keeps badges current after returning from playback.
-                repository.getProgress().getOrNull()?.let { entries ->
-                    progressByVideoId = entries.associateBy { it.videoId }
-                }
-
-                videos.forEach { video ->
-                    val entry = progressByVideoId[video.id]
-                    val v = when {
-                        entry != null && entry.percentComplete >= 95 -> video.copy(watched = true)
-                        entry != null && entry.percentComplete in 1..94 -> video.copy(progressPercent = entry.percentComplete)
-                        else -> video
+                    // Repository progress is cached briefly, so this is usually
+                    // free; it keeps badges current after returning from playback.
+                    repository.getProgress().getOrNull()?.let { entries ->
+                        progressByVideoId = entries.associateBy { it.videoId }
                     }
-                    pagination.adapter.add(v)
+
+                    videos.forEach { video ->
+                        val entry = progressByVideoId[video.id]
+                        val v = when {
+                            entry != null && entry.percentComplete >= 95 -> video.copy(watched = true)
+                            entry != null && entry.percentComplete in 1..94 -> video.copy(progressPercent = entry.percentComplete)
+                            else -> video
+                        }
+                        pagination.adapter.add(v)
+                    }
                 }
-            }
-            result.onFailure { e ->
-                // A 429 is temporary: keep the row pageable and try
-                // again after the pause. Anything else ends the row.
-                if (RowPrefetcher.isRateLimited(e)) {
-                    rateLimitedUntilMs = System.currentTimeMillis() + RATE_LIMIT_PAUSE_MS
-                } else {
-                    pagination.hasMore = false
+                result.onFailure { e ->
+                    // A 429 is temporary: keep the row pageable and try
+                    // again after the pause. Anything else ends the row.
+                    if (RowPrefetcher.isRateLimited(e)) {
+                        rateLimitedUntilMs = System.currentTimeMillis() + RATE_LIMIT_PAUSE_MS
+                    } else {
+                        pagination.hasMore = false
+                    }
                 }
-            }
+            } while (result.isSuccess && added == 0 && pagination.hasMore)
         }.invokeOnCompletion {
             // Also runs if the view goes before the posted work starts.
             pagination.isLoading = false

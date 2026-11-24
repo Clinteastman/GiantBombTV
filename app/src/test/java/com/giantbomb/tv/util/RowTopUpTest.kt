@@ -30,13 +30,15 @@ class RowTopUpTest {
         return Row(cards, cards.size, cards.size == first)
     }
 
-    /** One loadMoreForRow against [order]. */
+    /** One loadMoreForRow against [order]: pages on while a page adds nothing. */
     private fun more(row: Row, order: List<Int>) {
-        val request = RowPaging.next(row.offset, page)
-        val step = RowPaging.take(request, server(order, page, request.offset), page, row.cards.toSet()) { it }
-        row.cards.addAll(step.items)
-        row.offset = step.offset
-        if (!step.hasMore) row.hasMore = false
+        do {
+            val request = RowPaging.next(row.offset, page)
+            val step = RowPaging.take(request, server(order, page, request.offset), page, row.cards.toSet()) { it }
+            row.cards.addAll(step.items)
+            row.offset = step.offset
+            if (!step.hasMore) row.hasMore = false
+        } while (step.items.isEmpty() && row.hasMore)
     }
 
     private fun pageToEnd(row: Row, order: List<Int>) {
@@ -91,9 +93,11 @@ class RowTopUpTest {
     }
 
     @Test
-    fun `offset moves by the new videos`() {
+    fun `offset stops at the last held video in the page`() {
+        // Past the page the row cannot tell what was added or deleted, so it
+        // pages again from there and skips the cards it already holds.
         val plan = RowTopUp.plan((0 until 47).toList(), listOf(1002, 1001, 1000, 0, 1, 2, 3)) { it }!!
-        assertEquals(50, plan.offset)
+        assertEquals(7, plan.offset)
     }
 
     @Test
@@ -142,6 +146,30 @@ class RowTopUpTest {
         pageToEnd(row, after)
         // The deleted card stays where it was; every other video shows once.
         assertEquals(listOf(1000) + (0 until 100).toList(), row.cards)
+    }
+
+    @Test
+    fun `a deleted video past the first page does not skip a card`() {
+        // Codex review on PR 46: held 0..39, new 1000, 20 deleted.
+        val row = firstScreen(order(100), 7)
+        more(row, order(100))
+        val after = listOf(1000) + (0 until 100).filter { it != 20 }
+        topUp(row, after, 7)
+        pageToEnd(row, after)
+        assertEquals(listOf(1000) + (0 until 100).toList(), row.cards)
+    }
+
+    @Test
+    fun `a deep row pages on past the cards it holds`() {
+        val row = firstScreen(order(200), 7)
+        repeat(3) { more(row, order(200)) }
+        assertEquals(120, row.cards.size)
+        topUp(row, order(200, 2), 7)
+        more(row, order(200, 2))
+        assertTrue(row.cards.size > 122)
+        assertEquals(row.cards.size, row.cards.toSet().size)
+        pageToEnd(row, order(200, 2))
+        assertEquals(order(200, 2), row.cards)
     }
 
     @Test
